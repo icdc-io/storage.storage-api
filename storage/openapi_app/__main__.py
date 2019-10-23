@@ -1,0 +1,18 @@
+#!/usr/bin/env python
+
+import connexion
+
+from storage.openapi_app import encoder
+
+
+def main():
+    app = connexion.App(__name__, specification_dir='./openapi/')
+    app.app.json_encoder = encoder.JSONEncoder
+    app.add_api('openapi.yaml',
+                arguments={'title': 'S3 Storage service'},
+                pythonic_params=True)
+    app.run(port=8080)
+
+
+if __name__ == '__main__':
+    main()
