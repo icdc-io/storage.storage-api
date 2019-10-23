@@ -1,0 +1,43 @@
+# Core Flask and Extensions
+Flask==2.1.3            #Frozen version at the time of release. 2.1.3 -> 2.3.2
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-Cors
+flask-socketio
+marshmallow==3.21.2
+
+# Database and ORM
+SQLAlchemy==1.4.46
+SQLAlchemy-Utils
+psycopg2-binary
+
+# Authentication and Web Security
+PyJWT==1.7.1
+pyjwt-rsa==0.4.0
+Werkzeug==2.2.2                     # Werkzeug==3.0.4  for Flask==2.3.2
+
+# Configuration and Utilities
+PyYAML
+rgwadmin==2.3.3                    #Frozen version at the time of release
+paramiko==3.3.2                    #Frozen version at the time of release
+gevent-websocket
+simple-websocket
+
+# Testing
+pytest
+pytest-cov
+
+# AWS-related
+boto3
+
+
+# Web Servers and Networking
+gunicorn==23.0.0                   #Frozen version at the time of release
+
+
+# Websocket server
+Flask-SocketIO==5.3.4
+requests==2.31.0
+prometheus_client==0.16.0
+websockets
+eventlet

@@ -1,0 +1,165 @@
+"""
+S3 Quota model
+"""
+from app.database import db
+from app.models.model import AbstractModel
+from app.models.pool import Pools, PoolSchema
+from app import consts
+
+class S3Quotas(db.Model, AbstractModel):
+    id = db.Column(db.Integer, primary_key=True)
+    objects = db.Column(db.Integer)
+    data_size_mb = db.Column(db.Integer)
+    buckets = db.Column(db.Integer)
+    users = db.Column(db.Integer)
+    pool_id = db.Column(db.Integer, db.ForeignKey("pools.id"))
+    pool = db.relationship("Pools", back_populates="s3_quotas")
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"))
+    account = db.relationship("Accounts", back_populates="s3_quotas")
+    __table_args__ = (
+        db.UniqueConstraint(
+            "pool_id", "account_id", name="s3_quotas_pool_id_account_id"
+        ),
+    )
+
+    def save(self):
+        """
+        INSERT SQL
+        """
+        self._commit(db)
+
+    def __repr__(self):
+        return f"S3Quotas({self.id}, {self.objects}, {self.data_size_mb}, \
+            {self.buckets}, {self.users}, {self.pool_id}, {self.account_id})"
+
+    def serialize(self, hide_params=None):
+        """
+        Serialize model method
+        """
+        super()._serialize()
+        fields = {
+            "id": "self.id",
+            "objects": "self.objects",
+            "data_size_mb": "self.data_size_mb",
+            "buckets": "self.buckets",
+            "users": "self.users",
+            "pool": "self._pool()",
+        }
+        return self.response_filter(fields, hide_params)
+
+    def _pool(self):
+        return Pools.get_by("id", self.pool_id).serialize()
+
+    def update(self, body):
+        """
+        UPDATE SET SQL
+        """
+        self.objects = body.get("objects", self.objects)
+        self.data_size_mb = body.get("data_size_mb", self.data_size_mb)
+        self.buckets = body.get("buckets", self.buckets)
+        self.users = body.get("users", self.users)
+        self.save()
+
+    def get_restriction_names(self):
+        return ["objects", "data_size_mb", "buckets", "users"]
+
+    def compute_usage(self):
+        from app.models.s3_user import S3Users
+
+        usage = {
+            'data_size_mb': 0,
+            'objects': 0,
+            'buckets': 0
+        }
+
+        users = S3Users.query.filter_by(pool_id=self.pool_id, account_id=self.account_id).all()
+        for user in users:
+            user_quota = user.get_quota()
+            for key in usage.keys():
+                usage[key] = usage.get(key, 0) + user_quota[key]
+
+        usage = usage | {"users": len(users)}
+
+        return usage
+
+    def get_limits(self):
+        import os
+        from app.models.account import Accounts
+
+        default_account = Accounts.query.filter_by(name=consts.ACCOUNT_DEFAULT).first()
+        limits = self.query.filter_by(account_id=default_account.id, pool_id=self.pool_id).first()
+        return {restriction: getattr(limits, restriction) for restriction in self.get_restriction_names()}
+
+
+    def toDict(self):
+        """
+        Convert the S3Quotas object into a JSON-compatible dictionary.
+        """
+        return {
+            "id": self.id,
+            "objects": self.objects,
+            "data_size_mb": self.data_size_mb,
+            "buckets": self.buckets,
+            "users": self.users,
+            "pool_id": self.pool_id,
+            "account_id": self.account_id,
+            "pool": self._pool() if self.pool_id else None,
+        }
+
+
+from marshmallow import Schema, fields, validate, pre_load, ValidationError, validates_schema, pre_dump
+from app import consts
+
+class S3QuotaSchema(Schema):
+    id           = fields.Int(dump_only=True)
+    users        = fields.Int(validate=validate.Range(min=0))
+    buckets      = fields.Int(validate=validate.Range(min=0))
+    objects      = fields.Int(validate=validate.Range(min=0))
+    data_size_mb = fields.Int(validate=validate.Range(min=0))
+    account_id   = fields.Int()
+    pool_id      = fields.Int(load_only=True)
+    pool         = fields.Nested(PoolSchema(), dump_only=True)
+    endpoints    = fields.Method("generate_endpoints", dump_only=True)
+    usage        = fields.Function(lambda quota: quota.compute_usage(), dump_only=True)
+    limits       = fields.Function(lambda quota: quota.get_limits(), dump_only=True)
+
+    def generate_endpoints(self, obj):
+        name = obj.account.name
+        location_domain = consts.LOCATION_DOMAIN
+        return {
+                 "public": f"http://s3.{location_domain}/{name}, https://s3.{location_domain}/{name}",
+                 "private": f"http://s3.local.{location_domain}/{name}, https://s3.local.{location_domain}/{name}"
+               }
+
+    @pre_load
+    def set_limits(self, data, many, **kwargs):
+        default_account = self.__get_default_account()
+        pool = self.__get_pool(data.get("pool_id", None))
+        self.limits = S3Quotas.query.filter_by(account_id=default_account.id, pool_id=pool.id).first()
+        return data
+
+    @validates_schema
+    def validates_limit_exceeding(self, data, **kwargs):
+        errors = {}
+        usage = self.context.get("usage")
+        for value in ["users", "objects", "buckets", "data_size_mb"]:
+            if value in data:
+                if data[value] > getattr(self.limits, value):
+                    errors[value] = [f"Must be less than or equal to {getattr(self.limits, value)}."]
+                elif usage and data[value] < usage[value]:
+                    errors[value] = [f"The {value} must be greater than current in usage. {usage[value]}/{data[value]}"]
+        if errors:
+            raise ValidationError(errors)
+
+    def __get_default_account(self):
+        import os
+        from app.models.account import Accounts
+
+        return Accounts.query.filter_by(name=consts.ACCOUNT_DEFAULT).first()
+
+    def __get_pool(self, id):
+        pool = Pools.query.filter_by(id=id).first()
+        if not pool:
+            raise ValidationError("Must exist.", "pool")
+
+        return pool

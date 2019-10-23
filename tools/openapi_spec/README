@@ -1,7 +1,0 @@
-In order to generate python server code based on the open api specification file run
-
-java  -jar  ../openapi_generator/openapi-generator.jar generate  -i ./s3storage.yaml -c ./generator_config.json  -g  python-flask -o ../../server
-
-During development  it's easier to use a standalone flask developer server  instead of using  ceph storage plugin. When backend is ready we'll move
-folder  ../../openapi_app to ../../storage and fix imports
-

@@ -1,0 +1,40 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  labels:
+    build: storage-api-prod
+  name: storage-api-prod
+spec:
+  failedBuildsHistoryLimit: 5
+  nodeSelector: {}
+  output:
+    pushSecret:
+      name: registry-zby
+    to:
+      kind: DockerImage
+      name: 'registry.zby.icdc.io/icdc/storage-api:prod'
+  postCommit: {}
+  resources: {}
+  runPolicy: Serial
+  source:
+    git:
+      ref: prod
+      uri: 'https://git.zby.icdc.io/icdc/storage/storage-api.git'
+    sourceSecret:
+      name: os-deploy
+    type: Git
+  strategy:
+    dockerStrategy:
+      env:
+        - name: GIT_AUTH
+          valueFrom:
+            secretKeyRef:
+              key: GIT_CRED
+              name: git-cred
+    type: Docker
+  successfulBuildsHistoryLimit: 5
+  triggers:
+    - gitlab:
+        secretReference:
+          name: storage-api-prod-push-event
+      type: GitLab

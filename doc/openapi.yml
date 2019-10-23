@@ -1,0 +1,3214 @@
+openapi: 3.0.1
+info:
+  title: ICDC Storage API
+  description: >
+    # Introduction
+    
+    The `Storage` service provides easy HTTP API to manage **Object Storage** (aka S3 buckets) and **iSCSI Block Storage** functionality of ICDC Cloud Platform.
+    
+    Using this API you can script the complex actions that are required for your business case.
+    
+    The API documentation starting from general overview and followed by reference information on specific endpoints.
+    
+    ## Object Storage
+    
+    **Object Storage** is a technology based on OpenSource `Ceph` project.
+    
+    This functionality allows to create special `s3 user` accounts with the purpose of accessing buckets and store objects into the buckets.
+    Access can be provided with two protocols:
+    - Amazon S3-compatible Protocol
+    - Openstack Swift protocol
+
+    ## iSCSI Block Storage
+
+    This functionality allows to create iSCSI Disks (backed by RBD disk protocol) and iSCSI Clients (consumer devices).
+    iSCSI Clients (identified by IQN) can connect through iSCSI Portals (aka iSCSI Gateways, hosted on CloudGateway VM)
+    and get access to assigned iSCSI Disks (which are RBD disk on shared `Ceph` cluster).
+
+  version: 2.0.2
+  contact:
+    email: support@icdc.io
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+servers:
+  - description: Public URL
+    url: https://api.{loc}.icdc.io/api/storage/v2
+    variables:
+      loc:
+        default: dcz.lab
+        description: 3-letter code of location
+  - description: Location-local URL
+    url: http://storage.cloud-storage.svc:3000/api/v2
+  - description: Local development URL
+    url: http://localhost:8080/api/v2
+tags:
+  - name: Account
+    description: Account management
+  - name: S3
+    description: S3 service management
+  - name: iSCSI
+    description: iSCSI service management
+  - name: Pool
+    description: Pool management
+  - name: Gateway
+    description: Gateway management
+  - name: Config
+    description: Config management
+security:
+  - JWT:
+    # There is list of roles, not scopes:
+    - operator
+    - owner
+    - admin
+    - member
+    Account: []
+    Role: []
+  - basicAuth: []
+    Account: []
+    Role: []
+paths:
+
+  # @DS: reviewed 2024-01-26
+  /accounts:
+    post:
+      operationId: accounts.create
+      tags:
+        - Account
+        - Private
+      summary: Creates account
+      description: >
+        This the internal endpoint used by Setup-API.
+        By sending request to this endpoint you can create account and configures it with minimum usable state.
+
+        It help to configure:
+          - Quotas for each pool and each service
+          - Assign iSCSI Config records
+          - Assign iSCSI Gateway records
+        
+        At the moment, Setup-API starts initialization:
+          - Knows info which CloudGateway(s) are connected to account networks;
+          - Connects to CloudGateway(s) and configures them:
+            - Configured config file name (e.g. *<acc>_default.conf*) in CloudGateway(s);
+            - Assigns pool name (e.g. *iscsi-ssd*);
+          - Knows default credentials to internal iSCSI Gateway API (port :5000);
+          - Knows portal's IP address and API's IP address;
+        
+        As of Setup-API knows relationships between iSCSI Gateway (running on CloudGateway) and Pool (storage type),
+        it can pass all required information to this endpoint to create iSCSI Config and iSCSI Gateway records.
+        Setup-API knows pool names, so it has to request list of pools (see endpoint `/pools`) to find out `pool_id` used in this endpoint.
+         
+
+        Role-based access:
+          - `operator` role can send requests to the endpoint
+          - other roles does have to access the endpoint
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Account'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      operationId: accounts.list
+      tags:
+        - Account
+        - Private
+      summary: List all accounts
+      description: >
+        List all accounts configured in Storage service
+
+
+        Role-based access:
+          - `operator` role has full access
+          - other roles does have to the endpoint
+      responses:
+        '200':
+          $ref: '#/components/responses/Account_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # @DS: reviewed 2024-02-14
+  /accounts/{account}:
+    put:
+      operationId: accounts.update
+      tags:
+        - Account
+        - Private
+      summary: Update account (or re-setup)
+      description: >
+        This the internal endpoint used by Setup-API.
+        By sending request to this endpoint you can update account and re-setup account services.
+        Re-setup used when account was badly configured or new feature introduced which requires reconfiguration of account objects (e.g. iSCSI Config or iSCSI Gateways).
+        Check POST /accounts endpoint for more information.
+        
+        
+        Role-based access:
+          - `operator` role can send requests to the endpoint
+          - other roles does have access to the endpoint
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Account'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Notfound'
+    delete:
+      operationId: accounts.delete
+      tags:
+        - Account
+        - Private
+      summary: Delete (un-register) specific account
+      description: >
+        Delete specific account including:
+         - Remove iSCSI disks and clients
+         - Remove S3 users
+         - Remove S3 buckets
+         - Remove quotas
+         - Remove account entry (last step)
+        
+        As it can take long time it should put deleting task in queue and process such long tasks by separate thread (or process).
+
+        Role-based access:
+          - `operator` role can delete any account
+          - other roles does have access to the endpoint
+      responses:
+        '204':
+          description: "Deleted"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # @DS: reviewed 2024-12-03
+  /s3/limits:
+    # @DS: reviewed 2024-12-03
+    get:
+      operationId: s3.limits.list
+      tags: [Account]
+      summary: List account S3 per-pool limit-sets
+      description: >-
+        List account's S3 per-pool limit-sets (which limits quotas)
+        LimitSet object shares the same structure as QuotaSet.
+
+        Role-based access:
+          - all roles have read access to limit-sets of the authorized account
+          - `operator` gets limits for all accounts
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      responses:
+        '200':
+          $ref: '#/components/responses/S3_Quota_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # @DS: reviewed 2024-12-03
+  /s3/quotas:
+    # @DS: reviewed 2024-12-03
+    get:
+      operationId: s3.quotas.list
+      tags: [Account]
+      summary: List account S3 per-pool quota-sets
+      description: >-
+        List account's S3 per-pool quota-sets.
+        Account may not have quota-sets for some pools.
+
+        Role-based access:
+          - all roles have read access to quota sets of the authorized account
+          - `operator` can get quotas for all accounts
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      responses:
+        '200':
+          $ref: '#/components/responses/S3_Quota_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    # @DS: reviewed 2024-01-26
+    post:
+      operationId: s3.quotas.create
+      tags: [Account]
+      summary: Set up S3 per-pool quota set
+      description: >-
+        The endpoint allows to create S3 QuotaSet for specific pool for specific account.
+
+
+        Only one account quota can be configured for specific pool.
+        Throws `409 Conflict` if tried to install another quota for account per pool.
+
+
+        Role-based access:
+          - `owner`, `admin` roles can create quotas of the authorized account
+          - authorized `operator` can create quota for any account
+      # @DS: quota is going to be a billable metric, so may be restrict to be changed only by owner?
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      requestBody:
+        description: S3 Quota info
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/S3_Quota'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/S3_Quota'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # @DS: reviewed 2024-02-09
+  /s3/quotas/{id}:
+    # @DS: reviewed 2024-02-09
+    # @DS: reviewed 2024-07-18, renamed from: /accounts/{account}/s3/quotas/{id}
+    put:
+      operationId: s3.quotas.update
+      tags: [Account]
+      summary: Modify account S3 quota
+      description: >-
+        Modify account's S3 quota set for specific pool.
+        Modifing quota can not change pool it's connected, so `pool_id` attribute should be ignored.
+
+
+        Role-based access:
+          - `owner`, `admin` roles can create quotas of the authorized account
+          - authorized `operator` can create quota for any account
+      # @DS: quota is going to be a billable metric, so may be restrict to be changed only by owner?
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        description: New values for S3 Quota, may be partial
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/S3_Quota'
+      responses:
+        '200':
+          description: Updated S3 Quota quota values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/S3_Quota'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': #
+          $ref: '#/components/responses/Notfound'
+    delete:
+      operationId: s3.quotas.delete
+      tags: [Account]
+      summary: Delete account S3 quota
+      description: >-
+        Delete account's S3 quota for specific pool.
+
+
+        Role-based access:
+          - `owner`, `admin` roles can delete quotas of the authorized account
+          - authorized `operator` can delete quota for any account
+      # @DS: quota is going to be a billable metric, so may be restrict to be changed only by owner?
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-12-03
+  /iscsi/limits:
+    # @DS: reviewed 2024-12-03
+    get:
+      operationId: iscsi.limits.list
+      tags: [Account]
+      summary: List account S3 per-pool limit-sets
+      description: >-
+        List account's S3 per-pool limit-sets (which limits quotas)
+        LimitSet object shares the same structure as QuotaSet.
+
+        Role-based access:
+          - all roles have read access to limit-sets of the authorized account
+          - `operator` gets limits for all accounts
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      responses:
+        '200':
+          $ref: '#/components/responses/iSCSI_Quota_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # @DS: reviewed 2024-01-26
+  /iscsi/quotas:
+    # @DS: reviewed 2024-01-26
+    get:
+      operationId: iscsi.quotas.list
+      tags: [Account]
+      summary: List account iSCSI per-pool quota-sets
+      description: >-
+        List account's iSCSI quota sets for configured pools.
+        Account may not have quotas for some pools.
+
+        Role-based access:
+          - all roles have read access to quotas of the authorized account
+          - `operator` gets quotas for all account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      responses:
+        '200':
+          $ref: '#/components/responses/iSCSI_Quota_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      # @DS: reviewed 2024-01-26
+      operationId: iscsi.quotas.create
+      tags: [Account]
+      summary: Sets up account's iSCSI quotas
+      description: >-
+        Create account's iSCSI quotas for specific pool
+        
+        Only one account quota can be configured for specific pool.
+        Throw `409 Conflict` if tried to install another quota for account per pool.
+
+        Role-based access:
+          - `owner`, `admin` roles can create quotas of the authorized account
+          - authorized `operator` can create quota for any account
+      # TODO: @DS: quota is going to be a billable metric, so may be restrict to be changed only by owner?
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      requestBody:
+        description: iSCSI Quota info
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/iSCSI_Quota'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/iSCSI_Quota'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # @DS: reviewed 2024-02-06
+  /iscsi/quotas/{id}:
+    # @DS: reviewed 2024-02-06
+    # @DS: reviewed 2024-07-18, renamed from: /accounts/{account}/iscsi/quotas/{id}
+    put:
+      operationId: iscsi.quotas.update
+      tags: [Account]
+      summary: Modify account iSCSI quota
+      description: >-
+        Modify specific account's iSCSI quota for configured pools.
+        Modifing quota can not change pool it's connected, so `pool_id` attribute should be ignored.
+
+
+        Role-based access:
+          - `owner` can modify quotas in authorized account
+          - `operator` can modify quota in any account
+          - other roles can not modify quota
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        description: New values for iSCSI Quota, may be partial
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/iSCSI_Quota'
+      responses:
+        '200':
+          description: Updated iSCSI quota values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/iSCSI_Quota'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Notfound'
+    #TODO: @DS: implemented DELETE endpoint, currently we can not remove quotas
+
+
+  ###########################
+  ##   iSCSI Endpoints     ##
+  ###########################
+
+  # @DS: reviewed 2024-02-02
+  /iscsi/configs:
+    # @DS: reviewed 2024-01-29
+    get:
+      operationId: iscsi.configs.list
+      tags: 
+        - Account
+        - iSCSI
+      summary: List account iSCSI Configs
+      description: >-
+        List account's config for iSCSI gateways.
+
+        Role-based access:
+          - all roles can read access to configs of the authorized account
+          - `operator` can get configs for any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      responses:
+        '200':
+          $ref: '#/components/responses/iSCSI_Config_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    # @DS: reviewed 2024-02-02
+    post:
+      operationId: iscsi.configs.create
+      tags:
+        - Account
+        - iSCSI
+      summary: Create new iSCSI Config
+      description: >-
+        Create new account's config of iSCSI gateways.
+        iSCSI Config describes configuration of iSCSI Target, which describes:
+          - iSCSI Portals (IP to connect), which are hosted on 1 or more iSCSI Gateways.
+          - iSCSI Target (IQN name)
+          - Disks (LUNs)
+          - Clients (client machine id)
+        Currently there is no owner user for iSCSI config, so it's account-owned access level object.
+
+        Role-based access:
+          - `operator` can create configs for any account
+          - `operator` can create configs for any account
+          - other roles can not create new iscsi configs
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      requestBody:
+        description: iSCSI Config
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/iSCSI_Config'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/iSCSI_Config'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # @DS: reviewed 2024-02-02
+  /iscsi/configs/{config_id}:
+    # @DS: reviewed 2024-02-02
+    get:
+      operationId: iscsi.configs.get
+      tags: [iSCSI]
+      summary: Get single iSCSI Config by ID
+      description: >-
+        Get iSCSI config by ID
+        iSCSI Config describes configuration of iSCSI Target, which describes:
+          - iSCSI Portals (IP to connect), which are hosted on 1 or more iSCSI Gateways.
+          - iSCSI Target (IQN name)
+          - Disks (LUNs)
+          - Clients (client machine id)
+
+        Role-based access:
+          - all roles have read access to configs of the authorized account
+          - `operator` can get configs for any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ConfigId'
+      responses:
+        '200':
+          description: iSCSI Gateway's Config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/iSCSI_Config'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented
+          $ref: '#/components/responses/Notfound'
+    # @DS: reviewed 2024-02-02
+    delete:
+      operationId: iscsi.configs.delete
+      tags: [iSCSI]
+      summary: Delete single iSCSI Config by ID
+      description: >
+        Only "empty" iSCSI config can be deleted
+        "Empty" means that iSCSI config is a pure record in database and is not deployed to any active CloudGateway instance.        
+        Currently there is no owner of iSCSI config, so it's account-owned access level object.
+
+        Role-based access:
+          - `owner`\`admin` can delete config for authorized account
+          - `operator` can delete configs for any account
+          - other roles can not delete configs
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ConfigId'
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented
+          $ref: '#/components/responses/Notfound'
+  
+  # @DS: reviewed 2024-02-02
+  /iscsi/configs/{config_id}/disks:
+    # @DS: reviewed 2024-02-02
+    get:
+      operationId: iscsi.configs.disks.list
+      tags: [iSCSI]
+      summary: Get iSCSI Disks which created in the config/target
+      description: >-
+        Disks are created and then managed by end-users in specific config.
+        Practically currently we prodive only one configuration per storage type (aka Pool).
+        Disk has one owner user.
+
+        Role-based access:
+          - `member` have full access only to own disks
+          - `owner`\`admin` can see all disks for authorized account
+          - `operator` can see all disks for any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ConfigId'
+      responses:
+        '200':
+          $ref: '#/components/responses/iSCSI_Disk_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': #
+          $ref: '#/components/responses/Notfound'
+    # @DS: reviewed 2024-02-02
+    post:
+      operationId: iscsi.disks.create
+      tags: [iSCSI]
+      summary: Create new iSCSI Disk on specific config/target
+      description: >-
+        Disks are created by end-users in the specific iSCSI config.
+        Currently we have only one iSCSI config per storage type (aka Pool).
+        Disk has one owner user.
+
+        Role-based access:
+          - `member` have full access only to own disks
+          - `owner`\`admin` can create disks on behalf of other users in authorized account
+          - `operator` can create disks on behalf of other users in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ConfigId'
+      requestBody:
+        description: iSCSI Disk
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/iSCSI_Disk'
+      responses:
+        '200':
+          description: Created iSCSI disk
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/iSCSI_Disk'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': #
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-02-02
+  # TODO: @DS: May be better to move to /iscsi/disks/{id} as anyway is unique in database ID
+  /iscsi/configs/{config_id}/disks/{id}:
+    # @DS: reviewed 2024-02-02
+    put:
+      operationId: iscsi.disks.update
+      tags: [iSCSI]
+      summary: Update disk which provided by config/target
+      description: >-
+        Disks are created/updated by end-users in the specific iSCSI config.
+        Currently we have only one iSCSI config per storage type (aka Pool).
+        Disk has one owner user.
+
+        Role-based access:
+          - `member` have full access only to own disks
+          - `owner`\`admin` can update any disks in authorized account
+          - `operator` can update disks in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: config_id
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: id
+          description: Disk ID
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        description: Update iSCSI Disk
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/iSCSI_Disk'
+      responses:
+        '200':
+          description: Updated iSCSI disk parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/iSCSI_Disk'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented
+          $ref: '#/components/responses/Notfound'
+    # @DS: reviewed 2024-02-02
+    delete:
+      operationId: iscsi.disks.delete
+      tags: [iSCSI]
+      summary: Delete disk from config/target
+      description: >-
+        Disks are created and removed by end-users in the specific iSCSI config.
+        This operation effectevely destroy data on selected disk and removes it from iSCSI config.
+        Currently we have only one iSCSI config per storage type (aka Pool).
+        Disk has one owner user.
+
+        Role-based access:
+          - `member` have full access (including deleting) only to own disks
+          - `owner`\`admin` can delete disks on behalf of other users in authorized account
+          - `operator` can delete disks in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ConfigId'
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-02-02
+  # TODO: @DS: POST endpoint assign gateways is not implemented yet, move here from /configs/{config_id}/gateways
+  /iscsi/configs/{config_id}/gateways:
+    # @DS: reviewed 2024-02-02
+    get:
+      operationId: iscsi.configs.gateways.list
+      tags: [iSCSI]
+      summary: Get iSCSI Gateways defined in iSCSI Target/Config
+      description: >-
+        Get list of iSCSI Portals (aka iSCSI Gateways) for specific iSCSI Target/Config.
+        iSCSI Gateways are assigned by provisioning automation (or manually operator users).
+        Gateway may belong only to one iSCSI Target/Config and as well to one pool.
+        For a moment we provide only one iSCSI configuration per storage type (aka Pool).
+
+        Role-based access:
+          - all roles can get list of gateways in any config for authorized account
+          - `operator` can get list of gateways in any config for any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ConfigId'
+      responses:
+        '200':
+          $ref: '#/components/responses/iSCSI_Gateway_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, config not found
+          $ref: '#/components/responses/Notfound'
+    # @DS: reviewed 2024-02-02
+    # TODO: @DS: move here from /configs/{config_id}/gateways
+    post:
+      operationId: iscsi.gateways.create
+      tags: [iSCSI]
+      summary: Create iSCSI gateway to iSCSI Target/Config
+      description: >-
+        Create iSCSI Gateway (hosted on CloudGateway) to specific iSCSI Target/Config.
+        iSCSI Gateways are create by provisioning automation (Setup API) or manually operator users.
+        Gateway may belong only to one iSCSI Target/Config and as well to one pool.
+        For a moment we provide only one iSCSI configuration per storage type (aka Pool).
+        Gateways have no specific owner user, they are account-owner access level objects.
+
+        Note:
+          - assigning of gateway should trigger configuration changes at CloudGateway instance.
+          - it's a good idea to trigger Setup API (or even better some Gateway API) which will produce changes into CloudGateway instances.
+          - for a moment operator must take all changes manually before reassign the iSCSI Gateways to another iSCSI Target/Config.
+
+        Role-based access:
+          - `operator` can assign gateway in any account
+          - other roles can not assign gateways.
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ConfigId'
+      requestBody:
+        description: iSCSI Gateway
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Gateway'
+      responses:
+        '200':
+          description: Assigned iSCSI Gateway
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gateway'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-02-02
+  /iscsi/clients:
+    # @DS: reviewed 2024-02-02
+    get:
+      operationId: iscsi.clients.list
+      tags: [Account]
+      summary: Get account's iSCSI clients
+      description: >-
+        Get account's ISCSI clients (aka consumer devices) which mounts iSCSI disks.
+        Client records are created by end-users.
+        One client device can connect to multple pools so it can be involved in multiple iSCSI configs.
+        Client has one owner user.
+
+        Role-based access:
+          - `member` have full access only to own clients
+          - `owner`\`admin` can get list of clients in authorized account
+          - `operator` can get list of clients in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      responses:
+        '200':
+          description: Account's iSCSI clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/iSCSI_Client'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    # @DS: reviewed 2024-02-02
+    post:
+      operationId: iscsi.clients.create
+      tags: [Account]
+      summary: Create new iSCSI Client (consumer) devices
+      description: >-
+        Create new ISCSI clients (aka consumer devices) which mounts iSCSI disks.
+        Client records are created by end-users.
+        One client device can connect to multple pools so it can be involved in multiple iSCSI configs.
+        Client has one owner user.
+
+        Role-based access:
+          - `member` can create new clients and become the owner of the client record
+          - `owner`\`admin` can create clients on behalf of other users in authorized account
+          - `operator` can create clients in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      requestBody:
+        description: iSCSI Client
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/iSCSI_Client'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/iSCSI_Client'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # @DS: reviewed 2024-02-02
+  /iscsi/clients/{client_id}:
+    put:
+      operationId: iscsi.clients.update
+      tags: [iSCSI]
+      summary: Update iSCSI Client (consumer) devices
+      description: >-
+        Updating ISCSI clients (aka consumer devices) which mounts iSCSI disks.
+        Client records are created and managed by end-users.
+        One client device can connect to multple pools so it can be involved in multiple iSCSI configs.
+        Client has one owner user.
+
+        Role-based access:
+          - `member` can modify only own clients
+          - `owner`\`admin` can modify clients in authorized account
+          - `operator` can modify clients in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      requestBody:
+        description: Update iSCSI Client
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/iSCSI_Client'
+      responses:
+        '200':
+          description: Return updated iSCSI Client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/iSCSI_Client'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented
+          $ref: '#/components/responses/Notfound'
+        
+  # @DS: reviewed 2024-02-02
+  /iscsi/clients/{client_id}/disks:
+    # @DS: reviewed 2024-02-02
+    get:
+      operationId: iscsi.clients.disks.list
+      tags: [iSCSI]
+      summary: Get list of iSCSI Disks which assigned to the iSCSI Client
+      description: >-
+        Get list disks assigned of the specific ISCSI client (aka consumer devices).
+        Client and disks records are created and managed by end-users.
+        One client device can assigned on different disks, but one disk can be only in one Pool (iSCSI Config)
+        Client has one owner user. Disk has one owner user.
+
+        Role-based access:
+          - `member` can get list of all disks assigned to the own client.
+          - `owner`\`admin` can get list of all disks for all clients in authorized account
+          - `operator` can get get list of disks for all clients in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      responses:
+        '200':
+          description: iSCSI Client's assigned disks
+          $ref: '#/components/responses/iSCSI_Disk_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented
+          $ref: '#/components/responses/Notfound'
+    # @DS: reviewed 2024-02-02
+    post:
+      operationId: iscsi.clients.disks.assign
+      tags: [iSCSI]
+      summary: Assign existing iSCSI Disks to the specific iSCSI client
+      description: >-
+        With this endpoint multiple iSCSI disks multiple can be assigned to the ISCSI client (aka consumer device).
+        Basically multiple disks can be assigned to multiple clients.
+        Client and disks records are created and managed by end-users.
+        Client has one owner user. Disk has one owner user.
+
+        Effectively owner\admin can assign disk of one user to another user's client.
+        User which owns the client can later resign its own client from specific disk.
+
+        Role-based access:
+          - `member` can assign own disks to own client.
+          - `owner`\`admin` can assign any disks to any client in authorized account
+          - `operator` can assign any disk in to any client (both must be in the same account) in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      requestBody:
+        description: List of iSCSI Disk assignments
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/iSCSI_Disk_Assign'
+      responses:
+        '200':
+          description: All disks assigned to client including new assigned disks
+          $ref: '#/components/responses/iSCSI_Disk_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, client not found
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-02-02
+  /iscsi/clients/{client_id}/disks/{id}:
+    delete:
+      operationId: iscsi.clients.disks.unassign
+      tags: [iSCSI]
+      summary: Unassign disk from specific iSCSI client
+      description: >-
+        With this endpoint specific iSCSI disk can be unassigned (resigned) from the ISCSI client (aka consumer device).
+        Basically, multiple disks can be assigned to multiple clients.
+        Client and disk records are created, assigned, unassigned and deleted by end-users.
+        Client has one owner user. Disk has one owner user.
+
+        Effectively owner\admin can assign disk of one user to another user's client.
+        User which owns the client can unassign any disk from own client.
+
+        Role-based access:
+          - `member` can unassign any disks from own client.
+          - `owner`\`admin` can unassign any disk from any client in authorized account
+          - `operator` can unassign any disk from any client in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, client not found or disk not found
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-02-02
+  /iscsi/snapshots:
+    # @DS: reviewed 2024-02-02
+    get:
+      operationId: iscsi.snapshots.list
+      tags: [Account]
+      summary: Get account's snapshots
+      description: >-
+        Snapshots are created for specific iSCSI disk (backed by RBD disk).
+        Snapshots are owned by one owner user of related disk.
+
+        Role-based access:
+          - `member` have access to list of snapshots for own disks
+          - `owner`\`admin` can see list of all snapshots in authorized account
+          - `operator` can see list of all snapshots in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/Account'
+      responses:
+        '200':
+          $ref: "#/components/responses/iSCSI_Snapshot_List"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # @DS: reviewed 2024-02-02
+  /iscsi/disks/{disk_id}/snapshots:
+    # @DS: reviewed 2024-02-02
+    get:
+      operationId: iscsi.disks.snapshots.list
+      tags: [iSCSI]
+      summary: Get list of snapshots for iSCSI disk
+      description: >-
+        Get list of snapshots related to specific iSCSI disk.
+        Snapshots are owned by the owner of disk.
+        Snapshots are created and managed by end-user.
+
+        Role-based access:
+          - `member` can get list of snapshots of own disk.
+          - `owner`\`admin` can get list of snapshots for any disk in authorized account
+          - `operator` can get list of snapshots for any disk in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/DiskId'
+      responses:
+        '200':
+          description: Disk snapshots
+          $ref: '#/components/responses/iSCSI_Snapshot_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, disk not found
+          $ref: '#/components/responses/Notfound'
+    # @DS: reviewed 2024-02-02
+    post:
+      operationId: iscsi.disks.snapshots.create
+      tags: [iSCSI]
+      summary: Create snapshot for iSCSI disk
+      description: >-
+        Create snapshot for specific iSCSI disk.
+        Snapshots are created by end-users.
+
+        Role-based access:
+          - `member` can create snapshot only for own disk.
+          - `owner`\`admin` can create snapshot on behalf of other users for any disk in authorized account
+          - `operator` can create snapshot for any disk in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/DiskId'
+      requestBody:
+        description: iSCSI Disk Snapshot info
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Snapshot'
+      responses:
+        '200':
+          description: iSCSI Disk Snapshot
+          $ref: '#/components/schemas/Snapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, disk not found
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-02-02
+  # TODO: @DS: May be we should remove this endpoint as we can get all info from list of snapshot for specific disk
+  # TODO: At least should be refactored to replace snapshot_name => snapshot.id as identification parameter
+  /iscsi/disks/{disk_id}/snapshots/{snapshot_name}:
+    # @DS: reviewed 2024-02-02
+    get:
+      operationId: iscsi.snapshots.get
+      tags: [iSCSI]
+      summary: Get iSCSI Snapshot info
+      description: >-
+        Get specific snapshot by snapshot name
+        Snapshort are created by end-users.        
+        Snapshot is owned by the owner of disk.
+
+        Role-based access:
+          - `member` can get list of snapshots for own disks.
+          - `owner`\`admin` can get list of snapshots for any disk in authorized account
+          - `operator` can get list of snapshots for any disk in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/DiskId'
+        - in: path
+          name: snapshot_name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Specific snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Snapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, disk not found or snapshot not found
+          $ref: '#/components/responses/Notfound'
+    # @DS: reviewed 2024-02-02
+    # @DV: Not used in UI
+    put:
+      operationId: iscsi.snapshots.update
+      tags: [iSCSI]
+      summary: Update parameters of Snapshot for iSCSI disk
+      description: >-
+        Update specific snapshot by snapshot name
+        Snapshort are created by end-users.        
+        Snapshot is owned by the owner of disk.
+
+        Role-based access:
+          - `member` can update snapshots for own disks.
+          - `owner`\`admin` can update snapshots for any disk in authorized account
+          - `operator` can update of snapshots for any disk in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/DiskId'
+        - in: path
+          name: snapshot_name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: iSCSI Snapshot parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Snapshot'
+      responses:
+        '200':
+          description: Specific snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Snapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, disk not found or snapshot not found
+          $ref: '#/components/responses/Notfound'
+    # @DS: reviewed 2024-02-02
+    delete:
+      operationId: iscsi.snapshots.delete
+      tags: [iSCSI]
+      summary: Delete snapshot of iSCSI disk
+      description: >-
+        Delete specific snapshot by snapshot name.
+        This operation effectively and permanently destroy data RBD snapshot for specific disk.
+        Snapshort are created and deleted by end-users.
+        Snapshot is owned by the owner of disk.
+
+        Role-based access:
+          - `member` can delete snapshots for own disks.
+          - `owner`\`admin` can delete snapshots for any disk in authorized account
+          - `operator` can delete of snapshots for any disk in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/DiskId'
+        - in: path
+          name: snapshot_name
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, disk not found or snapshot not found
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-02-02
+  # TODO: @DS: replace with /iscsi/config/{config_id}/disks with parameter "from_snapshot"
+  /iscsi/disks/{disk_id}/snapshots/{snapshot_name}/new_disk:
+    post:
+      operationId: iscsi.snapshots.disks.create
+      tags: [iSCSI]
+      summary: Create a new iSCSI disk from existing snapshot of iSCSI disk
+      description: >-
+        Create iSCSI disk from snapshot of iSCSI disk.
+        Disks and snapshots are created by end-users.
+        Making disk is time consuming operation, so we don't guarantee return in before default 30 sec UI timeout.
+
+        Role-based access:
+          - `member` can create disk only from snapshots of own disk.
+          - `owner`\`admin` can create disk from any snapshot in authorized account
+          - `operator` can create disk from any snapshot in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/DiskId'
+        - in: path
+          name: snapshot_name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: iSCSI Disk
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/iSCSI_Disk'
+      responses:
+        '200':
+          description: iSCSI Disk
+          $ref: '#/components/schemas/iSCSI_Disk'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, disk not found
+          $ref: '#/components/responses/Notfound'
+  
+  # @DS: reviewed 2024-02-02
+  # TODO: @DS: replace with /iscsi/snapshots/{id}/restore
+  # @DV: 2024-02-07 Not used in UI
+  /iscsi/disks/{disk_id}/snapshots/{snapshot_name}/rollback:
+    post:
+      operationId: iscsi.snapshots.rollback
+      tags: [iSCSI]
+      summary: Restore iSCSI disk from snapshot
+      description: >-
+        Restore state of iSCSI disk from snapshot.
+        Disks and snapshots are created by end-users.
+        Restore a disk may be a time consuming operation, so we don't guarantee return in before default 30 sec UI timeout.
+
+        Role-based access:
+          - `member` can restore disk only from snapshots of own disk.
+          - `owner`\`admin` can restore disk from any snapshot in authorized account
+          - `operator` can restore disk from any snapshot in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/DiskId'
+        - in: path
+          name: snapshot_name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: iSCSI Disk
+          $ref: '#/components/schemas/iSCSI_Disk'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, disk not found or snapshot not found
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-02-02
+  # TODO: Currently not implemeted endpoint, it should replace implemented functions which use snapshot_name as id
+  # TODO: Put disk into restore state,  as we do not have other notification channel and task queue.
+  /iscsi/snapshots/{id}/restore:
+    post:
+      operationId: iscsi.snapshots.restore
+      tags: [iSCSI]
+      summary: Restore original disk for selected snapshot
+      description: >-
+        Restore state of original iSCSI disk from the selected snapshot.
+        Disks and snapshots are created by end-users.
+        Restore is time-consuming operation, so we can not guarantee that it finishes in default (30 sec) UI timeout.
+        Need to change state of disk, so nobody will restore in the same time.
+
+        Role-based access:
+          - `member` can restore from snapshot only for own disk.
+          - `owner`\`admin` can restore from snapshot any disk in authorized account
+          - `operator` can restore from snapshot any disk in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS not implemented, snapshot not found
+          $ref: '#/components/responses/Notfound'
+
+
+  ###########################
+  ##    Pools Endpoints    ##
+  ###########################
+
+  # @DS: reviewed 2024-02-02
+  /pools:
+    get:
+      operationId: pools.list
+      tags: [Pool]
+      summary: Get list of storage pools
+      description: >-
+        List pools of specific type.
+        Pools are configured during Storage installation (via seeding) and managed by operator users.
+
+        Role-based access:
+          - all roles can list pools (storage types)
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: query
+          name: type
+          required: true
+          schema:
+            type: string
+            example: s3
+      responses:
+        '200':
+          description: A storage pool object
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pool'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  ###########################
+  ##      S3 Endpoints     ##
+  ###########################
+
+  # @DS: reviewed 2024-02-05
+  /s3/users:
+    # @DS: reviewed 2024-02-05
+    get:
+      operationId: s3.users.list
+      tags: [S3]
+      summary: Get account's S3/Swift users
+      description: >-
+        Get list of technical S3/Swift user records which stores Access/Secret keys.
+        This keys are used to access buckets and objects via S3/Swift protocols.
+        S3/Swift protocol is out of scope of the current API.
+        Each S3 user object has owner user (identified by email).
+
+        Role-based access:
+          - `member` can get list of own s3users.
+          - `owner`\`admin` can get list of all s3users in authorized account
+          - `operator` can get list of all s3users in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      responses:
+        '200':
+          $ref: '#/components/responses/S3_User_List'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    # @DS: reviewed 2024-02-05
+    post:
+      operationId: s3.users.create
+      tags: [S3]
+      summary: Create new s3 user in account
+      description: >-
+        Creates technical S3/Swift user record which stores Access/Secret keys.
+        This keys are used to access buckets and objects via S3/Swift protocols.
+        S3/Swift protocol is out of scope of the current API.
+        Each S3 user object has owner user (identified by email).
+
+        NOTE: All newly created S3User objects will be prefixed with account name.
+
+        Role-based access:
+          - `member` can create `s3user` and become an owner of it.
+          - `owner`\`admin` can create `s3user` on behalf of other users in authorized account
+          - `operator` can create `s3user` on behalf of other users in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      requestBody:
+        description: S3 User parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/S3_User'
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/S3_User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # @DS: reviewed 2024-02-05
+  /s3/users/{id}:
+    # @DS: reviewed 2024-02-05
+    # @DS: we implemented it for page which show details on s3user.
+    get:
+      operationId: s3.users.get
+      tags: [S3]
+      summary: Get details on specific S3/Swift user
+      description: >-
+        Get details on technical S3/Swift user record which stores Access/Secret keys.
+        Each S3 user object has owner user (identified by email).
+
+        Role-based access:
+          - `member` can get list of own s3users.
+          - `owner`\`admin` can get list of all s3users in authorized account
+          - `operator` can get list of all s3users in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: S3 user for object storage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/S3_User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Notfound'
+    # @DS: reviewed 2024-02-05
+    put:
+      operationId: s3.users.update
+      tags: [S3]
+      summary: Modify S3 user object
+      description: >-
+        Modify technical S3/Swift user record (`s3user`) which stores Access/Secret keys.
+        Each `s3user` object has owner user (identified by email).
+
+        Role-based access:
+          - `member` can modify only own `s3users`. Can not change `s3user` ownership.
+          - `owner`\`admin` can modify any `s3users` in authorized account
+          - `operator` can modify any `s3users` in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        description: Update S3 user object
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/S3_User'
+      responses:
+        '200':
+          description: S3 user for object storage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/S3_User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Notfound'
+    # @DS: reviewed 2024-02-05
+    delete:
+      operationId: s3.users.delete
+      tags: [S3]
+      summary: Delete S3 user record
+      description: >-
+        Delete technical S3/Swift user record (`s3user`) which stores Access/Secret keys.
+        Each `s3user` object has owner user (identified by email).
+
+        Role-based access:
+          - `member` can delete only own `s3users`.
+          - `owner`\`admin` can delete any `s3users` in authorized account
+          - `operator` can delete any `s3users` in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-12-09
+  /s3/buckets:
+    get:
+      operationId: s3.buckets.list
+      tags: [S3]
+      summary: Get list of S3 buckets
+      description: >
+        Get list of `S3 Buckets`.  
+        Each bucket is owned by single `s3user` entity (which holds access and secret keys).  
+        `s3user` entity has owner user (responsible person identified by email).  
+
+
+        Role-based access:
+          - `member` can get list of buckets of own s3user.
+          - `owner`\`admin` can get list of buckets for all s3users in authorized account
+          - `operator` can get list of buckets for all s3users in any account
+        
+        Filtering:
+          - `filter[user_name]` - filter by S3 user name
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: query
+          name: filter[user_name]
+          description: Filter by S3 user name
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/S3_Bucket_List'
+    post:
+      operationId: s3.buckets.create
+      tags: [S3]
+      summary: Create S3 bucket for S3 user
+      description: >
+        Create S3 Bucket owned by specific S3 user.
+        Buckets are unique in account and can be created up to `s3user` quota.
+        S3 user object has owner user (identified by email).
+
+
+        Role-based access:
+          - `member` can create bucket and becomes owner of the bucket.
+          - `owner`\`admin` can create buckets on behalf of other users in authorized account
+          - `operator` can create buckets on behalf of other users in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      requestBody:
+        description: Create new Bucket
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Bucket'
+      responses:
+        '200':
+          description: S3 user for object storage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bucket'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': #
+          $ref: '#/components/responses/Notfound'
+  # @DS: reviewed 2024-12-09
+  /s3/buckets/{path}:
+    # @DS: reviewed 2024-02-05
+    put:
+      operationId: s3.buckets.update
+      tags: [S3]
+      summary: Modify existing bucket
+      description: >
+        Modify existing S3 Bucket.
+        Buckets are unique in account (by prefixing account name) and can be created up to `s3user` quota.
+        S3 user object has owner user (identified by email).
+
+
+        Role-based access:
+          - `member` can modify bucket for own s3users.
+          - `owner`\`admin` can modify buckets on behalf of other users in authorized account
+          - `operator` can create buckets on behalf of other users in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: path
+          description: Full path to S3 bucket (with account prefix if applicable)
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Update Bucket info
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Bucket'
+      responses:
+        '200':
+          description: S3 user for object storage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bucket'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': #
+          $ref: '#/components/responses/Notfound'
+    delete:
+      operationId: s3.buckets.delete
+      tags: [S3]
+      description: >
+        Delete S3 Bucket
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': #
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2024-02-08
+  /s3/users/{id}/keys:
+    # @DS: reviewed 2024-02-08
+    post:
+      operationId: s3.users.keys.regenerate
+      tags: [S3]
+      summary: Regenerate keys for S3 Protocol
+      description: >
+        Regenerate S3 user access and secret keys used in S3 protocol.
+        This endpoint can be useful if lost access to keys or they have been compromised.
+        Currently, S3 user may have only one credential per protocol:
+         - one pair of S3 keys
+         - one key for Swift protocol
+        Keys are stored inside S3 user object.
+        S3 user object has owner user (identified by email).
+
+        Role-based access:
+          - `member` can regenerate keys for own s3users.
+          - `owner`\`admin` can regenerate keys of other s3users in authorized account
+          - `operator` can regenerate keys on behalf of other s3users in any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: S3 user for object storage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/S3_User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': #
+          $ref: '#/components/responses/Notfound'
+
+
+  ############################
+  ##  Gateway Endpoints     ##
+  ############################
+
+  # @DS: reviewed 2024-02-06
+  /gateways:
+    # TODO: @DS: currently it's implemented in a wrong way
+    post:
+      operationId: gateway_create
+      tags:
+      - Gateway
+      - Private
+      description: >
+        Register new unassigned gateway in Storage database.
+        Such new gateway entry stores used credentials and IP addresses, but is not assigned to any account or iSCSI Target/Config.
+        This endpoint may be used by [not implemented yet] Gateway API automation during provisioning of a new CloudGateway.
+
+        Role-based access:
+          - `operator` can create new gateway records in any account
+          - other roles has no access to this endpoint
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      requestBody:
+        description: iSCSI Gateway, without Account and Config parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Gateway'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gateway'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # @DS: reviewed 2024-02-06
+  # TODO: @DS: currently it's implemented in a wrong way
+  /gateways/{gateway_id}:
+    get:
+      tags:
+        - Gateway
+        - Private
+      summary: Get specific iSCSI Gateway by ID
+      description: >
+        Get info on specific iSCSI Gateway (hosted on CloudGateway).
+        iSCSI Gateways are create by provisioning automation (Setup API) or manually by operator users.
+        Gateway may belong only to one iSCSI Target/Config and as well to one pool.
+        Gateways have no specific owner user, they are account-owner access level objects.
+
+        Role-based access:
+          - `operator` can get information on any gateway in any account
+          - other roles can get information on any gateway assigned to own iSCSI Config.
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - in: path
+          name: gateway_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: iSCSI Gateway object by ID
+          content:
+            application/json:
+              schema:
+                type: object
+                oneOf:
+                 - $ref: '#/components/schemas/Gateway'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': # TODO: @DS: not implemented
+          $ref: '#/components/responses/Notfound'
+
+  ############################
+  ##  Config Endpoints     ##
+  ############################
+  
+  # @DS: reviewed 2024-02-02
+  # TODO: @DS: we should get rid of this endpoints in favor of : /iscsi/configs/{config_id}/gateways
+  /configs/{config_id}/gateways:
+    get:
+      operationId: iscsi_config_gateway_list
+      tags: [Config]
+      summary: Get iSCSI Gateways defined in iSCSI Target/Config
+      description: >-
+        Get list of iSCSI Portals (aka iSCSI Gateways) for specific iSCSI Target/Config.
+        iSCSI Gateways are assigned by provisioning automation (or manually operator users).
+        Gateway may belong only to one iSCSI Target/Config and as well to one pool.
+        For a moment we provide only one iSCSI configuration per storage type (aka Pool).
+
+        Role-based access:
+          - all roles can get list of gateways in any config for authorized account
+          - `operator` can get list of gateways in any config for any account
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ConfigId'
+      responses:
+        '200':
+          description: List of iSCSI Gateways defined in iSCSI Target/Config
+          $ref: '#/components/responses/iSCSI_Gateway_List'
+    post:
+      operationId: iscsi_config_gateway_create
+      tags: [Config]
+      description: >
+        Create new iSCSI Gateway record.
+        This API is intended to be used by Setup API to configure CloudGateway.
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/ConfigId'
+      requestBody:
+        description: iSCSI Config
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Gateway'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gateway'
+
+components:
+  responses:
+    Conflict:
+      description: Conflict creating or modifying object
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: '409'
+            message: Object already exists or can not be changed
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: '401'
+            message: Not authorized to perform operation
+    Notfound:
+      description: Specific object not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: '404'
+            message: Not found
+    Account_List:
+      description: A JSON array of Account objects
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/Account'
+          examples:
+            All accounts:
+              value:
+              - name: acc1
+                description: Business account 1
+                quotas:
+                  s3:
+                    - id: 33
+                      objects: 2000
+                      buckets: 20
+                      users: 10
+                      data_size_mb: 10240
+                      pool:
+                        id: 13
+                        type: s3 
+                        name: nvme-object
+                        class: nvme
+                  iscsi:
+                    - id: 35
+                      clients: 50
+                      data_size_gb: 200
+                      disks: 10
+                      snapshots: 15
+                      pool:
+                        id: 15
+                        type: iscsi
+                        name: nvme-data
+                        class: nvme
+              - name: acc2
+                description: Business account 2
+    S3_Quota_List:
+      description: A JSON array of Account's S3 Quota object per pool
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/S3_Quota'
+          examples:
+            All account S3 quotas:
+              value:
+              - id: 33
+                objects: 2000
+                buckets: 20
+                users: 10
+                data_size_mb: 10240
+                account_name: acc1
+                pool:
+                  id: 13
+                  type: s3 
+                  name: nvme-object
+                  class: nvme
+              - id: 34
+                objects: 3000
+                buckets: 300
+                users: 30
+                data_size_mb: 512
+                account_name: acc1
+                pool:
+                  id: 14
+                  type: s3
+                  name: hdd-object
+                  class: hdd
+    S3_User_List:
+      description: A JSON array of Account's S3 User object
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/S3_User'
+          examples:
+            All account S3 users:
+              # TODO: @DS: review values
+              value:
+              - id: 102
+                name: acc1$app1
+                description: S3User for application 1 in account 1
+                is_locked: true
+                owner: user1@example.net
+                pool:
+                  id: 13
+                  type: s3 
+                  name: nvme-data
+                  class: nvme
+                keys:
+                  s3:
+                    user: acc1$app1
+                    access_key: T99JA8DRRC6SL7VLO03
+                    secret_key: mZ13a3rB6s3hGBFLVUzawqnRsUAUN2Nbc6BofNWD
+                  swift:
+                    user: acc1$app1:swift
+                    secret_key: T6fOLwLIDJ8SEvj4RWrgbYAToIZztTeKfkFYqZh4
+                quota:
+                  objects: 2000
+                  buckets: 20
+                  data_size_mb: 10240
+                usage:
+                  objects: 1222
+                  buckets: 12
+                  data_size_mb: 999
+              - id: 103
+                name: global-s3user
+                description: S3User in global scope
+                is_locked: false
+                owner: user2@example.net
+                pool:
+                  id: 14
+                  type: s3
+                  name: hdd-data
+                  class: hdd
+                keys:
+                  s3:
+                    user: global-s3user
+                    access_key: A99JA8DRRC6SL7VLO04
+                    secret_key: qZ13a3rB6s3hGBFLVUzawqnRsUAUN2Nbc6BofNWG
+                  swift:
+                    user: global-s3user:swift
+                    secret_key: i7fOLwLIDJ8SEvj4RWrgbYAToIZztTeKfkFYqZh5
+                quota:
+                  objects: 3000
+                  buckets: 300
+                  data_size_mb: 512
+                usage:
+                  objects: 1555
+                  buckets: 154
+                  data_size_mb: 55
+    S3_Bucket_List:
+      description: A JSON array of Buckets owned by S3 User
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/Bucket'
+          examples:
+            All S3 user buckets:
+              value:
+              - path: acc1/data-bucket
+                name: data-bucket
+                quota:
+                  data_size_mb: 300
+                  objects: 100
+                user_name: acc1$user1
+              - path: acc1/bucket1
+                name: data-bucket
+                quota:
+                  data_size_mb: 200
+                  objects: 50
+                user_name: acc1$user1
+    iSCSI_Quota_List:
+      description: A JSON array of Account's iSCSI Quota object per pool
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/iSCSI_Quota'
+          examples:
+            All account iSCSI quotas:
+              value:
+              - id: 35
+                clients: 50
+                data_size_gb: 200
+                disks: 10
+                snapshots: 15
+                account_name: acc1
+                pool:
+                  id: 15
+                  type: iscsi
+                  name: nvme-data
+                  class: nvme
+                configs:
+                  - id: 42
+                    name: acc1_default.conf
+                    target_iqn: iqn.2020-01.vendor.loc:iscsi-nvme
+                    gateways:
+                    - id: 52
+                      name: cloudgw-bf401950
+                      portal_ip_address: 198.18.0.2
+                      ip_address: 198.18.240.16
+              - id: 36
+                clients: 35
+                data_size_gb: 300
+                disks: 3
+                snapshots: 5
+                account_name: acc1
+                pool:
+                  id: 16
+                  type: iscsi
+                  name: hdd-data
+                  class: hdd
+                configs: [] # no configs for the pool
+    iSCSI_Config_List:
+      description: A JSON array of Account's iSCSI Config objects
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/iSCSI_Config'
+          examples:
+            All account iSCSI Configs:
+              value:
+              - id: 42
+                name: acc1_default.conf
+                target_iqn: iqn.2020-01.vendor.loc:iscsi-nvme
+                pool:
+                  id: 15
+                  type: iscsi
+                  name: nvme-data
+                  class: nvme
+              - id: 43
+                name: acc1_production.conf
+                target_iqn: iqn.2020-01.vendor.loc:iscsi-hdd
+                pool:
+                  id: 16
+                  type: iscsi
+                  name: hdd-data
+                  class: hdd
+    iSCSI_Gateway_List:
+      description: A JSON array of iSCSI Gateway objects defined in iSCSI Config
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/Gateway'
+          examples:
+            All gateways in iSCSI Config:
+              value:
+              - id: 52
+                name: cloudgw-bf401950
+                portal_ip_address: 198.18.0.2
+                ip_address: 198.18.240.16
+              - id: 53
+                name: cloudgw-c0512a61
+                portal_ip_address: 198.18.0.3
+                ip_address: 198.18.240.17
+    iSCSI_Disk_List:
+      description: A JSON array of Disks defined in iSCSI Target/Config
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/iSCSI_Disk'
+          examples:
+            All iSCSI Config disks:
+              value:
+              - id: 66
+                name: my_server_disk1
+                size_gb: 110
+                owner: bob@example.net
+              - id: 67
+                name: another shared server disk
+                size_gb: 300
+                owner: john@example.net
+    iSCSI_Snapshot_List:
+      description: A JSON array of iSCSI disk Snapshots
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/Snapshot'
+          examples:
+            All iSCSI disk snapshots:
+              value:
+              - id: 72
+                name: my snapshot
+                description: before installing software 1
+                size_gb: 3
+                creation_time: "2020-01-01T00:56:07.999+03:00"
+                owner: bob@example.net
+              - id: 73
+                name: another snapshot
+                size_gb: 27
+                creation_time: "2024-01-23T04:56:07.000+00:00"
+                owner: john@example.net
+    iSCSI_Client_List:
+      description: A JSON array of iSCSI Clients
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/iSCSI_Client'
+          examples:
+            All account iSCSI Clients:
+              value:
+              - id: 82
+                name: server1
+                iqn: 'iqn.1994-03.com.redhat:ae78b49c'
+                chap_username: user1
+                chap_password: Password111
+                owner: bob@example.net
+                account:
+                  id: 1
+                  name: acc1
+                  description: Business account 1
+                disks:
+                - id: 66
+                  name: my_server_disk1
+                  size_gb: 110
+                  owner: bob@example.net
+              - id: 83
+                name: my desktop 2
+                iqn: 'iqn.2000-03.com.ubuntu:ae78b49c:disks'
+                chap_username: ""
+                chap_password: ""
+                owner: john@example.net
+                account:
+                  id: 1
+                  name: acc1
+                  description: Business account 1
+                disks: []
+                
+  schemas:
+    # Schema for error response body
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+        - code
+        - message
+
+    Pool:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 11
+        type:
+          type: string
+          example: s3
+        class:
+          type: string
+          example: nvme
+        name:
+          type: string
+          example: fast_pool
+        s3_placement_target:
+          type: string
+          example: fast_storage
+
+    # @DS: reviewed 2024-01-26
+    Account:
+      description: >-
+        Data required to create and activate new account
+      type: object
+      properties:
+        id:
+          readOnly: true
+          type: integer
+          example: 17
+        name:
+          type: string
+          example: acc1
+          description: >-
+            Alphanumeric account code (up to 5 symbols)
+        description:
+          type: string
+          example: Business Account 1 corp.
+          description: >-
+            Full name (business name) for account
+        services:
+          writeOnly: true
+          description: Initiate parameters for sub-services
+          type: object
+          properties:
+            s3:
+              description: Initiate per-pool S3 quotas
+              type: object
+              properties:
+                quotas:
+                  description: List of quota for each pool, pool is referenced by name
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/S3_Quota'
+            iscsi:
+              description: Initiate per-pool iSCSI quotas
+              type: object
+              properties:
+                quotas:
+                  description: List of quotas for each pool, pool is referenced by name
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/iSCSI_Quota'
+                configs:
+                  description: >-
+                    iSCSI Config referenced by config file name, e.g. mm095_deafult.conf
+                    As well list of gateways by name to be initialized
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/iSCSI_Config'
+        # @DS: Leave for backward compatibillity with current implementation (before 2024-01-26)
+        # There is separate endpoint to list account's pool quotas per services
+        quotas:
+          readOnly: true
+          type: object
+          properties:
+            iscsi:
+              type: array
+              items:
+                $ref: '#/components/schemas/iSCSI_Quota'
+            s3:
+              type: array
+              items:
+                $ref: '#/components/schemas/S3_Quota'
+      required:
+        - name
+
+    # @DS: reviewed 2024-01-29
+    iSCSI_QuotaValue:
+      description: >-
+        Non-persistent object which is used to reference values in Quotas, Quota Limits and Quota Usage.
+      type: object
+      properties:
+        clients:
+          type: integer
+          example: 100
+        data_size_gb:
+          type: integer
+          example: 20000
+        disks:
+          type: integer
+          example: 99
+        snapshots:
+          type: integer
+          example: 55
+    # @DS: reviewed 2024-01-29
+    iSCSI_Quota:
+      description: >-
+        This is an object which describes account quota for some pool:
+          - quota values
+          - pool
+          - limits
+          - usage stats
+          - configs (are really iscsi portals)
+          DEPRECATED info:
+          - max_quota (is actually a limit)
+          - stats:
+            - actual usage
+            - limits (is actually a quota values)
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 34
+          readOnly: true
+        clients:
+          type: integer
+          example: 50
+        data_size_gb:
+          type: integer
+          example: 500
+        disks:
+          type: integer
+          example: 12
+        snapshots:
+          type: integer
+          example: 30
+        pool_id:
+          description: >-
+            Configured only once during creation of quota.
+          writeOnly: true
+          type: integer
+          example: 15
+        pool:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/Pool'
+        # TODO: @DS: currently not implemented
+        configs:
+          description: >-
+            List of configs available for this quoted pools.
+            Configs are describes endpoints which are needed to connect to.
+          readOnly: true
+          type: array
+          items:
+            $ref: '#/components/schemas/iSCSI_Config'
+        # TODO: @DS: currently not implemented
+        usage:
+          description: >-
+            Actual allocated disks and snapshots.
+            Defines minimum value for changing quota
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/iSCSI_QuotaValue'
+        # TODO: @DS: currently not implemented
+        limits:
+          description: >-
+            Limits are maximum values to which current quota values can be changed to.
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/iSCSI_QuotaValue'
+        # For backward compatibility with current implementation (before review 2024-01-29) of iSCSI_Quota
+        stats:
+          description: >-
+            DEPRECATED, Actually includes usage ("actual") and current quota value itself ("limits")
+          readOnly: true
+          type: object
+          oneOf:
+            - $ref: '#/components/schemas/iSCSI_Stats'
+        max_quota:
+          description: >-
+            DEPRECATED, Actually a limit
+          readOnly: true
+          type: object
+          oneOf:
+            - $ref: '#/components/schemas/iSCSI_QuotaValue'
+
+    # @DS: reviewed 2024-01-29
+    iSCSI_Config:
+      type: object
+      properties:
+        id:
+          readOnly: true
+          type: integer
+          example: 41
+        name:
+          description: >-
+            Config filename used on iSCSI gateways
+          type: string
+          example: acc1_default.conf
+        target_iqn:
+          type: string
+          description: >-
+            Usually consists of prefix with reversed location domain.
+            Suffix with iSCSI pool name: iscsi-nvme
+          example: 'iqn.2020-01.io.icdc.loc:iscsi-nvme'
+        pool_id:
+          writeOnly: true
+          type: integer
+          example: 15
+        pool:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/Pool'
+        gateways:
+          description: >-
+            Allow to create or select gateways on creation of iSCSI config
+          type: array
+          items:
+            $ref: '#/components/schemas/Gateway'
+        account:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/Account'
+    
+    # @DS: reviewed 2024-02-06
+    Gateway:
+      type: object
+      properties:
+        id:
+          readOnly: true
+          type: integer
+          example: 51
+        name:
+          type: string
+          example: cloudgw-bf401950
+        portal_ip_address:
+          description: >-
+            IP address used for providing iSCSI connection to virtual machines
+          type: string
+          example: 198.18.0.2
+        ip_address:
+          description: >-
+            IP address used to access iSCSI Gateway internal API
+          type: string
+          example: 198.18.240.16
+        cloudgw_id:
+          description: >-
+            CloudGateway ID is a kind of confidential internal info used to access service configuration
+          writeOnly: true
+          type: string
+          example: bf401950-1f4c-11ed-a5c3-00163e629632
+        api_user:
+          description: >-
+            Username used to access iSCSI Gateway internal API
+          writeOnly: true
+          type: string
+          example: admin
+        api_password:
+          description: >-
+            Password used to access iSCSI Gateway internal API
+          writeOnly: true
+          type: string
+          example: StrongPassword
+        config_id:
+          writeOnly: true
+          type: integer
+          example: 41
+        config:
+          readOnly: true
+          # TODO: @DS: kind of circular dependency here, maybe rid of config in gateways
+          oneOf:
+            - $ref: '#/components/schemas/iSCSI_Config'
+    
+    # @DS: reviewed 2024-01-29
+    iSCSI_Disk:
+      description: >-
+        Disk create in iSCSI target/config
+      type: object
+      properties:
+        id:
+          readOnly: true
+          type: integer
+          example: 66
+        name:
+          type: string
+          example: My Disk 1
+        size_gb:
+          type: integer
+          example: 100
+        owner:
+          type: string
+          example: user@example.net
+
+    # @DS: reviewed 2024-01-29
+    iSCSI_Disk_Assign:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 66
+        # TODO: practically not needed
+        name:
+          type: string
+          example: My Disk 1
+
+     # @DS: reviewed 2024-02-02
+    iSCSI_Client:
+      type: object
+      description: >-
+        Client device which connects to portals defined in iSCSI target/config
+        and mounts iSCSI disks.
+      properties:
+        id:
+          readOnly: true
+          type: integer
+          example: 81
+        name:
+          type: string
+          description: Readable name
+          example: My virtual server
+        iqn:
+          type: string
+          example: iqn.1994-05.com.redhat:104ba78e
+        chap_username:
+          type: string
+          example: peter
+        chap_password:
+          type: string
+          example: parker
+        owner:
+          type: string
+          example: bob@example.net
+        # TODO: @DS: cuurently (on review 2024-02-02) it's not implemented in code
+        # may be delete if not used anywhere
+        account:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/Account'
+        # TODO: @DS: cuurently (on review 2024-02-02) it's implemented in code
+        # do not know where it used, may be delete if not used anywhere
+        disks:
+          readOnly: true
+          type: array
+          items: 
+            $ref: '#/components/schemas/iSCSI_Disk'
+
+    # TODO: @DS: remove when refactored iSCSI_Quota.stats
+    iSCSI_Stats:
+      type: object
+      properties:
+        clients:
+          $ref: "#/components/schemas/Stat_Item"
+        disks:
+          $ref: "#/components/schemas/Stat_Item"
+        snapshots:
+          $ref: "#/components/schemas/Stat_Item"
+        storage_gb:
+          $ref: "#/components/schemas/Stat_Item"
+
+    # @DS: reviewed 2024-02-02
+    Snapshot:
+      type: object
+      properties:
+        id:
+          readOnly: true
+          type: integer
+          example: 71
+        name:
+          type: string
+          example: snapshot name
+        description:
+          type: string
+          example: description
+        size_gb:
+          readOnly: true
+          description: >-
+            Snapshot size (basically) can increase over the time.
+            This happens because of nature of snapshots - they are just difference in blocks,
+            and difference between actual write layer and snapshoted layer blocks can increase over the time
+          type: integer
+          example: 120
+        creation_time:
+          readOnly: true
+          type: string
+          example: "2000-01-23T04:56:07.000+00:00"
+        disk_id:
+          readOnly: true
+          description: >-
+            Parent iSCSI (RBD) disk which the snapshot related to
+          type: string
+          example: 61
+        # @DS: may we should return readonly owner as well
+        owner:
+          readOnly: true
+          type: string
+          example: user1@example.net
+
+    
+    # @DS: reviewed 2024-01-29
+    S3_QuotaValue:
+      description: >-
+        Non-persistent object which is used to reference values in Quotas, Quota Limits and Quota Usage.
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 33
+          readOnly: true
+        users:
+          description: Number of S3 user entries
+          type: integer
+          example: 10
+        data_size_mb:
+          description: Sum of space quota across all S3 users
+          type: integer
+          example: 10240
+        buckets:
+          description: Sum of bucket quota across all S3 users
+          type: integer
+          example: 20
+        objects:
+            description: Sum of objects quota across all S3 users
+            type: integer
+            example: 2000
+    # @DS: reviewed 2024-01-26
+    S3_Quota:
+      description: >-
+        This is an object which describes account quota for some pool:
+          - quota values (attributes)
+          - limits
+          - usage stats
+          - endpoints
+          - pool
+          DEPRECATED info:
+          - max_quota (is actually a limit)
+          - stats:
+            - actual usage
+            - limits (is actually a quota values)
+      type: object
+      properties:
+        id:
+          readOnly: true
+          type: integer
+          example: 33
+        objects:
+            type: integer
+            example: 2000
+        buckets:
+          type: integer
+          example: 20
+        users:
+          type: integer
+          example: 10
+        data_size_mb:
+          type: integer
+          example: 10240
+        # TODO: add account name to all QuotaSet objects, as we moved it from account namespace.
+        account_name: 
+          type: string
+          example: acc1
+        pool_id:
+          writeOnly: true
+          type: integer
+          example: 4
+        pool:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/Pool'
+        usage:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/S3_QuotaValue'
+        limits:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/S3_QuotaValue'
+        endpoints:
+          readOnly: true
+          oneOf:
+            - $ref: '#/components/schemas/S3_Endpoints'
+    # @DS: reviewed 2024-01-26
+    S3_Endpoints:
+      type: object
+      properties:
+        public:
+          type: string
+          example: "http://s3.dcz.lab.icdc.io/acc1, https://s3.dcz.lab.icdc.io/acc1"
+        private:
+          type: string
+          example: "http://s3.local.dcz.lab.icdc.io/acc1, https://s3.local.dcz.lab.icdc.io/acc1"
+
+    # @DS: reviewed 2024-02-05
+    S3_User:
+      type: object
+      properties:
+        id:
+          readOnly: true
+          type: integer
+          example: 101
+        name:
+          description: >-
+            S3 user name as stored in Ceph storage (full name with account prefix)
+            For S3 users create in Storage V1 there can not be account prefix.
+          type: string
+          example: acc1$user1
+          examples:
+            - acc1$user1
+            - acc2$user1
+            - user3
+        description:
+          type: string
+          example: Application 1 User
+        is_locked:
+          type: boolean
+          example: true
+        owner:
+          type: string
+          example: user@example.net
+        pool:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/Pool'
+        pool_id:
+          writeOnly: true
+          type: integer
+          example: 13
+        keys:
+          readOnly: true
+          description: >-
+            Object storage credentials by used protocol
+          oneOf:
+          - $ref: '#/components/schemas/Keys'
+        quota:
+          $ref: '#/components/schemas/S3_User_Quota'
+        usage:
+          $ref: '#/components/schemas/S3_User_Usage'
+
+    # @DS: reviewed 2024-02-05
+    S3_User_Quota:
+      type: object
+      properties:
+        data_size_mb:
+          description: >-
+            Mapped into Ceph: s3user.user_quota.max_size(_kb)
+          type: integer
+          example: 4096
+        objects:
+          description: >-
+            Mapped into Ceph: s3user.user_quota.max_objects
+          type: integer
+          example: 100
+        buckets:
+          description: >-
+            Mapped into Ceph: s3user.max_buckets
+          type: integer
+          example: 65
+
+    # @DS: reviewed 2024-11-05
+    S3_User_Usage:
+      type: object
+      properties:
+        data_size_mb:
+          description: >-
+            Retrieved from Ceph: s3user.usage.TotalBytes / 1.MiB
+          type: integer
+          example: 4096
+        objects:
+          description: >-
+            Retrieved from Ceph: s3user.usage.TotalEntries
+          type: integer
+          example: 100
+        buckets:
+          description: >-
+            Retrieved from Ceph: s3user.sum(buckets)
+          type: integer
+          example: 65
+
+    # @DS: reviewed 2024-02-05
+    Bucket:
+      description: >-
+        Buckets are not stored in database but in Ceph only, so buckets are identified by path (aka full bucket name)
+      type: object
+      properties:
+        path:
+          readOnly: true
+          description: >-
+            Full bucket name including account prefix, unique across Storage service
+          type: string
+          example: acc1/data-bucket
+        name:
+          description: >-
+            Short bucket name, unique across account (and all account's s3users)
+          type: string
+          example: data-bucket
+        quota:
+          description: >-
+            Quota for specific bucket
+          $ref: "#/components/schemas/Bucket_Quota"
+        # TODO @DS: may be return user object, which includes user.id and user.name.
+        #           because we manipulate by s3user ID everywhere.
+        user_name:
+          description: >-
+            S3 user which owns the bucket.
+          type: string
+          example: acc1$user1
+
+    # @DS: reviewed 2024-02-05
+    Bucket_Quota:
+      description: >-
+        Bucket-specific quota as defined in Ceph
+      type: object
+      properties:
+        data_size_mb:
+          description: >-
+            Bucket-specific quota on data size, specified in MB
+          type: integer
+          example: 500
+        objects:
+          description: >-
+            Bucket-specific quota on number of objects
+          type: integer
+          example: 30
+
+    # @DS: reviewed 2024-02-06
+    # TODO: remove when stop using s3user.stats
+    Stat_Item:
+      type: object
+      properties:
+        actual:
+          type: integer
+          example: 12
+        limit:
+          type: integer
+          example: 40
+
+    # @DS: reviewed 2024-02-06
+    Keys:
+      description: >-
+        Object storage credentials stored by protocol
+      type: object
+      properties:
+        swift:
+          $ref: "#/components/schemas/Keys_Swift"
+        s3:
+          $ref: "#/components/schemas/Keys_S3"
+
+    # @DS: reviewed 2024-02-06
+    Keys_Swift:
+      description: >-
+        Swift protocol credential
+      type: object
+      properties:
+        user:
+          type: string
+          example: acc1$user1:swift
+        secret_key:
+          type: string
+          example: T6fOLwLIDJ8SEvj4RWrgbYAToIZztTeKfkFYqZh4
+
+    # @DS: reviewed 2024-02-06
+    Keys_S3:
+      description: >-
+        S3 protocol credential
+      type: object
+      properties:
+        user:
+          description: >-
+            The name is the same as in S3 user
+          type: string
+          example: acc1$user1
+        access_key:
+          type: string
+          example: T99JA8DRRC6SL7VLO02
+        secret_key:
+          type: string
+          example: kZ03a3rB6s3hGBFLVUzawqnRsUAUN2Nbc6BofNWD
+
+  parameters:
+    Account:
+      in: path
+      name: account
+      description: >-
+        Name of the account, 5-symbols alphanumeric string
+      required: true
+      schema:
+        type: string
+      example: acc1
+    ConfigId:
+      in: path
+      name: config_id
+      description: >-
+        ID of iSCSI config, as stored in Storage database
+      required: true
+      schema:
+        type: integer
+      example: 61
+    DiskId:
+      in: path
+      name: disk_id
+      description: >-
+        ID of iSCSI Disk, as stored in Storage database
+      required: true
+      schema:
+        type: integer
+      example: 71
+    ClientId:
+      in: path
+      name: client_id
+      description: >-
+        ID of iSCSI Client, as stored in Storage database
+      required: true
+      schema:
+        type: integer
+      example: 81
+
+  securitySchemes:
+    JWT:
+      type: openIdConnect
+      openIdConnectUrl: https://login.lab.icdc.io/realms/devel/.well-known/openid-configuration
+    basicAuth:
+        type: http
+        scheme: basic
+    Account:
+      type: apiKey
+      in: header
+      #TODO: [DS] rename to x-auth-account
+      name: x-auth-account
+    Role:
+      type: apiKey
+      in: header
+      #TODO: [DS] rename to x-auth-role
+      name: x-auth-role
