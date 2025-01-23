@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify
 from werkzeug.exceptions import HTTPException
 
 import app.controllers.auth as auth
+from app.lib import auth as au
 from app.controllers import s3_controller as controller
 from app.controllers.s3 import quotas_controller
 from app.lib.request_utils import process_response, query, request_json, handle_exception
@@ -14,7 +15,7 @@ s3.register_error_handler(HTTPException, handle_exception)
 
 
 @s3.route("/limits", methods=["GET"])
-@auth.account_auth_required
+@au.rbac("s3.limits.list")
 def get_s3_limits(*args, **kwargs):
     return controller.get_s3_limits(*args, **kwargs), 200
 
@@ -103,8 +104,8 @@ def regenerate_keys(*args, **kwargs):
 
 
 @s3.route("/quotas", methods=["GET"])
-@auth.account_auth_required
-def get_account_s3_quota(*args, **kwargs):
+@au.rbac("s3.quotas.list")
+def get_account_s3_quota(subject):
     """
     Get the S3 quota for a specific account.
 
@@ -115,7 +116,7 @@ def get_account_s3_quota(*args, **kwargs):
     Returns:
     The response data after processing.
     """
-    return quotas_controller.index(*args, **kwargs), 200
+    return quotas_controller.index(subject), 200
 
 
 @s3.route("/quotas", methods=["POST"])

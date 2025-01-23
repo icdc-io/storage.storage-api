@@ -33,6 +33,18 @@ def abort_detailed(code, message, errors):
     abort(code, message, response)
 
 
+def parse_jsonapi_filters(args: dict):
+    """
+    Parse args dictionary in JSON:API format for filters
+    """
+    filters = {}
+    for key, value in args.items():
+        if key.startswith("filter[") and key.endswith("]"):
+            field_name = key[7:-1]
+            filters[field_name] = value
+    return filters
+
+
 def dig(self, *keys):
     """Ruby's hash.dig() implementation"""
     for key in keys:

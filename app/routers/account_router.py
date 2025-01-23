@@ -66,7 +66,7 @@ def get_accounts(*args, **kwargs):
 
 
 @account_management.route("", methods=["POST"])
-@auth.operator_required
+@au.rbac("accounts.create")
 def create_account(*args, **kwargs):
     """
     Create a new account using the provided data.
@@ -83,7 +83,7 @@ def create_account(*args, **kwargs):
 
 
 @account_management.route("", methods=["PUT"])
-@auth.operator_required
+@au.rbac("accounts.update")
 def update_account(*args, **kwargs):
     """
     Create a new account using the provided data.
@@ -100,7 +100,7 @@ def update_account(*args, **kwargs):
 
 
 @account_management.route("/<account_name>", methods=["DELETE"])
-@auth.operator_required
+@au.rbac("accounts.delete")
 def delete_account(*args, **kwargs):
     """
     Delete an account. Validates that the request method is DELETE and ensures that

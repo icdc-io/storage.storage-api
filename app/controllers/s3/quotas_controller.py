@@ -1,21 +1,20 @@
 from app.lib import request_utils
-from app.lib.request_utils import log
-from app.lib.request_utils import abort_detailed
+from app.lib.request_utils import log, abort_detailed, parse_jsonapi_filters
 from app.models.account import Accounts
 from app.models.s3_quota import S3Quotas, S3QuotaSchema
 from app.models.pool import Pools
 from sqlalchemy.orm import selectinload
-from flask import abort, jsonify
+from flask import abort, jsonify, request
 from marshmallow import ValidationError
 
+schema = S3QuotaSchema(partial=True)
 
-def index(**kwargs):
-    account = Accounts.query.filter_by(name=kwargs["account_name"]).first()
-    log.debug(kwargs["account_name"])
-    if not account:
-        abort(404, "Account not found.")
-    quotas = S3Quotas.query.options(selectinload(S3Quotas.pool)).filter_by(account_id=account.id).all()
 
+def index(subject):
+    parsed_filters = parse_jsonapi_filters(request.args)
+    filters = schema.load(parsed_filters)
+    # quotas = S3Quotas.query.options(selectinload(S3Quotas.pool)).filter_by(account_id=account.id).all()
+    quotas = S3Quotas.filtered(subject.filters).options(selectinload(S3Quotas.pool)).filter_by(**filters).all()
     return jsonify(S3QuotaSchema(many=True).dump(quotas))
 
 

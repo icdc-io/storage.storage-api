@@ -8,9 +8,27 @@ roles:
         - delete
         - get
       filters: {}
-
-  admin:
     iscsi.limits:
       permissions:
         - list
       filters: {}
+    s3.limits:
+      permissions:
+        - list
+      filters: {}
+  admin:
+    s3.quotas:
+      permissions:
+        - list
+      filters:
+        account_id: account_id
+        owner: owner
+  owner:
+    s3.quotas:
+      permissions:
+        - list
+      filters:
+          account_id: account_id
+          owner: owner
+  member:
+

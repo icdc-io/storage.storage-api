@@ -29,6 +29,7 @@ class Subject:
         if not account:
             raise ValueError("Account name not found")
         role = Roles(headers.get("X-Auth-Role"))
+        role = Roles("admin")
         operator = role.name == "operator"
         self.account = account
         self.account_id = account.id

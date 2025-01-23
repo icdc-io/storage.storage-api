@@ -78,6 +78,10 @@ class AbstractModel:
         log.debug(f"Result: {result}")
         return result
 
+    @classmethod
+    def filtered(cls, subject):
+        return cls.query.filter_by(**subject.filters)
+
     def response_filter(self, fields, hide):
         """
         Hide attributes. Needed for resolve recursion issue
