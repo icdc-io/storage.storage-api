@@ -7,6 +7,7 @@ import app.controllers.auth as auth
 from app.controllers import iscsi_controller as controller
 from app.lib.request_utils import process_response, request_json, handle_exception
 from app.controllers.iscsi import quotas_controller
+from app.lib import auth as au
 from werkzeug.exceptions import HTTPException
 
 iscsi = Blueprint(name="iscsi", import_name=__name__)
@@ -14,9 +15,9 @@ iscsi.register_error_handler(HTTPException, handle_exception)
 
 
 @iscsi.route("/limits", methods=["GET"])
-@auth.account_auth_required
-def get_iscsi_limits(*args, **kwargs):
-    return controller.get_iscsi_limits(**kwargs), 200
+@au.rbac("iscsi.limits.list")
+def get_iscsi_limits(subject):
+    return controller.get_iscsi_limits(subject), 200
 
 
 @iscsi.route("/quotas", methods=["GET"])

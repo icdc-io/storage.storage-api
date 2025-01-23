@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify
 from werkzeug.exceptions import HTTPException
 
 import app.controllers.auth as auth
+import app.lib.auth as au
 from app.controllers import account_controller as controller
 from app.lib.request_utils import process_response, request_json, handle_exception
 
@@ -43,7 +44,7 @@ def get_account(*args, **kwargs):
 
 
 @account_management.route("", methods=["GET"])
-@auth.operator_required
+@au.rbac("accounts.list")
 def get_accounts(*args, **kwargs):
     """
     Get all accounts for the authenticated operator.

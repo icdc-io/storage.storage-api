@@ -39,7 +39,7 @@ from app.models.snapshot import Snapshots
 from app import consts
 
 
-def get_iscsi_limits(**kwargs):
+def get_iscsi_limits(subject):
     """
     List account's ISCSI per-pool limit-sets
     """

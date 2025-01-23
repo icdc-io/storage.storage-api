@@ -74,6 +74,8 @@ def config() -> None:
     # Set the constants using the configuration
     __set_consts("", __defaults("secrets.yaml"))
 
+    __set_consts("", __defaults("rbac.yaml"))
+
     # Print the values of the constants
     for key, value in globals().items():
         if key.isupper():

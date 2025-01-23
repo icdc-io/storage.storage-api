@@ -1,0 +1,16 @@
+roles:
+  operator:
+    accounts:
+      permissions:
+        - list
+        - create
+        - update
+        - delete
+        - get
+      filters: {}
+
+  admin:
+    iscsi.limits:
+      permissions:
+        - list
+      filters: {}
