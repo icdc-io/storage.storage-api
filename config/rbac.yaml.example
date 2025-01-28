@@ -11,24 +11,48 @@ roles:
     iscsi.limits:
       permissions:
         - list
+        - create
+        - update
+        - delete
       filters: {}
     s3.limits:
       permissions:
         - list
       filters: {}
+    s3.quotas:
+      permissions:
+        - list
+        - create
+        - update
+        - delete
+      filters: {}
+
+
   admin:
+    s3.quotas:
+      permissions:
+        - list
+        - create
+        - update
+        - delete
+      filters:
+        account_id: account_id
+
+
+  owner:
+    s3.quotas:
+      permissions:
+        - list
+        - create
+        - update
+        - delete
+      filters:
+          account_id: account_id
+
+
+  member:
     s3.quotas:
       permissions:
         - list
       filters:
         account_id: account_id
-        owner: owner
-  owner:
-    s3.quotas:
-      permissions:
-        - list
-      filters:
-          account_id: account_id
-          owner: owner
-  member:
-

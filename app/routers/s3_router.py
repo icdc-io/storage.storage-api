@@ -120,25 +120,23 @@ def get_account_s3_quota(subject):
 
 
 @s3.route("/quotas", methods=["POST"])
-@auth.account_admin_required
-def set_account_s3_quota(*args, **kwargs):
+@au.rbac("s3.quotas.create")
+def set_account_s3_quota(subject):
     """
     Route for setting the S3 quotas for a specific account.
     Takes in parameters *args and **kwargs.
     Returns the processed response data.
     """
-    kwargs["body"] = request_json(request)
-    return quotas_controller.create(*args, **kwargs), 201
+    return quotas_controller.create(subject), 201
 
 
 @s3.route("/quotas/<id>", methods=["PUT"])
-@auth.account_auth_required
-def update_s3_quota(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    return quotas_controller.update(*args, **kwargs), 200
+@au.rbac("s3.quotas.update")
+def update_s3_quota(subject, id):
+    return quotas_controller.update(subject, id), 200
 
 
 @s3.route("/quotas/<id>", methods=["DELETE"])
-@auth.account_auth_required
-def destroy_s3_quota(*args, **kwargs):
-    return quotas_controller.destroy(*args, **kwargs), 204
+@au.rbac("s3.quotas.delete")
+def destroy_s3_quota(subject, id):
+    return quotas_controller.destroy(subject, id), 204
