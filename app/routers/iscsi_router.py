@@ -21,29 +21,27 @@ def get_iscsi_limits(subject):
 
 
 @iscsi.route("/quotas", methods=["GET"])
-@auth.account_auth_required
+@au.rbac("iscsi.quotas.list")
 def get_account_iscsi_quota(*args, **kwargs):
     return quotas_controller.get_account_quotas(**kwargs), 200
 
 
 @iscsi.route("/quotas", methods=["POST"])
-@auth.account_auth_required
-def set_account_iscsi_quota(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    return quotas_controller.create(**kwargs), 201
+@au.rbac("iscsi.quotas.create")
+def set_account_iscsi_quota(subject):
+    return quotas_controller.create(subject), 201
 
 
-@iscsi.route("/quotas/<id>", methods=["PUT"])
-@auth.account_auth_required
-def update_iscsi_quota(*args,**kwargs):
-    kwargs["body"] = request_json(request)
-    return quotas_controller.update(*args, **kwargs), 200
+@iscsi.route("/quotas/<quota_id>", methods=["PUT"])
+@au.rbac("iscsi.quotas.update")
+def update_iscsi_quota(subject, quota_id):
+    return quotas_controller.update(subject, quota_id), 200
 
 
-@iscsi.route("/quotas/<id>", methods=["DELETE"])
-@auth.account_auth_required
-def destroy_iscsi_quota(*args,**kwargs):
-    return quotas_controller.destroy(*args, **kwargs), 204
+@iscsi.route("/quotas/<quota_id>", methods=["DELETE"])
+@au.rbac("iscsi.quotas.delete")
+def destroy_iscsi_quota(subject, quota_id):
+    return quotas_controller.destroy(subject, quota_id), 204
 
 
 @iscsi.route("/configs", methods=["POST"])

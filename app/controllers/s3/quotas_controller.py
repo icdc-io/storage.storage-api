@@ -18,9 +18,9 @@ def index(subject):
 
 def create(subject):
     body = request_json(request)
-    account = Accounts.query.filter_by(name=body["account_name"]).first()
+    account = Accounts.filtered(subject).filter_by(name=body["account_name"]).first()
     if not account:
-        abort(404, "Account with this name not found.")
+        abort(404, "Account with this name not found or you haven't access for it.")
     body.pop("account_name")
     try:
         S3QuotaSchema().load(body)
@@ -40,7 +40,7 @@ def update(subject, quota_id):
     body = request_json(request)
     quota = S3Quotas.filtered(subject).filter_by(id=quota_id).first()
     if not quota:
-        abort(404, "Quota with this ID not found.")
+        abort(404, "Quota with this ID not found or you haven't access for it.")
     usage = quota.compute_usage()
     schema = S3QuotaSchema(context={"usage": usage})
     try:
@@ -56,7 +56,7 @@ def update(subject, quota_id):
 def destroy(subject, quota_id):
     quota = S3Quotas.filtered(subject).filter_by(id=quota_id).first()
     if not quota:
-        abort(404, "Quota with this ID not found.")
+        abort(404, "Quota with this ID not found or you haven't access for it.")
     quota.destroy()
 
     return jsonify("No content.")

@@ -80,7 +80,8 @@ class AbstractModel:
 
     @classmethod
     def filtered(cls, subject):
-        return cls.query.filter_by(**subject.filters)
+        filters = {key: value for key, value in subject.filters.items() if hasattr(cls, key)}
+        return cls.query.filter_by(**filters)
 
     def response_filter(self, fields, hide):
         """

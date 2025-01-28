@@ -1,35 +1,30 @@
-from sqlalchemy.orm import joinedload
-from flask import abort, jsonify
+from flask import abort, jsonify, request
 from marshmallow import ValidationError
+from sqlalchemy.orm import selectinload
 
-from app.lib.request_utils import abort_detailed, log
+from app.lib.request_utils import abort_detailed, log, parse_jsonapi_filters, request_json
 from app.models.account import Accounts, AccountSchema
 from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
 from app.models.pool import Pools
 from app import consts
 
 
-def get_account_quotas(**kwargs):
-    account_name = kwargs["account_name"]
-
-    account = Accounts.query.filter_by(name=account_name).first()
-
-    if account is None:
-        abort(404, "Account with this name not found.")
-
-    quotas = IscsiQuotas.query.filter_by(account_id=account.id).all()
+def get_account_quotas(subject):
+    schema = IscsiQuotaSchema(partial=True)
+    parsed_filters = parse_jsonapi_filters(request.args)
+    filters = schema.load(parsed_filters)
+    quotas = IscsiQuotas.filtered(subject).options(selectinload(IscsiQuotas.pool)).filter_by(**filters).all()
     return jsonify(IscsiQuotaSchema(many=True).dump(quotas))
 
 
-def create(**kwargs):
-    body = kwargs["body"]
+def create(subject):
+    body = request_json(request)
     account_name = body.pop("account_name")
-
     log.debug(f"Set iSCSI quota to account {account_name} with params {body}")
 
-    account = Accounts.query.filter_by(name=account_name).first()
+    account = Accounts.filtered(subject).filter_by(name=account_name).first()
     if not account:
-        abort(404, "Account with name not found.")
+        abort(404, "Account with this name not found or you haven't access for it.")
 
     if IscsiQuotas.query.filter_by(account_id=account.id, pool_id=body["pool_id"]).first():
         abort(409, "Quota for this pool already exists.")
@@ -45,23 +40,24 @@ def create(**kwargs):
     return IscsiQuotaSchema().dump(quota)
 
 
-def update(**kwargs):
-    quota = IscsiQuotas.query.get(kwargs["id"])
+def update(subject, quota_id):
+    body = request_json(request)
+    quota = IscsiQuotas.filtered(subject).filter_by(id=quota_id).first()
     if not quota:
-        abort(404, "Quota with this ID not found.")
+        abort(404, "Quota with this ID not found or you haven't access for it.")
     schema = IscsiQuotaSchema(context={"usage": quota.compute_usage()})
     try:
-        schema.load(kwargs["body"] | {"pool_id": quota.pool_id})
+        schema.load(body | {"pool_id": quota.pool_id})
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters.", e.messages)
 
-    quota.update(kwargs["body"])
+    quota.update(body)
     return IscsiQuotaSchema().dump(quota)
 
 
-def destroy(**kwargs):
-    quota = IscsiQuotas.query.get(kwargs["id"])
+def destroy(subject, quota_id):
+    quota = IscsiQuotas.filtered(subject).filter_by(id=quota_id).first()
     if not quota:
-        abort(404, "Quota with this ID not found.")
+        abort(404, "Quota with this ID not found or you haven't access for it.")
     quota.destroy()
     return jsonify("No content.")

@@ -171,6 +171,8 @@ class IscsiQuotaSchema(Schema):
     @pre_load
     def set_limits(self, data, many, **kwargs):
         default_account = self.__get_default_account()
+        if not data.get("pool_id"):
+            return data
         pool = self.__get_pool(data.get("pool_id", None))
         self.limits = IscsiQuotas.query.filter_by(account_id=default_account.id, pool_id=pool.id).first()
 
