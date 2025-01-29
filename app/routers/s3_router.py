@@ -21,86 +21,69 @@ def get_s3_limits(*args, **kwargs):
 
 
 @s3.route("/users", methods=["POST"])
-@auth.account_auth_required
-def create_s3_user(*args, **kwargs):
+@au.rbac("s3.users.create")
+def create_s3_user(subject):
     """
     Create an S3 user for the specified account.
-
-    :param args: additional positional arguments
-    :param kwargs: additional keyword arguments
-    :return: the processed response data
     """
-    kwargs["body"] = request_json(request)
-    return controller.create_s3_user(*args, **kwargs), 201
+    return controller.create_s3_user(subject), 201
 
 
 @s3.route("/users", methods=["GET"])
-@auth.account_auth_required
-def get_account_s3_users(*args, **kwargs):
+@au.rbac("s3.users.list")
+def get_account_s3_users(subject):
     """
     Get account S3 users.
-
-    Args:
-        *args: Variable length argument list.
-        **kwargs: Arbitrary keyword arguments.
-
-    Returns:
-        The processed response data.
     """
-    return jsonify(controller.get_account_s3_users(*args, **kwargs)), 200
+    return jsonify(controller.get_account_s3_users(subject)), 200
 
 
-@s3.route("/users/<id>", methods=["GET"])
-@auth.account_auth_required
-def get_s3_user(*args, **kwargs):
-    return controller.get_s3_user(*args, **kwargs), 200
+@s3.route("/users/<user_id>", methods=["GET"])
+@au.rbac("s3.users.get")
+def get_s3_user(subject, user_id):
+    return controller.get_s3_user(subject, user_id), 200
 
 
-@s3.route("/users/<id>", methods=["DELETE"])
-@auth.account_auth_required
-def delete_s3_user(*args, **kwargs):
-    return controller.delete_s3_user(*args, **kwargs), 204
+@s3.route("/users/<user_id>", methods=["DELETE"])
+@au.rbac("s3.users.delete")
+def delete_s3_user(subject, user_id):
+    return controller.delete_s3_user(subject, user_id), 204
 
 
-@s3.route("/users/<id>", methods=["PUT"])
-@auth.account_auth_required
-def update_s3_user(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    return controller.update_s3_user(*args, **kwargs), 200
+@s3.route("/users/<user_id>", methods=["PUT"])
+@au.rbac("s3.users.update")
+def update_s3_user(subject, user_id):
+    return controller.update_s3_user(subject, user_id), 200
 
 
 @s3.route("/buckets", methods=["POST"])
-@auth.account_auth_required
-def create_bucket(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-
-    return controller.create_bucket(*args, **kwargs), 201
+@au.rbac("s3.buckets.create")
+def create_bucket(subject):
+    return controller.create_bucket(subject), 201
 
 
 @s3.route("/buckets", methods=["GET"])
-@auth.account_auth_required
-def get_bucket_info(*args, **kwargs):
-    kwargs["user_name"] = query(request).get("user_name")
-    return controller.get_buckets_info(*args, **kwargs), 200
+@au.rbac("s3.buckets.list")
+def get_bucket_info(subject):
+    return controller.get_buckets_info(subject), 200
 
 
 @s3.route("/buckets/<path:path>", methods=["PUT"])
-@auth.account_auth_required
-def update_bucket(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    return controller.update_bucket(*args, **kwargs), 200
+@au.rbac("s3.buckets.update")
+def update_bucket(subject, path):
+    return controller.update_bucket(subject, path), 200
 
 
 @s3.route("/buckets/<path:path>", methods=["DELETE"])
-@auth.account_auth_required
-def delete_bucket(*args, **kwargs):
-    return controller.delete_bucket(*args, **kwargs), 204
+@au.rbac("s3.buckets.delete")
+def delete_bucket(subject, path):
+    return controller.delete_bucket(subject, path), 204
 
 
 @s3.route("/users/<user_id>/keys", methods=["POST"])
-@auth.account_auth_required
-def regenerate_keys(*args, **kwargs):
-    return controller.regenerate_keys(*args, **kwargs), 201
+@au.rbac("s3.users.key.create")
+def regenerate_keys(subject, user_id):
+    return controller.regenerate_keys(subject, user_id), 201
 
 
 @s3.route("/quotas", methods=["GET"])
@@ -108,13 +91,6 @@ def regenerate_keys(*args, **kwargs):
 def get_account_s3_quota(subject):
     """
     Get the S3 quota for a specific account.
-
-    Parameters:
-    *args: Variable length argument list.
-    **kwargs: Arbitrary keyword arguments.
-
-    Returns:
-    The response data after processing.
     """
     return quotas_controller.index(subject), 200
 

@@ -29,7 +29,7 @@ class Subject:
         if not account:
             raise ValueError("Account name not found")
         role = Roles(headers.get("X-Auth-Role"))
-        role = Roles("admin")
+        role = Roles("operator")
         operator = role.name == "operator"
         self.account = account
         self.account_id = account.id
@@ -70,6 +70,12 @@ class Subject:
             f"  filters={self.filters}\n"
             f")"
         )
+
+    def is_privileged_role(self):
+        return self.role.name in ["admin", "owner", "operator"]
+
+    def is_operator(self):
+        return self.is_operator()
 
 def rbac(action):
     def wrapper(func):

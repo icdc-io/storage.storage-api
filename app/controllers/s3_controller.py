@@ -6,7 +6,7 @@ import os
 from json import JSONDecodeError
 
 import rgwadmin
-from flask import abort, jsonify
+from flask import abort, jsonify, request
 from marshmallow import ValidationError
 from botocore.exceptions import ClientError
 
@@ -18,7 +18,7 @@ from app.lib.perm import is_admin
 from app.lib.request_utils import (
     abort_detailed,
     log,
-    no_content,
+    no_content, request_json, parse_jsonapi_filters, query,
 )
 from app.models.account import Accounts
 from app.models.pool import Pools
@@ -39,15 +39,15 @@ def get_s3_limits(**kwargs):
     return jsonify(limits)
 
 
-def create_s3_user(**kwargs):
+def create_s3_user(subject):
     """
     Create S3 User in Ceph and in Postgres
     """
-    body = kwargs["body"]
+    body = request_json(request)
     account_name = body["account_name"]
     account = Accounts.query.filter_by(name=account_name).first()
-    if not account:
-        abort(404, "Account not found.")
+    if account.id != subject.account_id and not subject.is_operator():
+        abort(404, "You haven't permission for this account.")
     body.pop("account_name", None)
     pool = Pools.query.filter_by(id=body["pool_id"]).first()
     if not pool:
@@ -171,39 +171,37 @@ def _create_s3user_ceph(account_name, data, placement):
         raise e
 
 
-def get_account_s3_users(**kwargs):
+def get_account_s3_users(subject):
     """
     Get list of S3 User which are assigned to account
     """
-    account = Accounts.query.filter_by(name=kwargs["account_name"]).first()
-    if not account:
-        log.info(f"Can not find account {kwargs['account_name']}")
-        abort(404, "Account with this ID not found.")
+    schema = S3QuotaSchema(partial=True)
+    parsed_filters = parse_jsonapi_filters(request.args)
+    filters = schema.load(parsed_filters)
+    s3_users = S3Users.filtered(subject).filter_by(**filters).all()
+    return S3UserSchema(many=True).dump(s3_users)
 
-    return S3UserSchema(many=True).dump(account.s3_users)
 
-
-def get_s3_user(**kwargs):
+def get_s3_user(subject, user_id):
     """
     Retrive info, keys, statistice of S3 User from ceph
     """
-    user_id = kwargs["id"]
-    s3_user = S3Users.query.filter_by(id=user_id).first()
+    s3_user = S3Users.filtered(subject).filter_by(id=user_id).first()
+
     if not s3_user:
-        abort(404, "S3 User with this ID not found.")
+        abort(404, "S3 User with this ID not found or you haven't access for it.")
     return S3UserSchema().dump(s3_user)
 
 
-def delete_s3_user(**kwargs):
+def delete_s3_user(subject, user_id):
     """
     Delete S3 User from Ceph and Postgres
     """
-    user_id = kwargs["id"]
     log.debug(f"Delete S3User with id {user_id}")
 
-    s3_user_obj = S3Users.query.filter_by(id=user_id).first()
+    s3_user_obj = S3Users.filtered(subject).filter_by(id=user_id).first()
     if s3_user_obj is None:
-        abort(404, "This account hasn't got the user with this ID.")
+        abort(404, "This account hasn't got the user with this ID or you haven't access for it.")
     try:
         rgwadmin_conn().remove_user(s3_user_obj.name, purge_data=True)
     except rgwadmin.exceptions as e:
@@ -212,14 +210,14 @@ def delete_s3_user(**kwargs):
     return jsonify("No content.")
 
 
-def update_s3_user(**kwargs):
+def update_s3_user(subject, user_id):
     """
     Editing S3 user. Modify quotas and so on.
     """
-    user_id, body, role = kwargs["id"], kwargs["body"], kwargs["role"]
-    s3_user = S3Users.query.filter_by(id=user_id).first()
+    body = request_json(request)
+    s3_user = S3Users.filtered(subject).filter_by(id=user_id).first()
     if not s3_user:
-        abort(404, "S3 User not found.")
+        abort(404, "S3 User not found or you haven't access for it.")
 
     account = Accounts.query.filter_by(id=s3_user.account_id).first()
     account_quota = S3Quotas.query.filter_by(
@@ -237,7 +235,7 @@ def update_s3_user(**kwargs):
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters", e.messages)
 
-    if not is_admin(role):
+    if not subject.is_privileged_role():
         body["owner"] = s3_user.owner
     else:
         body["owner"] = body.get("owner", s3_user.owner)
@@ -283,29 +281,33 @@ def _modify_user_ceph(s3_user_name, body):
         raise rgwadmin.exceptions.InternalError("Failed to retrieve user information.")
 
 
-def delete_bucket(**kwargs):
+def delete_bucket(subject, path):
     """
     Delete bucket
     """
-    path = kwargs["path"]
     log.debug(f"Delete bucket with path {path}")
     try:
-        rgwadmin_conn().remove_bucket(path, purge_objects=True)
-    except rgwadmin.exceptions.NoSuchBucket:
-        abort(404, "Can not find bucket with this name.")
+        bucket = Bucket.from_bucket_path(path)
+    except Exception as e:
+        abort(404, "Bucket with this name not found.")
+
+    s3_user = S3Users.filtered(subject).filter_by(name=bucket.user_name).first()
+    if not s3_user:
+        abort(401, "You haven't permission for this bucket.")
+    rgwadmin_conn().remove_bucket(path, purge_objects=True)
     return jsonify("No content.")
 
 
-def create_bucket(**kwargs):
+def create_bucket(subject):
     """
     Create bucket for s3 user.
     """
-    body = kwargs["body"]
+    body = request_json(request)
     user_name = body["user_name"]
 
-    s3_user = S3Users.query.filter_by(name=user_name).first()
+    s3_user = S3Users.filtered(subject).filter_by(name=user_name).first()
     if s3_user is None:
-        abort(404, "User with this name not found.")
+        abort(404, "User with this name not found or you haven't permission for it.")
 
     try:
         BucketSchema(context={"user": s3_user}).load(body)
@@ -381,28 +383,33 @@ def _create_bucket(access_key, secret_key, body, pool):
         raise e
 
 
-def get_buckets_info(**kwargs):
+def get_buckets_info(subject):
     """
     Get buckets info of s3 user.
     """
-    user_name = kwargs["user_name"]
-    s3_user = S3Users.query.filter_by(name=user_name).first()
+    schema = S3QuotaSchema(partial=True)
+    parsed_filters = parse_jsonapi_filters(request.args)
+    try:
+        filters = schema.load(parsed_filters)
+    except AttributeError as e:
+        abort(400, "Invalid query parameters.")
+    s3_users = S3Users.filtered(subject).filter_by(**filters).all()
 
-    if not s3_user:
-        abort(404, "User not found.")
-    buckets_name = s3_user.get_buckets_name()
+    if not s3_users:
+        abort(404, "User not found or you haven't permission.")
     buckets = []
-    for bucket_name in buckets_name:
-        buckets.append(Bucket.from_user_and_bucket_name(s3_user.name, bucket_name))
+    for s3_user in s3_users:
+        for bucket_name in s3_user.get_buckets_name():
+            buckets.append(Bucket.from_user_and_bucket_name(s3_user.name, bucket_name))
 
     return jsonify(BucketSchema(many=True).dump(buckets))
 
 
-def update_bucket(**kwargs):
+def update_bucket(subject, path):
     """
     Update the bucket of an S3 user.
     """
-    path, body = kwargs["path"], kwargs["body"]
+    body = request_json(request)
 
     if not body.get("quota"):
         abort(404, "Missed parameter 'quota'.")
@@ -411,7 +418,9 @@ def update_bucket(**kwargs):
     except Exception as e:
         abort(404, "Bucket with this name not found.")
 
-    s3_user = S3Users.query.filter_by(name=bucket.user_name).first()
+    s3_user = S3Users.filtered(subject).filter_by(name=bucket.user_name).first()
+    if not s3_user:
+        abort(401, "You haven't permission for this bucket.")
 
     try:
         BucketSchema(
@@ -459,15 +468,14 @@ def update_bucket_quota(bucket_name, user_name, quota):
     return no_content()
 
 
-def regenerate_keys(**kwargs):
+def regenerate_keys(subject, user_id):
     """
     Regenerate S3 keys
     """
-    user_id = kwargs["user_id"]
     log.debug(f"Regenerate keys for S3User {user_id}")
-    s3_user_obj = S3Users.query.filter_by(id=user_id).first()
+    s3_user_obj = S3Users.filtered(subject).filter_by(id=user_id).first()
     if not s3_user_obj:
-        abort(404, "User with this ID not found.")
+        abort(404, "User with this ID not found or you haven't permission for it.")
     s3_user_name = s3_user_obj.full_name()
     user_info = rgwadmin_conn().request(
         "GET", f"/admin/user?format=json&stats=true&uid={s3_user_name}"
