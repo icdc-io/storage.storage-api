@@ -297,27 +297,25 @@ def delete_disk(**kwargs):
     return no_content(IscsiDiskSchema().dump(disk))
 
 
-def get_iscsi_clients(**kwargs):
+def get_iscsi_clients(subject):
     """
     Get list of iSCSI clients
     """
-    account_name, role, requester_id = (
-        kwargs["account_name"],
-        kwargs["role"],
-        kwargs["requester_id"],
-    )
-    account_obj = Accounts.query.filter_by(name=account_name).first()
-    if not account_obj:
-        abort(404, "Account with name not found.")
-    clients = IscsiClientSchema(many=True).dump(account_obj.iscsi_clients)
-    return jsonify(filter_response(clients, role, requester_id))
+    schema = IscsiClientSchema(partial=True)
+    parsed_filters = parse_jsonapi_filters(request.args)
+    try:
+        filters = schema.load(parsed_filters)
+    except TypeError as e:
+        abort(400, "Invalid query parameters.")
+    clients = IscsiClients.filtered(subject).filter_by(**filters).all()
+    return jsonify(IscsiClientSchema(many=True).dump(clients))
 
 
-def create_iscsi_client(**kwargs):
+def create_iscsi_client(subject):
     """
     Create iSCSI Client in Ceph and Postgres
     """
-    body = kwargs["body"]
+    body = request_json(request)
     account_name = body.pop("account_name")
     log.debug(
         f"Create iSCSI client to account {account_name} with params {body}"
@@ -326,6 +324,8 @@ def create_iscsi_client(**kwargs):
         account_obj = Accounts.query.filter_by(name=account_name).first()
         if not account_obj:
             abort(404, "Account with this name not found.")
+        if not subject.has_permission(account_obj):
+            abort(401, "You haven't permission for this endpoint.")
         body["account_id"] = account_obj.id
         client = IscsiClients(**body)
         client.save()
@@ -338,38 +338,24 @@ def create_iscsi_client(**kwargs):
         abort(409, "Client with such iqn is already exists")
 
 
-def get_client_disks(**kwargs):
+def get_client_disks(subject, client_id):
     """
     Get clients of disk. Depends on role of requester
     """
-    client_id, role, requester_id = (
-        kwargs["client_id"],
-        kwargs["role"],
-        kwargs["requester_id"],
-    )
-    client_obj = IscsiClients.get_by("id", client_id)
+    client_obj = IscsiClients.filtered(subject).filter_by(id=client_id).first()
     if client_obj is None:
         return abort(404, "There is no client with such ID.")
-    return jsonify(
-        filter_response(
-            [IscsiDiskSchema(exclude=['clients'], many=True).dump(client_obj.disks)],
-            role,
-            requester_id,
-        )
-    )
+    return jsonify(IscsiDiskSchema(many=True).dump(client_obj.disks))
 
 
-def disks_to_client(**kwargs):
+def disks_to_client(subject, client_id):
     """
     Connect iSCSI disks to client
     """
-    """
-    Connect and disconnect iSCSI disks to client
-    """
-    client_id, body = kwargs["client_id"], kwargs["body"]
-    client_obj = IscsiClients.get_by("id", client_id)
+    body = request_json(request)
+    client_obj = IscsiClients.filtered(subject).filter_by(id=client_id).first()
     if not client_obj:
-        abort(404, "Client with this ID not found.")
+        abort(404, "Client with this ID not found or you haven't permission.")
     response = []
     for disk in body:
         response.append(_connect_disk(client_obj, disk))
@@ -383,14 +369,13 @@ def disks_to_client(**kwargs):
     return jsonify(body)
 
 
-def unassign_client_disk(**kwargs):
+def unassign_client_disk(subject, client_id, disk_id):
     """
     Disconnect iSCSI disks to client
     """
-    client_id, disk_id = kwargs["client_id"], kwargs["disk_id"]
-    client_obj = IscsiClients.get_by("id", client_id)
+    client_obj = IscsiClients.filtered(subject).filter_by(id=client_id).first()
     if not client_obj:
-        abort(404, "Client with this ID not found.")
+        abort(404, "Client with this ID not found or you haven't permission.")
     response = [_disconnect_disk(client_obj, disk_id)]
     for i in response:
         if i['code'] == 409:
@@ -693,18 +678,14 @@ def rollback_snapshot(**kwargs):
     return ok(disk_obj.serialize())
 
 
-def delete_client(**kwargs):
+def delete_client(subject, client_id):
     """
     Delete Client. Depends on Disks od this client
     """
-    """
-    Delete Client. Depends on Disks od this client
-    """
-    client_id = kwargs["client_id"]
     log.debug(f"Delete client with id {client_id}")
-    client_obj = IscsiClients.get_by("id", client_id)
+    client_obj = IscsiClients.filtered(subject).filter_by(id=client_id).first()
     if not client_obj:
-        abort(404, "Client with this ID not found.")
+        abort(404, "Client with this ID not found or you haven't permission.")
     assigned_disks = len(client_obj.disks)
     if assigned_disks:
         abort(
@@ -718,19 +699,16 @@ def delete_client(**kwargs):
     return jsonify("No content.")
 
 
-def update_client(**kwargs):
+def update_client(subject, client_id):
     """
     Update Client. Depends on role of requester
     """
-    """
-    Update Client. Depends on role of requester
-    """
-    client_id, body, role = kwargs["client_id"], kwargs["body"], kwargs["role"]
+    body = request_json(request)
     log.debug(f"Update client {client_id}")
-    client_obj = IscsiClients.get_by("id", client_id)
+    client_obj = IscsiClients.filtered(subject).filter_by(id=client_id).first()
     if not client_obj:
-        abort(404, "Client with this ID not found.")
-    if is_admin(role):
+        abort(404, "Client with this ID not found or you haven't permission.")
+    if subject.is_privileged_role():
         body["owner"] = client_obj.owner  # pylint: disable=multiple-statements
     client_disks = client_obj.disks
     if not client_disks == []:

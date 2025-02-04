@@ -66,6 +66,20 @@ roles:
         - update
         - delete
       filters: {}
+    iscsi.clients:
+      permissions:
+        - list
+        - create
+        - update
+        - delete
+      filters: {}
+    iscsi.clients.disks:
+      permissions:
+        - list
+        - create
+        - delete
+      filters: {}
+
   admin:
     s3.quotas:
       permissions:
@@ -117,6 +131,21 @@ roles:
         - list
         - create
         - update
+        - delete
+      filters:
+        account_id: account_id
+    iscsi.clients:
+      permissions:
+        - list
+        - create
+        - update
+        - delete
+      filters:
+        account_id: account_id
+    iscsi.clients.disks:
+      permissions:
+        - list
+        - create
         - delete
       filters:
         account_id: account_id
@@ -175,7 +204,21 @@ roles:
         - delete
       filters:
         account_id: account_id
-
+    iscsi.clients:
+      permissions:
+        - list
+        - create
+        - update
+        - delete
+      filters:
+        account_id: account_id
+    iscsi.clients.disks:
+      permissions:
+        - list
+        - create
+        - delete
+      filters:
+        account_id: account_id
 
   member:
     s3.quotas:
@@ -224,6 +267,23 @@ roles:
         - list
         - create
         - update
+        - delete
+      filters:
+        account_id: account_id
+        owner: owner
+    iscsi.clients:
+      permissions:
+        - list
+        - create
+        - update
+        - delete
+      filters:
+        account_id: account_id
+        owner: owner
+    iscsi.clients.disks:
+      permissions:
+        - list
+        - create
         - delete
       filters:
         account_id: account_id

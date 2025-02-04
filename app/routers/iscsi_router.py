@@ -100,48 +100,45 @@ def get_config_gateways(*args, **kwargs):
 
 
 @iscsi.route("/clients", methods=["POST"])
-@auth.account_auth_required
-def create_iscsi_client(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    return controller.create_iscsi_client(**kwargs), 201
+@au.rbac("iscsi.clients.create")
+def create_iscsi_client(subject):
+    return controller.create_iscsi_client(subject), 201
 
 
 @iscsi.route("/clients", methods=["GET"])
-@auth.account_auth_required
-def get_iscsi_clients(*args, **kwargs):
-    return controller.get_iscsi_clients(**kwargs), 200
+@au.rbac("iscsi.clients.list")
+def get_iscsi_clients(subject):
+    return controller.get_iscsi_clients(subject), 200
 
 
 @iscsi.route("/clients/<client_id>", methods=["DELETE"])
-@auth.account_auth_required
-def delete_client(*args, **kwargs):
-    return controller.delete_client(*args, **kwargs), 204
+@au.rbac("iscsi.clients.delete")
+def delete_client(subject, client_id):
+    return controller.delete_client(subject, client_id), 204
 
 
 @iscsi.route("/clients/<client_id>", methods=["PUT"])
-@auth.account_auth_required
-def update_client(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    return controller.update_client(*args, **kwargs), 200
+@au.rbac("iscsi.client.update")
+def update_client(subject, client_id):
+    return controller.update_client(subject, client_id), 200
 
 
 @iscsi.route("/clients/<client_id>/disks", methods=["POST"])
-@auth.account_auth_required
-def disks_to_client(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    return controller.disks_to_client(*args, **kwargs)
+@au.rbac("iscsi.clients.disks.create")
+def disks_to_client(subject, client_id):
+    return controller.disks_to_client(subject, client_id)
 
 
 @iscsi.route("/clients/<client_id>/disks/<disk_id>", methods=["DELETE"])
-@auth.account_auth_required
-def unassign_client_disk(*args, **kwargs):
-    return controller.unassign_client_disk(*args, **kwargs)
+@au.rbac("iscsi.clients.disks.delete")
+def unassign_client_disk(subject, client_id, disk_id):
+    return controller.unassign_client_disk(*subject, client_id, disk_id)
 
 
 @iscsi.route("/clients/<client_id>/disks", methods=["GET"])
-@auth.account_auth_required
-def get_client_disks(*args, **kwargs):
-    return controller.get_client_disks(*args, **kwargs)
+@au.rbac("iscsi.clients.disks.list")
+def get_client_disks(subject, client_id):
+    return controller.get_client_disks(subject, client_id)
 
 
 @iscsi.route("/disks/<disk_id>/snapshots", methods=["GET"])

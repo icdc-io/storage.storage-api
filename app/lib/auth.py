@@ -77,6 +77,10 @@ class Subject:
     def is_operator(self):
         return self.is_operator()
 
+    def has_permission(self, account):
+        return account.id == self.account_id or self.is_operator()
+
+
 def rbac(action):
     def wrapper(func):
         @wraps(func)
