@@ -45,78 +45,57 @@ def destroy_iscsi_quota(subject, quota_id):
 
 
 @iscsi.route("/configs", methods=["POST"])
-@auth.account_auth_required
-def create_iscsi_config(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    return controller.set_iscsi_configs(**kwargs), 201
+@au.rbac("iscsi.configs.create")
+def create_iscsi_config(subject):
+    return controller.set_iscsi_configs(subject), 201
 
 
 @iscsi.route("/configs", methods=["GET"])
-@auth.account_auth_required
-def get_iscsi_configs(*args, **kwargs):
-    return controller.get_configs(**kwargs), 200
+@au.rbac("iscsi.configs.list")
+def get_iscsi_configs(subject):
+    return controller.get_configs(subject), 200
 
 
 @iscsi.route("/configs/<config_id>", methods=["GET"])
-@auth.account_auth_required
-def get_config(*args, **kwargs):
-    return controller.get_config(*args, **kwargs), 200
+@au.rbac("iscsi.configs.get")
+def get_config(subject, config_id):
+    return controller.get_config(subject, config_id), 200
 
 
 @iscsi.route("/configs/<config_id>", methods=["DELETE"])
-@auth.account_auth_required
-def delete_config(*args, **kwargs):
-    return controller.delete_config(*args, **kwargs), 204
+@au.rbac("iscsi.configs.delete")
+def delete_config(subject, config_id):
+    return controller.delete_config(subject, config_id), 204
 
 
-@iscsi.route("/configs/<config_id>/disks/<disk_id>", methods=["DELETE"])
-@auth.account_auth_required
-def delete_config_disk(*args, **kwargs):
-    data = controller.delete_config_disk(*args, **kwargs)
-    return process_response(data)
+@iscsi.route("/configs/<config_id>/disks", methods=["GET"])
+@au.rbac("iscsi.disks.list")
+def get_config_disks(subject, config_id):
+    return controller.get_config_disks(subject, config_id), 200
+
+
+@iscsi.route("/configs/<config_id>/disks", methods=["POST"])
+@au.rbac("iscsi.disks.create")
+def create_config_disk(subject, config_id):
+    return controller.create_config_disk(subject, config_id), 201
 
 
 @iscsi.route("/disks/<disk_id>", methods=["DELETE"])
-@auth.account_auth_required
-def delete_disk(*args, **kwargs):
-    data = controller.delete_disk(*args, **kwargs)
-    return process_response(data)
-
-
-@iscsi.route("/configs/<config_id>/disks/<disk_id>", methods=["PUT"])
-@auth.account_auth_required
-def update_disk_legacy(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    data = controller.update_disk_legacy(*args, **kwargs)
-    return process_response(data)
+@au.rbac("iscsi.disks.delete")
+def delete_disk(subject, disk_id):
+    return controller.delete_disk(subject, disk_id), 204
 
 
 @iscsi.route("/disks/<disk_id>", methods=["PUT"])
-@auth.account_auth_required
-def update_disk(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    data = controller.update_disk(*args, **kwargs)
-    return process_response(data)
+@au.rbac("iscsi.disks.update")
+def update_disk(subject, disk_id):
+    return controller.update_disk(subject, disk_id)
+
 
 @iscsi.route("/configs/<config_id>/gateways", methods=["GET"])
 @auth.account_auth_required
 def get_config_gateways(*args, **kwargs):
     data = controller.get_config_gateways(*args, **kwargs)
-    return process_response(data)
-
-
-@iscsi.route("/configs/<config_id>/disks", methods=["GET"])
-@auth.account_auth_required
-def get_config_disks(*args, **kwargs):
-    data = controller.get_config_disks(*args, **kwargs)
-    return process_response(data)
-
-
-@iscsi.route("/configs/<config_id>/disks", methods=["POST"])
-@auth.account_auth_required
-def create_config_disk(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    data = controller.create_config_disk(*args, **kwargs)
     return process_response(data)
 
 

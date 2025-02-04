@@ -45,9 +45,11 @@ def create_s3_user(subject):
     """
     body = request_json(request)
     account_name = body["account_name"]
-    account = Accounts.query.filter_by(name=account_name).first()
-    if account.id != subject.account_id and not subject.is_operator():
-        abort(404, "You haven't permission for this account.")
+    account = Accounts.filter_by(name=body["account_name"]).first()
+    if not account:
+        abort(404, "Account with this name not found.")
+    if not subject.has_permission(account):
+        abort(401, "You haven't permission for this account.")
     body.pop("account_name", None)
     pool = Pools.query.filter_by(id=body["pool_id"]).first()
     if not pool:
@@ -177,7 +179,10 @@ def get_account_s3_users(subject):
     """
     schema = S3QuotaSchema(partial=True)
     parsed_filters = parse_jsonapi_filters(request.args)
-    filters = schema.load(parsed_filters)
+    try:
+        filters = schema.load(parsed_filters)
+    except TypeError as e:
+        abort(400, "Invalid query parameters.")
     s3_users = S3Users.filtered(subject).filter_by(**filters).all()
     return S3UserSchema(many=True).dump(s3_users)
 

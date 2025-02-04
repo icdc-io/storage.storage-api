@@ -18,7 +18,7 @@ class IscsiConfigs(db.Model, AbstractModel):
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"))
     name = db.Column(db.String(128))
     gateways = db.relationship(
-        "IscsiGateways", backref="gateways", cascade="all, delete-orphan"
+        "IscsiGateways", backref="gateways", cascade="all, delete-orphan", uselist=False
     )
     disks = db.relationship(
         "IscsiDisks", backref="iscsi_disks", cascade="all, delete-orphan"
@@ -109,9 +109,9 @@ from app import consts
 
 class IscsiConfigSchema(Schema):
     id = fields.Int(dump_only=True)
-    target_iqn = fields.String(dump_only=True)
-    pool_id = fields.Int(dump_only=True)
-    account_id = fields.Int(dump_only=True)
+    target_iqn = fields.String()
+    pool_id = fields.Int(load_only=True)
+    account_id = fields.Int(load_only=True)
     name = fields.String()
     pool = fields.Function(lambda config: config._pool(), dump_only=True)
     account = fields.Function(lambda config: config._account(), dump_only=True)

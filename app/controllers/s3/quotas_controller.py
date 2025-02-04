@@ -11,16 +11,21 @@ from marshmallow import ValidationError
 def index(subject):
     schema = S3QuotaSchema(partial=True)
     parsed_filters = parse_jsonapi_filters(request.args)
-    filters = schema.load(parsed_filters)
+    try:
+        filters = schema.load(parsed_filters)
+    except TypeError as e:
+        abort(400, "Invalid query parameters.")
     quotas = S3Quotas.filtered(subject).options(selectinload(S3Quotas.pool)).filter_by(**filters).all()
     return jsonify(S3QuotaSchema(many=True).dump(quotas))
 
 
 def create(subject):
     body = request_json(request)
-    account = Accounts.filtered(subject).filter_by(name=body["account_name"]).first()
+    account = Accounts.filter_by(name=body["account_name"]).first()
     if not account:
-        abort(404, "Account with this name not found or you haven't access for it.")
+        abort(404, "Account with this name not found.")
+    if not subject.has_permission(account):
+        abort(401, "You haven't permission for this account.")
     body.pop("account_name")
     try:
         S3QuotaSchema().load(body)

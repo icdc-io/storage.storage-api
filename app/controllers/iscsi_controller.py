@@ -6,7 +6,9 @@ import json
 from datetime import datetime
 from sqlite3 import IntegrityError
 
-from flask import abort, jsonify
+from flask import abort, jsonify, request
+from marshmallow import ValidationError
+
 from app.controllers.auth import filter_response
 from app.lib.controller_utils import (
     _check_iscsi_account_quota,
@@ -25,7 +27,7 @@ from app.lib.request_utils import (
     not_found,
     ok,
     unprocessable_entity,
-    abort_detailed
+    abort_detailed, request_json, parse_jsonapi_filters
 )
 from app.lib.perm import is_admin
 from app.models.account import Accounts
@@ -49,11 +51,11 @@ def get_iscsi_limits(subject):
     return jsonify(limits)
 
 
-def set_iscsi_configs(**kwargs):
+def set_iscsi_configs(subject):
     """
     Store iSCSI config in Postgres
     """
-    body = kwargs["body"]
+    body = request_json(request)
     account_name = body.pop("account_name")
     log.debug(
         f"Set iSCSI config to account {account_name} with params {body}"
@@ -74,39 +76,40 @@ def set_iscsi_configs(**kwargs):
         abort(400, "Invalid parameters")
 
 
-def get_configs(**kwargs):
+def get_configs(subject):
     """
     Get iSCSI configs from Postgres
     """
-    account_name = kwargs["account_name"]
-    account_obj = Accounts.query.filter_by(name=account_name).first()
-    if not account_obj:
-        return abort(404, "Account with such name does not exists.")
-    return jsonify(IscsiConfigSchema(many=True).dump(account_obj.iscsi_configs))
+    schema = IscsiConfigSchema(partial=True)
+    parsed_filters = parse_jsonapi_filters(request.args)
+    try:
+        filters = schema.load(parsed_filters)
+    except TypeError as e:
+        abort(400, "Invalid query parameters.")
+    configs = IscsiConfigs.filtered(subject).filter_by(**filters).all()
+    return jsonify(IscsiConfigSchema(many=True).dump(configs))
 
 
-def delete_config(**kwargs):
+def delete_config(subject, config_id):
     """
     Delete iSCSI config
     """
-    config_id = kwargs["config_id"]
     log.debug(f"Delete config with id {config_id}")
-    config_obj = IscsiConfigs.get_by("id", config_id)
+    config_obj = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
     if not config_obj:
-        abort(404, "Config with this ID not found")
+        abort(404, "Config with this ID not found or you have not permission.")
     config_obj.remove()
     return jsonify("No content.")
 
 
-def get_config(**kwargs):
+def get_config(subject, config_id):
     """
     Get iSCSI Config
     """
-    config_id = kwargs["config_id"]
-    config = IscsiConfigs.get_by("id", config_id)
-    if not config:
+    config_obj = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
+    if not config_obj:
         abort(404, "Config with this ID not found")
-    return IscsiConfigSchema().dump(config)
+    return IscsiConfigSchema().dump(config_obj)
 
 
 @trytest
@@ -187,99 +190,85 @@ def get_config_gateways(**kwargs):
     return ok(response)
 
 
-def get_config_disks(**kwargs):
+def get_config_disks(subject, config_id):
     """
     Get all iSCSI disks which are assigned to config
     """
-    config_id, role, requester_id = (
-        kwargs["config_id"],
-        kwargs["role"],
-        kwargs["requester_id"],
-    )
-    config_obj = IscsiConfigs.get_by("id", config_id)
-    if not config_obj:
-        return not_found("Config with this ID not found.")
-    return ok(
-        filter_response(
-            [IscsiDiskSchema().dump(disk) for disk in config_obj.disks], role, requester_id
-        )
-    )
+    config = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
+    if not config:
+        abort(400, "Config with this ID not found or you haven't permission.")
+    return IscsiDiskSchema(many=True).dump(config.disks)
 
 
-def create_config_disk(**kwargs):
+def create_config_disk(subject, config_id):
     """
     Create iSCSI disk and assign it to iSCSI Config
     """
-    """
-    Create iSCSI disk and assign it to iSCSI Config
-    """
-    config_id, body = kwargs["config_id"], kwargs["body"]
+    body = request_json(request)
     log.debug(
         f"Create disk with params {body} and assign disk to config with id {config_id}"
     )
-    config_obj = IscsiConfigs.get_by("id", config_id)
-    if config_obj is None:
-        return not_found("There is no config with such id.")
-    gateway_obj = config_obj.gateways[0]
-    account_obj = Accounts.get_by("id", config_obj.account_id)
-    pool_obj = Pools.get_by("id", config_obj.pool_id)
-    quotas = [
-        quota for quota in account_obj.iscsi_quotas if quota.pool_id == pool_obj.id
-    ]
-    if len(quotas) == 0:
-        return conflict("Account doesn't have quota for this pool")
-    quota_obj = quotas[0]
-    account_usage = [
-        quota
-        for quota in _get_iscsi_account_usage(account_obj)
-        if quota["id"] == quota_obj.id
-    ][0]
+    config = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
+    if config is None:
+        abort(400, "There is no config with such id or you haven't permission or you haven't permission.")
 
-    check = _check_iscsi_account_quota(account_usage["stats"], body)
-    if check is not True:
-        return conflict(f"Quota overflow! {', '.join(check).capitalize()}.")
+    quota = IscsiQuotas.query.filter_by(account_id=config.account_id, pool_id=config.pool_id).first()
+    if not quota:
+        abort(400, "Account doesn't have quota for this pool")
+    try:
+        IscsiDiskSchema().load(body)
+    except ValidationError as e:
+        abort_detailed(400, "Invalid parameters.", e.messages)
 
+    gateway = config.gateway
+    if not gateway:
+        abort(400, "You haven't gateway for this config.")
     response = Iscsi().create_disk(
-        config=config_obj, gateway=gateway_obj, image=True, body=body
+        config=config, gateway=gateway, image=True, body=body
     )
     if is_failed(response):
-        return status_codes.get(response["code"])(
-            json.loads(response["data"])["message"]
-        )
-    return created(response)
+        abort(status_codes.get(response["code"], response["data"])["message"])
+    return response
 
 
-# will be deprecated and replaced with iscsi/disks/<disk_id> update soon
-def delete_config_disk(**kwargs):
+def update_disk(**kwargs):
     """
-    Delete iSCSI Disk and disconnect it from Confi.
-    Depends on clients which are assigned to this disk
+    Update disk. Resize disk can be only heigher than before resize
     """
-    """
-    Delete iSCSI Disk and disconnect it from Confi.
-    Depends on clients which are assigned to this disk
-    """
-    config_id, disk_id = kwargs["config_id"], kwargs["disk_id"]
-    log.debug(f"Delete disk with id {disk_id}")
-    config_obj = IscsiConfigs.get_by("id", config_id)
-    if config_obj is None:
-        return not_found("There is no config with such id.")
-    gateway_obj = config_obj.gateways[0]
-    disk_obj = IscsiDisks.get_by("id", disk_id)
-    count_disk_clients = len(disk_obj.clients)
-    if count_disk_clients != 0:
-        return conflict(f"This disk is used by {count_disk_clients} clients")
-        return conflict(f"This disk is used by {count_disk_clients} clients")
-
-    if len(disk_obj.snapshots):
-        return conflict("This disk cannot be deleted. Disk has snapshots.")
-
-    response = Iscsi().delete_iscsi_disk(
-        config=config_obj, gateway=gateway_obj, disk_name=disk_obj.name
+    disk_id, role, body = (
+        kwargs['disk_id'],
+        kwargs['role'],
+        kwargs['body']
     )
-    if not is_failed(response):
-        disk_obj.remove()
-    return no_content(disk_obj.serialize())
+    disk = IscsiDisks.get_by('id', disk_id)
+    config = IscsiConfigs.get_by('id', disk.config_id)
+    if not disk:
+        return not_found("Disk with this ID not found")
+
+    schema = IscsiDiskSchema(
+        context={
+            'disk': disk,
+            'config': config
+        }
+    )
+    errors = schema.validate(body)
+    if errors:
+        return unprocessable_entity(errors)
+
+    if "size_gb" in body:
+        if body["size_gb"] > disk.size_gb:
+            response = Iscsi().update_disk(disk, config, body)
+            if is_failed(response):
+                return status_codes.get(response["code"])(
+                    json.loads(response["data"])["message"]
+                )
+        else:
+            return unprocessable_entity("Resize disk must be higher than previous size.")
+
+    if is_admin(role):
+        body['owner'] = disk.owner  # pylint: disable=multiple-statements
+    disk.update(kwargs['body'])
+    return ok(IscsiDiskSchema().dump(disk))
 
 
 def delete_disk(**kwargs):
@@ -749,91 +738,6 @@ def update_client(**kwargs):
             Iscsi().update_user(client_obj, disk, body)
     client_obj.update(body)
     return IscsiClientSchema().dump(client_obj)
-
-
-# will be deprecated and replaced with iscsi/disks/<disk_id> update soon
-@trytest
-def update_disk_legacy(**kwargs):
-    """
-    Update disk. Resize disk can be only heigher than before resize
-    """
-    disk_id, config_id, role, body = (
-        kwargs["disk_id"],
-        kwargs["config_id"],
-        kwargs["role"],
-        kwargs["body"],
-    )
-    log.debug(f"Update disk {disk_id}. Mapped on config {config_id}. Params {body}")
-    disk_obj = IscsiDisks.get_by("id", disk_id)
-    config_obj = IscsiConfigs.get_by("id", config_id)
-    account_obj = Accounts.get_by("id", config_obj.account_id)
-    pool_obj = Pools.get_by("id", config_obj.pool_id)
-    quota_obj = [
-        quota for quota in account_obj.iscsi_quotas if quota.pool_id == pool_obj.id
-    ][0]
-    account_usage = [
-        quota
-        for quota in _get_iscsi_account_usage(account_obj)
-        if quota["id"] == quota_obj.id
-    ][0]
-    check = _check_iscsi_account_quota_disk_update(
-        account_usage["stats"], body, disk_obj
-    )
-    if check is not True:
-        return conflict(f"Quota overflow! {', '.join(check).capitalize()}.")
-
-    if "size_gb" in body:
-        if body["size_gb"] > disk_obj.size_gb:
-            response = Iscsi().update_disk(disk_obj, config_obj, body)
-            if is_failed(response):
-                return status_codes.get(response["code"])(
-                    json.loads(response["data"])["message"]
-                )
-    if role != "admin":
-        body["owner"] = disk_obj.owner  # pylint: disable=multiple-statements
-    disk_obj.update(body)
-    return no_content()
-
-
-@trytest
-def update_disk(**kwargs):
-    """
-    Update disk. Resize disk can be only heigher than before resize
-    """
-    disk_id, role, body = (
-        kwargs['disk_id'],
-        kwargs['role'],
-        kwargs['body']
-    )
-    disk = IscsiDisks.get_by('id', disk_id)
-    config = IscsiConfigs.get_by('id', disk.config_id)
-    if not disk:
-        return not_found("Disk with this ID not found")
-
-    schema = IscsiDiskSchema(
-        context={
-            'disk': disk,
-            'config': config
-        }
-    )
-    errors = schema.validate(body)
-    if errors:
-        return unprocessable_entity(errors)
-
-    if "size_gb" in body:
-        if body["size_gb"] > disk.size_gb:
-            response = Iscsi().update_disk(disk, config, body)
-            if is_failed(response):
-                return status_codes.get(response["code"])(
-                    json.loads(response["data"])["message"]
-                )
-        else:
-            return unprocessable_entity("Resize disk must be higher than previous size.")
-
-    if is_admin(role):
-        body['owner'] = disk.owner  # pylint: disable=multiple-statements
-    disk.update(kwargs['body'])
-    return ok(IscsiDiskSchema().dump(disk))
 
 
 def _disk_migrate(body):

@@ -112,17 +112,34 @@ class IscsiDiskSchema(Schema):
     snapshots = fields.Function(lambda disk: disk._snapshots(), dump_only=True)
 
     @validates_schema
-    def validates_quota_exceeding(self, data, **kwargs):
-        errors = {}
-        if not data.get('size_gb'):
+    def validate_quota_exceeding(self, data, **kwargs):
+        size_gb = data.get("size_gb")
+        if size_gb is None:
             return
-        config = self.context.get('config')
-        disk = self.context.get('disk')
-        quota = IscsiQuotas.query.filter_by(account_id=config.account_id, pool_id=config.pool_id).first()
-        usage = quota.compute_usage()
-        delta = data['size_gb'] - disk.size_gb
-        if usage['data_size_gb']+delta > quota.data_size_gb:
-            errors['size_gb'] = [f"Requested disk size is above account quota: {usage['data_size_gb']+delta}/{quota.data_size_gb} GiB"]
 
-        if errors:
-            raise ValidationError(errors)
+        config = self.context.get("config")
+        disk = self.context.get("disk")
+        quota = self.context.get("quota")
+
+        if not quota and config:
+            quota = IscsiQuotas.query.filter_by(
+                account_id=config.account_id, pool_id=config.pool_id
+            ).first()
+
+        if not quota:
+            return
+
+        usage = quota.compute_usage()
+        delta = size_gb - (disk.size_gb if disk else 0)
+        new_usage = usage["data_size_gb"] + delta
+
+        if new_usage > quota.data_size_gb:
+            raise ValidationError({
+                "size_gb": [f"Requested disk size exceeds quota: {new_usage}/{quota.data_size_gb} GiB"]
+            })
+
+        if not disk and usage["disks"] + 1 > quota.disk_limit:
+            raise ValidationError({
+                "disks": [f"Disk limit reached: maximum allowed is {quota.disk_limit}"]
+            })
+
