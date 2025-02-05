@@ -58,3 +58,16 @@ class Snapshots(db.Model, AbstractModel):
         self.description = body.get("description", self.description)
         self.name = body.get("new_snapshot_name", self.name)
         self.save()
+
+
+from marshmallow import Schema, ValidationError, fields
+
+
+class SnapshotSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.String()
+    size_gb = fields.Int(dump_only=True)
+    provisioned = fields.Int()
+    description = fields.String()
+    creation_time = fields.Time(dump_only=True)
+    disk_id = fields.Int(dump_only=True)

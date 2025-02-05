@@ -142,53 +142,42 @@ def get_client_disks(subject, client_id):
 
 
 @iscsi.route("/disks/<disk_id>/snapshots", methods=["GET"])
-@auth.account_auth_required
-def get_disk_snapshots(*args, **kwargs):
-    data = controller.get_disk_snapshots(*args, **kwargs)
-    return process_response(data)
+@au.rbac("iscsi.disks.snapshots.list")
+def get_disk_snapshots(subject, disk_id):
+    return controller.get_disk_snapshots(subject, disk_id), 200
 
 
 @iscsi.route("/disks/<disk_id>/snapshots", methods=["POST"])
-@auth.account_auth_required
-def create_disk_snapshot(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    data = controller.create_disk_snapshot(*args, **kwargs)
-    return process_response(data)
+@au.rbac("iscsi.disks.snapshots.create")
+def create_disk_snapshot(subject, disk_id):
+    return controller.create_disk_snapshot(subject, disk_id)
 
 
-@iscsi.route("/disks/<disk_id>/snapshots/<snapshot_name>", methods=["GET"])
-@auth.account_auth_required
-def get_snapshot(*args, **kwargs):
-    data = controller.get_snapshot(*args, **kwargs)
-    return process_response(data)
+@iscsi.route("/disks/<disk_id>/snapshots/<snapshot_id>", methods=["GET"])
+@au.rbac("iscsi.disks.snapshots.get")
+def get_snapshot(subject, disk_id, snapshot_id):
+    return controller.get_snapshot(subject, disk_id, snapshot_id)
 
 
-@iscsi.route("/disks/<disk_id>/snapshots/<snapshot_name>", methods=["PUT"])
-@auth.account_auth_required
-def update_snapshot(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    data = controller.update_snapshot(*args, **kwargs)
-    return process_response(data)
+@iscsi.route("/disks/<disk_id>/snapshots/<snapshot_id>", methods=["PUT"])
+@au.rbac("iscsi.disks.snapshots.update")
+def update_snapshot(subject, disk_id, snapshot_id):
+    return controller.update_snapshot(subject, disk_id, snapshot_id)
 
 
-@iscsi.route("/disks/<disk_id>/snapshots/<snapshot_name>", methods=["DELETE"])
-@auth.account_auth_required
-def delete_snapshot(*args, **kwargs):
-    data = controller.delete_snapshot(*args, **kwargs)
-    return process_response(data)
+@iscsi.route("/disks/<disk_id>/snapshots/<snapshot_id>", methods=["DELETE"])
+@au.rbac("iscsi.disks.snapshots.delete")
+def delete_snapshot(subject, snapshot_id):
+    return controller.delete_snapshot(subject, snapshot_id)
 
 
-@iscsi.route("/disks/<disk_id>/snapshots/<snapshot_name>/new_disk", methods=["POST"])
-@auth.account_auth_required
-def new_disk_from_snapshot(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    data = controller.new_disk_from_snapshot(*args, **kwargs)
-    return process_response(data)
+@iscsi.route("/disks/<disk_id>/snapshots/<snapshot_id>/new_disk", methods=["POST"])
+@au.rbac("iscsi.disks.snapshots.new_disk")
+def new_disk_from_snapshot(subject, snapshot_id):
+    return controller.new_disk_from_snapshot(subject, snapshot_id)
 
 
-@iscsi.route("/disks/<disk_id>/snapshots/<snapshot_name>/rollback", methods=["POST"])
-@auth.account_auth_required
-def rollback_snapshot(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    data = controller.rollback_snapshot(*args, **kwargs)
-    return process_response(data)
+@iscsi.route("/disks/<disk_id>/snapshots/<snapshot_id>/rollback", methods=["POST"])
+@au.rbac("iscsi.disks.snapshots.rollback")
+def rollback_snapshot(subject, snapshot_id):
+    return controller.rollback_snapshot(subject, snapshot_id)

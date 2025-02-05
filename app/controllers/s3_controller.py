@@ -45,7 +45,7 @@ def create_s3_user(subject):
     """
     body = request_json(request)
     account_name = body["account_name"]
-    account = Accounts.filter_by(name=body["account_name"]).first()
+    account = Accounts.filtered(subject).filter_by(name=body["account_name"]).first()
     if not account:
         abort(404, "Account with this name not found.")
     if not subject.has_permission(account):

@@ -13,6 +13,7 @@ class IscsiDisks(db.Model, AbstractModel):
     Define columns in database and methods of model
     """
 
+    RESOURCE_NAME = "iscsi.disks"
     id = db.Column(db.Integer, primary_key=True)
     owner = db.Column(db.String(128))
     size_gb = db.Column(db.Integer)

@@ -17,7 +17,7 @@ class Accounts(db.Model, AbstractModel):
     """
     Define columns in database and methods of model
     """
-
+    RESOURCE_NAME = "accounts"
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False, unique=True)
     description = db.Column(db.String(128))

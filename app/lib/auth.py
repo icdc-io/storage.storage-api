@@ -29,7 +29,7 @@ class Subject:
         if not account:
             raise ValueError("Account name not found")
         role = Roles(headers.get("X-Auth-Role"))
-        role = Roles("operator")
+        role = Roles("admin")
         operator = role.name == "operator"
         self.account = account
         self.account_id = account.id
@@ -53,12 +53,15 @@ class Subject:
             )
 
         self.permissions = permissions
-        self.filters = {
+
+    def get_filters(self, object_name):
+        filters = {
             key: getattr(self, value)
-            for key, value in RBAC_POLICY[role.value][requested_object][
+            for key, value in RBAC_POLICY[self.role.value][object_name][
                 "filters"
             ].items()
         }
+        return filters
 
     def __repr__(self):
         return (

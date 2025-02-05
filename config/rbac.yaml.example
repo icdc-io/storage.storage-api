@@ -81,6 +81,10 @@ roles:
       filters: {}
 
   admin:
+    accounts:
+      permissions: {}
+      filters:
+        name: account_name
     s3.quotas:
       permissions:
         - list

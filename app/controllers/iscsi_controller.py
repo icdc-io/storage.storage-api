@@ -37,7 +37,7 @@ from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
 from app.models.iscsi_disk import IscsiDisks, IscsiDiskSchema
 from app.models.iscsi_gateway import IscsiGateways
 from app.models.pool import Pools
-from app.models.snapshot import Snapshots
+from app.models.snapshot import Snapshots, SnapshotSchema
 from app import consts
 
 
@@ -61,7 +61,7 @@ def set_iscsi_configs(subject):
         f"Set iSCSI config to account {account_name} with params {body}"
     )
     try:
-        account = Accounts.query.filter_by(name=account_name).first()
+        account = Accounts.filtered(subject).filter_by(name=account_name).first()
         if not account:
             abort(404, "Account with this name not found.")
         if IscsiConfigs.query.filter_by(account_id=account.id, pool_id=body["pool_id"]).first():
@@ -231,29 +231,27 @@ def create_config_disk(subject, config_id):
     return response
 
 
-def update_disk(**kwargs):
+def update_disk(subject, disk_id):
     """
     Update disk. Resize disk can be only heigher than before resize
     """
-    disk_id, role, body = (
-        kwargs['disk_id'],
-        kwargs['role'],
-        kwargs['body']
-    )
-    disk = IscsiDisks.get_by('id', disk_id)
-    config = IscsiConfigs.get_by('id', disk.config_id)
-    if not disk:
-        return not_found("Disk with this ID not found")
+    body = request_json(request)
 
-    schema = IscsiDiskSchema(
-        context={
-            'disk': disk,
-            'config': config
-        }
-    )
-    errors = schema.validate(body)
-    if errors:
-        return unprocessable_entity(errors)
+    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
+    if not disk:
+        abort(404, "Disk not found or you haven't permission.")
+    config = IscsiConfigs.filtered(subject).filter_by(id=disk.config_id).first()
+    if not config:
+        abort(404, "Config with this ID not found or you haven't permission.")
+    try:
+        IscsiDiskSchema(
+            context={
+                'disk': disk,
+                'config': config
+            }
+        ).load(body)
+    except ValidationError as e:
+        abort_detailed(400, "Invalid parameters.", e.messages)
 
     if "size_gb" in body:
         if body["size_gb"] > disk.size_gb:
@@ -263,32 +261,33 @@ def update_disk(**kwargs):
                     json.loads(response["data"])["message"]
                 )
         else:
-            return unprocessable_entity("Resize disk must be higher than previous size.")
+            return abort(400, "Resize disk must be higher than previous size.")
 
-    if is_admin(role):
+    if subject.is_privileged_role():
         body['owner'] = disk.owner  # pylint: disable=multiple-statements
-    disk.update(kwargs['body'])
-    return ok(IscsiDiskSchema().dump(disk))
+    disk.update(body)
+    return IscsiDiskSchema().dump(disk)
 
 
-def delete_disk(**kwargs):
+def delete_disk(subject, disk_id):
     """
     Delete iSCSI Disk and disconnect it from Config.
     Depends on clients which are assigned to this disk
     """
 
-    disk_id = kwargs["disk_id"]
     log.debug(f"Delete disk with id {disk_id}")
-    disk = IscsiDisks.get_by("id", disk_id)
+    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first
     if not disk:
-        return not_found("There no disk with such id.")
+        abort(400, "There no disk with such id or you haven't permission.")
     if len(disk.clients) != 0:
-        return conflict(f"This disk is used by {len(disk.clients)} clients")
+        abort(409, f"This disk is used by {len(disk.clients)} clients")
     if len(disk.snapshots):
-        return conflict("This disk cannot be deleted. Disk has snapshots.")
+        abort(409, "This disk cannot be deleted. Disk has snapshots.")
 
-    config = IscsiConfigs.get_by("id", disk.config_id)
-    gateway = config.gateways[0]
+    config = IscsiConfigs.filtered(subject).filter_by(id=disk.config_id).first()
+    if not config:
+        abort(404, "Config with this ID not found or you haven't permission.")
+    gateway = config.gateway
     response = Iscsi().delete_iscsi_disk(
         config=config, gateway=gateway, disk_name=disk.name
     )
@@ -419,48 +418,36 @@ def _disconnect_disk(client_obj, disk_id):
 
 
 
-def get_disk_snapshots(**kwargs):
+def get_disk_snapshots(subject, disk_id):
     """
     Get list of snapshots which are assigned to disk
     """
-    """
-    Get list of snapshots which are assigned to disk
-    """
-    disk_id = kwargs["disk_id"]
-    disk_obj = IscsiDisks.get_by("id", disk_id)
-    return ok([snapshot.serialize() for snapshot in disk_obj.snapshots])
+    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
+    if not disk:
+        abort(404, "Disk not found or you haven't permission.")
+    return SnapshotSchema(many=True).dump(disk.snapshots)
 
 
-def create_disk_snapshot(**kwargs):
+def create_disk_snapshot(subject, disk_id):
     """
     Create new snaphot on Ceph side and on Postgres side
     Assign Snapshot to Disk
     """
-    disk_id, body = kwargs["disk_id"], kwargs["body"]
+    body = request_json(request)
     log.debug(f"Create Snapshot based on disk {disk_id} with params {body}")
-    disk_obj = IscsiDisks.get_by("id", disk_id)
-    config_obj = IscsiConfigs.get_by("id", disk_obj.config_id)
-    account_obj = Accounts.get_by("id", config_obj.account_id)
-    pool_obj = Pools.get_by("id", config_obj.pool_id)
-    quota_obj = [
-        quota for quota in account_obj.iscsi_quotas if quota.pool_id == pool_obj.id
-    ][0]
-    account_usage = [
-        quota
-        for quota in _get_iscsi_account_usage(account_obj)
-        if quota["id"] == quota_obj.id
-    ][0]
-    disk_name = f"{account_obj.name}_{disk_obj.name}"
-    body["pool"], body["disk"] = f"{pool_obj.type}-{pool_obj.klass}", disk_name
-    disk_params = disk_obj.serialize()
+    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
+    if not disk:
+        abort(404, "Disk not found or you haven't permission.")
+    config = IscsiConfigs.filtered(subject).filter_by(id=disk.config_id).first()
+    account = Accounts.query.filter_by(id=config.account_id).first()
+    pool = Accounts.query.filter_by(id=config.pool_id).first()
+    quota = IscsiQuotas.query.filter_by(pool_id=pool.id, account_id=account.id).first()
+    disk_name = f"{account.name}_{disk.name}"
+    body["pool"], body["disk"] = f"{pool.type}-{pool.klass}", disk_name
+    disk_params = disk.serialize()
     disk_params["snapshots"] = 1
     disk_params["size_gb"] = 0
 
-    check = _check_iscsi_account_quota(
-        account_usage["stats"], disk_params, disk_count=0
-    )
-    if check is not True:
-        return conflict(f"Quota overflow! {', '.join(check).capitalize()}.")
 
     response = Iscsi().create_snapshot(body=body)
     _ = [body.pop(key, None) for key in ["pool", "disk", "ioctx", "rbd", "image"]]
@@ -475,15 +462,14 @@ def create_disk_snapshot(**kwargs):
     return created(snapshot_obj.serialize())
 
 
-def get_snapshot(**kwargs):
+def get_snapshot(subject, disk_id, snapshot_id):
     """
     Get snapshot by id
     """
-    disk_id, snapshot_name = kwargs["disk_id"], kwargs["snapshot_name"]
-    disk_obj = IscsiDisks.get_by("id", disk_id)
-    snapshots = [
-        snapshot for snapshot in disk_obj.snapshots if snapshot.name == snapshot_name
-    ]
+    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first
+    if not disk:
+        abort(404, "Disk not found or you haven't permission.")
+    snapshot = Snapshots.filtered(subject).filter_by
     if len(snapshots) == 0:
         return not_found("Disk hasn't got snapshots")
 
