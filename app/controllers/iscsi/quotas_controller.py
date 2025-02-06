@@ -25,11 +25,9 @@ def create(subject):
     account_name = body.pop("account_name")
     log.debug(f"Set iSCSI quota to account {account_name} with params {body}")
 
-    account = Accounts.filter_by(name=body["account_name"]).first()
+    account = Accounts.filtered(subject).filter_by(name=account_name).first()
     if not account:
         abort(404, "Account with this name not found.")
-    if not subject.has_permission(account):
-        abort(401, "You haven't permission for this account.")
 
     if IscsiQuotas.query.filter_by(account_id=account.id, pool_id=body["pool_id"]).first():
         abort(409, "Quota for this pool already exists.")

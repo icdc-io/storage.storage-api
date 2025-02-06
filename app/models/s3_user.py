@@ -12,7 +12,7 @@ class S3Users(db.Model, AbstractModel):
     """
     Define columns in database and methods of model
     """
-
+    RESOURCE_NAME = "s3.users"
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(128))
     owner = db.Column(db.String(128))

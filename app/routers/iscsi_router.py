@@ -132,7 +132,7 @@ def disks_to_client(subject, client_id):
 @iscsi.route("/clients/<client_id>/disks/<disk_id>", methods=["DELETE"])
 @au.rbac("iscsi.clients.disks.delete")
 def unassign_client_disk(subject, client_id, disk_id):
-    return controller.unassign_client_disk(*subject, client_id, disk_id)
+    return controller.unassign_client_disk(subject, client_id, disk_id)
 
 
 @iscsi.route("/clients/<client_id>/disks", methods=["GET"])

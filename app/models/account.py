@@ -5,11 +5,11 @@ from typing import Any, Dict, Union
 from app.database import db
 from app.loggers import log
 from app.models.iscsi_config import IscsiConfigs
-from app.models.iscsi_quota import IscsiQuotas
+from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
 from app.models.iscsi_gateway import IscsiGateways
 from app.models.model import AbstractModel
 from app.models.pool import Pools
-from app.models.s3_quota import S3Quotas
+from app.models.s3_quota import S3Quotas, S3QuotaSchema
 from sqlalchemy.orm import joinedload
 
 
@@ -74,17 +74,16 @@ class Accounts(db.Model, AbstractModel):
         }
         return self.response_filter(fields, hide_params)
 
-    def _quotas(self, iscsi_quotas, s3_quotas):
+    def _quotas(self):
         """
         Returns a dictionary containing the serialized iscsi and s3 quotas based on the provided iscsi_quotas and s3_quotas.
         """
         return {
             "iscsi": [
-                IscsiQuotas.get_by("id", object.id).serialize()
-                for object in iscsi_quotas
+                IscsiQuotaSchema(many=True).dump(self.iscsi_quotas)
             ],
             "s3": [
-                S3Quotas.get_by("id", object.id).serialize() for object in s3_quotas
+                S3QuotaSchema(many=True).dump(self.s3_quotas)
             ],
         }
 
@@ -186,4 +185,3 @@ class AccountSchema(Schema):
     id = fields.Int()
     name = fields.String()
     description = fields.String()
-

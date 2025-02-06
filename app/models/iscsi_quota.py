@@ -11,7 +11,7 @@ class IscsiQuotas(db.Model, AbstractModel):
     """
     Define columns in database and methods of model
     """
-
+    RESOURCE_NAME = "iscsi.quotas"
     id = db.Column(db.Integer, primary_key=True)
     clients = db.Column(db.Integer)
     data_size_gb = db.Column(db.Integer)
@@ -182,6 +182,8 @@ class IscsiQuotaSchema(Schema):
     def validates_limits_exceeding(self, data, **kwargs):
         errors = {}
         usage = self.context.get("usage")
+        if not usage:
+            return
         for value in ["clients", "data_size_gb", "disks", "snapshots"]:
             if value in data:
                 if data[value] > getattr(self.limits, value):

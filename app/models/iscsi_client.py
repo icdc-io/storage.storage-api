@@ -11,7 +11,7 @@ class IscsiClients(db.Model, AbstractModel):
     """
     Define columns in database and methods of model
     """
-
+    RESOURCE_NAME = "iscsi.clients"
     id = db.Column(db.Integer, primary_key=True)
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"))
     name = db.Column(db.String(128))

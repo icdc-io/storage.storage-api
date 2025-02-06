@@ -29,7 +29,7 @@ class Subject:
         if not account:
             raise ValueError("Account name not found")
         role = Roles(headers.get("X-Auth-Role"))
-        role = Roles("admin")
+        role = Roles("member")
         operator = role.name == "operator"
         self.account = account
         self.account_id = account.id
@@ -40,14 +40,13 @@ class Subject:
         self.forwarded_for = headers.get("X-Forwarded-For")
         self.forwarded_host = headers.get("X-Forwarded-Host")
         requested_object, requested_permission = action.rsplit(".", 1)
-
-        if not requested_object in RBAC_POLICY[role.value]:
+        if requested_object not in RBAC_POLICY[role.value]:
             raise PermissionException(
                 f"Access to {action} forbidden for role {role.name}"
             )
         self.requested_object = requested_object
         permissions = RBAC_POLICY[role.value][requested_object]["permissions"]
-        if not requested_permission in permissions:
+        if requested_permission not in permissions:
             raise PermissionException(
                 f"Access to {action} forbidden for role {role.name}"
             )
@@ -66,11 +65,10 @@ class Subject:
     def __repr__(self):
         return (
             f"Subject(\n"
-            f"  role={self.role},\n"
-            f"  account_id={self.account.id},\n"
-            f"  account_name={self.account.name},\n"
-            f"  permissions={self.permissions},\n"
-            f"  filters={self.filters}\n"
+            f"  role={self.role}, \n"
+            f"  account_id={self.account.id}, \n"
+            f"  account_name={self.account.name}, \n"
+            f"  permissions={self.permissions}, \n"
             f")"
         )
 

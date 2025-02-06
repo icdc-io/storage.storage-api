@@ -21,11 +21,9 @@ def index(subject):
 
 def create(subject):
     body = request_json(request)
-    account = Accounts.filter_by(name=body["account_name"]).first()
+    account = Accounts.filtered(subject).filter_by(name=body["account_name"]).first()
     if not account:
         abort(404, "Account with this name not found.")
-    if not subject.has_permission(account):
-        abort(401, "You haven't permission for this account.")
     body.pop("account_name")
     try:
         S3QuotaSchema().load(body)

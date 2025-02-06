@@ -6,7 +6,9 @@ from app.models.model import AbstractModel
 from app.models.pool import Pools, PoolSchema
 from app import consts
 
+
 class S3Quotas(db.Model, AbstractModel):
+    RESOURCE_NAME = "s3.quotas"
     id = db.Column(db.Integer, primary_key=True)
     objects = db.Column(db.Integer)
     data_size_mb = db.Column(db.Integer)
@@ -144,6 +146,8 @@ class S3QuotaSchema(Schema):
     def validates_limit_exceeding(self, data, **kwargs):
         errors = {}
         usage = self.context.get("usage")
+        if not usage:
+            return
         for value in ["users", "objects", "buckets", "data_size_mb"]:
             if value in data:
                 if data[value] > getattr(self.limits, value):

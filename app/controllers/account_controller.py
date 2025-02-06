@@ -4,12 +4,15 @@ Account controller
 
 import os
 
+from flask import request, abort, jsonify
+
 from app.database import db
-from app.lib import paramiko, request_utils
+from app.lib import paramiko
 from app.lib.controller_utils import (
     _get_iscsi_account_usage_billing,
     _get_s3_account_usage_billing,
 )
+from app.lib.request_utils import request_json, log
 
 # Import models
 from app.models.account import Accounts
@@ -25,21 +28,21 @@ from app.models.s3_user import S3Users
 #############################################
 
 
-def create_account(data):
+def create_account(subject):
     """
     Create account instance along with its S3 and iSCSI quotas and iSCSI configs.
     """
+    data = request_json(request)
     # Validate input data
     valid, message = Accounts.validate_account_data(data)
     if not valid:
-        request_utils.log.error(message)
-        return request_utils.bad_request(message)
-
-    # Create accountr
-    request_utils.log.debug(
+        log.error(message)
+        abort(400, message)
+    # Create account
+    log.debug(
         f"Creating account and associated records for: {data['name']}"
     )
-    request_utils.log.debug(f"Data: {data}")
+    log.debug(f"Data: {data}")
 
     try:
         # Attempt to create Account (assuming unique constraint or similar check exists)
@@ -49,27 +52,27 @@ def create_account(data):
         account_obj.save()
         # Check if account creation was successful
         if account_obj.id is None:
-            request_utils.log.error("Failed to create account")
-            return request_utils.conflict("Account already exists")
-        request_utils.log.debug("Account created successfully")
+            log.error("Failed to create account")
+            abort(409, "Account already exist.")
+        log.debug("Account created successfully")
 
         # Process S3 Quotas
         for s3_quota in data.get("services", {}).get("s3", {}).get("quotas", []):
             s3_quota["account_id"] = account_obj.id
             s3_quota_obj = S3Quotas(**s3_quota)
             s3_quota_obj.save()
-        request_utils.log.debug("S3 Quotas processed successfully")
+        log.debug("S3 Quotas processed successfully")
 
         # Process iSCSI Quotas
         for iscsi_quota in data.get("services", {}).get("iscsi", {}).get("quotas", []):
             iscsi_quota["account_id"] = account_obj.id
             iscsi_quota_obj = IscsiQuotas(**iscsi_quota)
             iscsi_quota_obj.save()
-        request_utils.log.debug("iSCSI Quotas processed successfully")
+        log.debug("iSCSI Quotas processed successfully")
 
         # Process iSCSI Configs and Gateways
         for iscsi_config in (
-            data.get("services", {}).get("iscsi", {}).get("configs", [])
+                data.get("services", {}).get("iscsi", {}).get("configs", [])
         ):
             iscsi_config["account_id"] = account_obj.id
             gateways = iscsi_config.pop("gateways", [])
@@ -82,31 +85,29 @@ def create_account(data):
                 gateway_obj = IscsiGateways(**gateway)
                 gateway_obj.save()
 
-        request_utils.log.debug("iSCSI Configs and Gateways processed successfully")
+        log.debug("iSCSI Configs and Gateways processed successfully")
 
         # Prepare final response
         response_data = account_obj.toDict()
 
-        request_utils.log.debug("Account and associated records created successfully")
-        return request_utils.ok(response_data)
+        log.debug("Account and associated records created successfully")
+        return response_data
 
     except Exception as e:
-        request_utils.log.error(
+        log.error(
             f"An error occurred while creating account and associated records: {e}"
         )
-        return request_utils.internal_server_error(
-            "Failed to create account and associated records"
-        )
+        return abort(500, "Failed to create account and associated records")
 
 
-def get_account_info(account_name):
+def get_account_info(subject, account_name):
     """Get account information by name."""
     account = Accounts.query.filter_by(name=account_name).first()
 
     if account is None:
-        return request_utils.not_found("Account does not exist.")
+        abort(404, "Account does not exist.")
 
-    return request_utils.ok(account.toDict())
+    return account.toDict()
 
 
 def update_account(data):
@@ -316,12 +317,12 @@ def delete_account(**kwargs):
         return request_utils.ok(account_obj.id)
 
 
-def get_accounts_all(**kwargs):
+def get_accounts_all(subject):
     """
     Retrieve all accounts with optional filter parameters.
     """
 
-    return request_utils.ok(Accounts.get_all_accounts())
+    return Accounts.get_all_accounts()
 
 
 def get_account_usage(**kwargs):

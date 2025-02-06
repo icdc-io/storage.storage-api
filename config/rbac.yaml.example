@@ -155,6 +155,10 @@ roles:
         account_id: account_id
 
   owner:
+    accounts:
+      permissions: {}
+      filters:
+        name: account_name
     s3.quotas:
       permissions:
         - list
@@ -225,6 +229,10 @@ roles:
         account_id: account_id
 
   member:
+    accounts:
+      permissions: {}
+      filters:
+        name: account_name
     s3.quotas:
       permissions:
         - list

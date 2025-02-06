@@ -413,7 +413,7 @@ def _disconnect_disk(client_obj, disk_id):
     if not disk_obj:
         return not_found("Disk with this ID does not exist.")
     config_obj = IscsiConfigs.get_by("id", disk_obj.config_id)
-    gateway_obj = config_obj.gateways[0]
+    gateway_obj = config_obj.gateways
     return Iscsi().disconnect_disk(client_obj, disk_obj, config_obj, gateway_obj)
 
 
