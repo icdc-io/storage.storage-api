@@ -33,6 +33,8 @@ roles:
         - get
         - update
         - delete
+        - regenerate_key
+        - regenerate_key
       filters: {}
     s3.users.key:
       permissions:
@@ -77,6 +79,14 @@ roles:
       permissions:
         - list
         - create
+        - delete
+      filters: {}
+    iscsi.snapshots:
+      permissions:
+        - list
+        - get
+        - create
+        - update
         - delete
       filters: {}
 
@@ -136,8 +146,7 @@ roles:
         - create
         - update
         - delete
-      filters:
-        account_id: account_id
+      filters: {}
     iscsi.clients:
       permissions:
         - list
@@ -153,6 +162,14 @@ roles:
         - delete
       filters:
         account_id: account_id
+    iscsi.snapshots:
+      permissions:
+        - list
+        - get
+        - create
+        - update
+        - delete
+      filters: {}
 
   owner:
     accounts:
@@ -210,8 +227,7 @@ roles:
         - create
         - update
         - delete
-      filters:
-        account_id: account_id
+      filters: {}
     iscsi.clients:
       permissions:
         - list
@@ -227,6 +243,14 @@ roles:
         - delete
       filters:
         account_id: account_id
+    iscsi.snapshots:
+      permissions:
+        - list
+        - get
+        - create
+        - update
+        - delete
+      filters: {}
 
   member:
     accounts:
@@ -281,7 +305,6 @@ roles:
         - update
         - delete
       filters:
-        account_id: account_id
         owner: owner
     iscsi.clients:
       permissions:
@@ -300,3 +323,11 @@ roles:
       filters:
         account_id: account_id
         owner: owner
+    iscsi.snapshots:
+      permissions:
+        - list
+        - get
+        - create
+        - update
+        - delete
+      filters: {}

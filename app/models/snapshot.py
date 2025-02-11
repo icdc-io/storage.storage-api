@@ -11,7 +11,7 @@ class Snapshots(db.Model, AbstractModel):
     """
     Define columns in database and methods of model
     """
-
+    RESOURCE_NAME = "iscsi.snapshots"
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False, unique=True)
     size_gb = db.Column(db.Integer)
@@ -69,5 +69,5 @@ class SnapshotSchema(Schema):
     size_gb = fields.Int(dump_only=True)
     provisioned = fields.Int()
     description = fields.String()
-    creation_time = fields.Time(dump_only=True)
+    creation_time = fields.DateTime(dump_only=True)
     disk_id = fields.Int(dump_only=True)

@@ -11,14 +11,14 @@ class IscsiConfigs(db.Model, AbstractModel):
     """
     Define columns in database and methods of model
     """
-
+    RESOURCE_NAME = "iscsi.configs"
     id = db.Column(db.Integer, primary_key=True)
     target_iqn = db.Column(db.String(256))
     pool_id = db.Column(db.Integer, db.ForeignKey("pools.id"))
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"))
     name = db.Column(db.String(128))
     gateways = db.relationship(
-        "IscsiGateways", backref="gateways", cascade="all, delete-orphan", uselist=False
+        "IscsiGateways", backref="gateways", cascade="all, delete-orphan"
     )
     disks = db.relationship(
         "IscsiDisks", backref="iscsi_disks", cascade="all, delete-orphan"

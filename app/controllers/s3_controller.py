@@ -29,7 +29,7 @@ from app import consts
 import re
 
 
-def get_s3_limits(**kwargs):
+def get_s3_limits(subject):
     """
     List account's S3 per-pool limit-sets
     """
@@ -48,8 +48,6 @@ def create_s3_user(subject):
     account = Accounts.filtered(subject).filter_by(name=body["account_name"]).first()
     if not account:
         abort(404, "Account with this name not found.")
-    if not subject.has_permission(account):
-        abort(401, "You haven't permission for this account.")
     body.pop("account_name", None)
     pool = Pools.query.filter_by(id=body["pool_id"]).first()
     if not pool:
@@ -392,8 +390,9 @@ def get_buckets_info(subject):
     """
     Get buckets info of s3 user.
     """
-    schema = S3QuotaSchema(partial=True)
+    schema = S3UserSchema(partial=True)
     parsed_filters = parse_jsonapi_filters(request.args)
+    print(parsed_filters)
     try:
         filters = schema.load(parsed_filters)
     except AttributeError as e:

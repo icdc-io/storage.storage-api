@@ -16,8 +16,8 @@ s3.register_error_handler(HTTPException, handle_exception)
 
 @s3.route("/limits", methods=["GET"])
 @au.rbac("s3.limits.list")
-def get_s3_limits(*args, **kwargs):
-    return controller.get_s3_limits(*args, **kwargs), 200
+def get_s3_limits(subject):
+    return controller.get_s3_limits(subject), 200
 
 
 @s3.route("/users", methods=["POST"])

@@ -139,7 +139,7 @@ class IscsiDiskSchema(Schema):
                 "size_gb": [f"Requested disk size exceeds quota: {new_usage}/{quota.data_size_gb} GiB"]
             })
 
-        if not disk and usage["disks"] + 1 > quota.disk_limit:
+        if not disk and usage["disks"] + 1 > quota.disks:
             raise ValidationError({
                 "disks": [f"Disk limit reached: maximum allowed is {quota.disk_limit}"]
             })

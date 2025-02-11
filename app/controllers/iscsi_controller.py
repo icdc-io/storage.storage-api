@@ -108,7 +108,7 @@ def get_config(subject, config_id):
     """
     config_obj = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
     if not config_obj:
-        abort(404, "Config with this ID not found")
+        abort(404, "Config with this ID not found or you have not permission.")
     return IscsiConfigSchema().dump(config_obj)
 
 
@@ -194,10 +194,8 @@ def get_config_disks(subject, config_id):
     """
     Get all iSCSI disks which are assigned to config
     """
-    config = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
-    if not config:
-        abort(400, "Config with this ID not found or you haven't permission.")
-    return IscsiDiskSchema(many=True).dump(config.disks)
+    disks = IscsiDisks.filtered(subject).filter_by(config_id=config_id).all()
+    return jsonify(IscsiDiskSchema(many=True).dump(disks))
 
 
 def create_config_disk(subject, config_id):
@@ -216,19 +214,22 @@ def create_config_disk(subject, config_id):
     if not quota:
         abort(400, "Account doesn't have quota for this pool")
     try:
-        IscsiDiskSchema().load(body)
+        IscsiDiskSchema(context={
+            "quota": quota
+        }).load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters.", e.messages)
 
-    gateway = config.gateway
+    gateway = config.gateways[0]
     if not gateway:
         abort(400, "You haven't gateway for this config.")
     response = Iscsi().create_disk(
         config=config, gateway=gateway, image=True, body=body
     )
     if is_failed(response):
-        abort(status_codes.get(response["code"], response["data"])["message"])
-    return response
+        abort(response["code"], json.loads(response["data"])["message"])
+    disk = response.get("data")
+    return IscsiDiskSchema().dump(disk)
 
 
 def update_disk(subject, disk_id):
@@ -257,13 +258,11 @@ def update_disk(subject, disk_id):
         if body["size_gb"] > disk.size_gb:
             response = Iscsi().update_disk(disk, config, body)
             if is_failed(response):
-                return status_codes.get(response["code"])(
-                    json.loads(response["data"])["message"]
-                )
+                abort(response["code"], json.loads(response["data"])["message"])
         else:
             return abort(400, "Resize disk must be higher than previous size.")
 
-    if subject.is_privileged_role():
+    if not subject.is_privileged_role():
         body['owner'] = disk.owner  # pylint: disable=multiple-statements
     disk.update(body)
     return IscsiDiskSchema().dump(disk)
@@ -276,9 +275,9 @@ def delete_disk(subject, disk_id):
     """
 
     log.debug(f"Delete disk with id {disk_id}")
-    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first
+    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
     if not disk:
-        abort(400, "There no disk with such id or you haven't permission.")
+        abort(404, "There no disk with such id or you haven't permission.")
     if len(disk.clients) != 0:
         abort(409, f"This disk is used by {len(disk.clients)} clients")
     if len(disk.snapshots):
@@ -287,7 +286,7 @@ def delete_disk(subject, disk_id):
     config = IscsiConfigs.filtered(subject).filter_by(id=disk.config_id).first()
     if not config:
         abort(404, "Config with this ID not found or you haven't permission.")
-    gateway = config.gateway
+    gateway = config.gateways[0]
     response = Iscsi().delete_iscsi_disk(
         config=config, gateway=gateway, disk_name=disk.name
     )
@@ -320,11 +319,9 @@ def create_iscsi_client(subject):
         f"Create iSCSI client to account {account_name} with params {body}"
     )
     try:
-        account_obj = Accounts.query.filter_by(name=account_name).first()
+        account_obj = Accounts.filtered(subject).filter_by(name=account_name).first()
         if not account_obj:
-            abort(404, "Account with this name not found.")
-        if not subject.has_permission(account_obj):
-            abort(401, "You haven't permission for this endpoint.")
+            abort(404, "Account with this name not found or you haven't permission.")
         body["account_id"] = account_obj.id
         client = IscsiClients(**body)
         client.save()
@@ -357,7 +354,7 @@ def disks_to_client(subject, client_id):
         abort(404, "Client with this ID not found or you haven't permission.")
     response = []
     for disk in body:
-        response.append(_connect_disk(client_obj, disk))
+        response.append(_connect_disk(subject, client_obj, disk))
     for i in response:
         if i['code'] == 409:
             abort_detailed(409, "Invalid parameters.", i['data'])
@@ -375,7 +372,7 @@ def unassign_client_disk(subject, client_id, disk_id):
     client_obj = IscsiClients.filtered(subject).filter_by(id=client_id).first()
     if not client_obj:
         abort(404, "Client with this ID not found or you haven't permission.")
-    response = [_disconnect_disk(client_obj, disk_id)]
+    response = [_disconnect_disk(subject, client_obj, disk_id)]
     for i in response:
         if i['code'] == 409:
             abort_detailed(409, "Invalid parameters.", i['data'])
@@ -386,34 +383,27 @@ def unassign_client_disk(subject, client_id, disk_id):
     return jsonify("No content.")
 
 
-def _connect_disk(client_obj, disk):
+def _connect_disk(subject, client_obj, disk):
     log.debug(f"Connect Disk {disk['id']} to clinet {client_obj.iqn}")
-    disk_obj = IscsiDisks.get_by("id", disk["id"])
+    disk_obj = IscsiDisks.filtered(subject).filter_by(id=disk["id"]).first()
     if not disk_obj:
-        return not_found("Disk with this ID does not exist.")
+        abort(404, "Disk with this ID does not exist or you haven't permission")
     config_obj = IscsiConfigs.get_by("id", disk_obj.config_id)
-    quota = [
-        i
-        for i in Accounts.get_by("id", config_obj.account_id).iscsi_quotas
-        if i.pool_id == config_obj.pool_id
-    ][0]
+    quota = IscsiQuotas.query.filter_by(account_id=config_obj.account_id, pool_id=config_obj.pool_id).first()
     gateway_obj = config_obj.gateways[0]
-    clients = []
-    for disk in config_obj.disks:
-        for client in disk.clients:
-            clients.append(client.id)
-    if len(set(clients)) + 1 > quota.clients:
-        return conflict("Clients quota overflow")
+    usage = quota.compute_usage()
+    if usage["clients"] + 1 > quota.clients:
+        abort(409, "Quota overflow for clients.")
     return Iscsi().assign_disk(client_obj, disk_obj, config_obj, gateway_obj)
 
 
-def _disconnect_disk(client_obj, disk_id):
+def _disconnect_disk(subject, client_obj, disk_id):
     log.debug(f"Disconnect Disk {disk_id} to clinet {client_obj.iqn}")
-    disk_obj = IscsiDisks.get_by("id", disk_id)
+    disk_obj = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
     if not disk_obj:
-        return not_found("Disk with this ID does not exist.")
+        abort(404, "Disk with this ID does not exist or you haven't permission.")
     config_obj = IscsiConfigs.get_by("id", disk_obj.config_id)
-    gateway_obj = config_obj.gateways
+    gateway_obj = config_obj.gateways[0]
     return Iscsi().disconnect_disk(client_obj, disk_obj, config_obj, gateway_obj)
 
 
@@ -440,14 +430,16 @@ def create_disk_snapshot(subject, disk_id):
         abort(404, "Disk not found or you haven't permission.")
     config = IscsiConfigs.filtered(subject).filter_by(id=disk.config_id).first()
     account = Accounts.query.filter_by(id=config.account_id).first()
-    pool = Accounts.query.filter_by(id=config.pool_id).first()
+    pool = Pools.query.filter_by(id=config.pool_id).first()
     quota = IscsiQuotas.query.filter_by(pool_id=pool.id, account_id=account.id).first()
     disk_name = f"{account.name}_{disk.name}"
     body["pool"], body["disk"] = f"{pool.type}-{pool.klass}", disk_name
     disk_params = disk.serialize()
     disk_params["snapshots"] = 1
     disk_params["size_gb"] = 0
-
+    usage = quota.compute_usage()
+    if usage["snapshots"] + 1 > quota.snapshots:
+        abort(409, "Quota overflow for snapshots!")
 
     response = Iscsi().create_snapshot(body=body)
     _ = [body.pop(key, None) for key in ["pool", "disk", "ioctx", "rbd", "image"]]
@@ -459,86 +451,75 @@ def create_disk_snapshot(subject, disk_id):
     body["disk_id"] = disk_id
     snapshot_obj = Snapshots(**body)
     snapshot_obj.save()
-    return created(snapshot_obj.serialize())
+    return snapshot_obj.serialize()
 
 
 def get_snapshot(subject, disk_id, snapshot_id):
     """
     Get snapshot by id
     """
-    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first
+    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
     if not disk:
         abort(404, "Disk not found or you haven't permission.")
-    snapshot = Snapshots.filtered(subject).filter_by
-    if len(snapshots) == 0:
-        return not_found("Disk hasn't got snapshots")
+    snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
+    if not snapshot:
+        return abort(404, "Disk hasn't got snapshots")
 
-    return ok(snapshots[0].serialize())
+    return SnapshotSchema().dump(snapshot)
 
 
-def update_snapshot(**kwargs):
+def update_snapshot(subject, disk_id, snapshot_id):
     """
     Update snapshot description
     """
-    disk_id, snapshot_name, body = (
-        kwargs["disk_id"],
-        kwargs["snapshot_name"],
-        kwargs["body"],
-    )
-    log.debug(f"Update Snapshot {snapshot_name} with params {body}")
-    disk_obj = IscsiDisks.get_by("id", disk_id)
+    body = request_json(request)
+    disk_obj = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
+    if not disk_obj:
+        abort(404, "Disk not found or you haven't permission.")
     config_obj = IscsiConfigs.get_by("id", disk_obj.config_id)
     account_obj = Accounts.get_by("id", config_obj.account_id)
     pool_obj = Pools.get_by("id", config_obj.pool_id)
     disk_name = f"{account_obj.name}_{disk_obj.name}"
+    snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
+    log.debug(f"Update Snapshot {snapshot.name} with params {body}")
     body["pool"], body["disk"], body["snapshot_name"] = (
         f"{pool_obj.type}-{pool_obj.klass}",
         disk_name,
-        snapshot_name,
+        snapshot.name,
     )
-    snapshots = [
-        snapshot for snapshot in disk_obj.snapshots if snapshot.name == snapshot_name
-    ]
-    if len(snapshots) == 0:
-        return not_found("Disk hasn't got snapshots")
+    if not snapshot == 0:
+        return abort(404, "Snapshot not found.")
 
-    snapshot_obj = snapshots[0]
-    if body["new_snapshot_name"] != snapshot_obj.name:
+    if body["new_snapshot_name"] != snapshot.name:
         response = Iscsi().update_snapshot(body=body)
         if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
+            abort(response["code"], json.loads(response["data"])["message"])
 
-    snapshot_obj.update(body)
+    snapshot.update(body)
     return no_content()
 
 
-def delete_snapshot(**kwargs):
+def delete_snapshot(subject, disk_id, snapshot_id):
     """
     Delete snapshot by name
     """
-    disk_id, snapshot_name = kwargs["disk_id"], kwargs["snapshot_name"]
-    log.debug(f"Delete snapshot {snapshot_name} from disk with id {disk_id}")
-    disk_obj = IscsiDisks.get_by("id", disk_id)
+    disk_obj = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
+    if not disk_obj:
+        abort(404, "Disk not found or you haven't permission.")
+    snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
+    log.debug(f"Delete snapshot {snapshot.name} from disk with id {disk_id}")
     config_obj = IscsiConfigs.get_by("id", disk_obj.config_id)
     account_obj = Accounts.get_by("id", config_obj.account_id)
     pool_obj = Pools.get_by("id", config_obj.pool_id)
     disk_name = f"{account_obj.name}_{disk_obj.name}"
-    kwargs["pool"], kwargs["disk"], kwargs["snapshot"] = (
-        f"{pool_obj.type}-{pool_obj.klass}",
-        disk_name,
-        snapshot_name,
-    )
-    snapshots = [
-        snapshot for snapshot in disk_obj.snapshots if snapshot.name == snapshot_name
-    ]
-    if len(snapshots) == 0:
-        return not_found("Disk hasn't got the snapshot with such name.")
+    body = {"snapshot_name": snapshot.name, "disk_id": disk_id, "pool": f"{pool_obj.type}-{pool_obj.klass}",
+            "disk": disk_name, "snapshot": snapshot.name}
 
-    response = Iscsi().delete_snapshot(body=kwargs)
+    response = Iscsi().delete_snapshot(body=body)
     if is_failed(response):
-        return status_codes.get(response["code"])(response["data"])
+        abort(response["code"], json.loads(response["data"])["message"])
 
-    snapshots[0].remove()
+    snapshot.remove()
     return no_content()
 
 
@@ -694,7 +675,7 @@ def update_client(subject, client_id):
     client_obj = IscsiClients.filtered(subject).filter_by(id=client_id).first()
     if not client_obj:
         abort(404, "Client with this ID not found or you haven't permission.")
-    if subject.is_privileged_role():
+    if not subject.is_privileged_role():
         body["owner"] = client_obj.owner  # pylint: disable=multiple-statements
     client_disks = client_obj.disks
     if not client_disks == []:
