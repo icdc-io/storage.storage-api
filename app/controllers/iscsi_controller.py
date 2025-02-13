@@ -481,14 +481,14 @@ def update_snapshot(subject, disk_id, snapshot_id):
     pool_obj = Pools.get_by("id", config_obj.pool_id)
     disk_name = f"{account_obj.name}_{disk_obj.name}"
     snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
+    if not snapshot:
+        abort(404, "Snapshot not found.")
     log.debug(f"Update Snapshot {snapshot.name} with params {body}")
     body["pool"], body["disk"], body["snapshot_name"] = (
         f"{pool_obj.type}-{pool_obj.klass}",
         disk_name,
         snapshot.name,
     )
-    if not snapshot == 0:
-        return abort(404, "Snapshot not found.")
 
     if body["new_snapshot_name"] != snapshot.name:
         response = Iscsi().update_snapshot(body=body)

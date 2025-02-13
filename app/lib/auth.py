@@ -1,3 +1,4 @@
+import re
 from enum import Enum
 from functools import wraps
 
@@ -29,8 +30,9 @@ class Subject:
         if not account:
             raise ValueError("Account name not found")
         role = Roles(headers.get("X-Auth-Role"))
-        role = Roles("member")
-        operator = role.name == "operator"
+        operator = is_operator(account.name, role.value)
+        if role.name == "OPERATOR" and not operator:
+            raise PermissionException("You are not operator.")
         self.account = account
         self.account_id = account.id
         self.account_name = account.name
@@ -62,6 +64,12 @@ class Subject:
         }
         return filters
 
+    def has_permission(self, permission, object_name=None):
+        if not object_name:
+            object_name = self.requested_object
+        permissions = RBAC_POLICY[self.role.value][object_name]["permissions"]
+        return permission in permissions
+
     def __repr__(self):
         return (
             f"Subject(\n"
@@ -73,13 +81,7 @@ class Subject:
         )
 
     def is_privileged_role(self):
-        return self.role.name in ["admin", "owner", "operator"]
-
-    def is_operator(self):
-        return self.is_operator()
-
-    def has_permission(self, account):
-        return account.id == self.account_id or self.is_operator()
+        return self.role.value in ["admin", "owner", "operator"]
 
 
 def rbac(action):
@@ -97,3 +99,13 @@ def rbac(action):
             return func(*args, **kwargs)
         return wrap
     return wrapper
+
+
+def is_operator(account, role):
+    """
+    Check operator permissions
+    """
+    operator_group = consts.LOCATION_OPERATOR_GROUP
+    operator = re.split(r"[./]", operator_group)
+    separator = "." if "." in operator_group else "/"
+    return role == operator[-1] and account == separator.join(operator[:-1])

@@ -12,7 +12,7 @@ from app.lib.controller_utils import (
     _get_iscsi_account_usage_billing,
     _get_s3_account_usage_billing,
 )
-from app.lib.request_utils import request_json, log
+from app.lib.request_utils import request_json, log, ok
 
 # Import models
 from app.models.account import Accounts
@@ -97,7 +97,7 @@ def create_account(subject):
         log.error(
             f"An error occurred while creating account and associated records: {e}"
         )
-        return abort(500, "Failed to create account and associated records")
+        abort(500, "Failed to create account and associated records")
 
 
 def get_account_info(subject, account_name):
@@ -110,22 +110,24 @@ def get_account_info(subject, account_name):
     return account.toDict()
 
 
-def update_account(data):
+def update_account(subject, account_name):
+    data = request_json(request)
+    data["name"] = account_name
     # Validate input data
     valid, message = Accounts.validate_account_data(data)
     if not valid:
-        request_utils.log.error(message)
-        return request_utils.bad_request(message)
+        log.error(message)
+        abort(400, message)
 
-    request_utils.log.debug(f"Update account with data: {data}")
+    log.debug(f"Update account with data: {data}")
 
     # Search for the existing account by name or another unique identifier
-    account_obj = Accounts.query.filter_by(name=data.get("name")).first()
+    account_obj = Accounts.query.filter_by(name=account_name).first()
 
     if not account_obj:
         error_message = f"Account with name {data.get('name')} does not exist."
-        request_utils.log.error(error_message)
-        return request_utils.not_found(error_message)
+        log.error(error_message)
+        abort(404, error_message)
 
     try:
         # Process S3 Quotas
@@ -137,7 +139,7 @@ def update_account(data):
                 pool_id=s3_quota_obj.pool_id, account_id=s3_quota_obj.account_id
             ).first()
 
-            request_utils.log.debug(existing_s3_quota)
+            log.debug(existing_s3_quota)
             if existing_s3_quota:
                 # Update existing record's attributes as needed
                 for key, value in s3_quota.items():
@@ -147,10 +149,10 @@ def update_account(data):
                 # If not found, perhaps you want to add a new record instead
                 db.session.add(s3_quota_obj)
 
-            request_utils.log.debug(s3_quota_obj)
+            log.debug(s3_quota_obj)
             db.session.commit()
 
-        request_utils.log.debug("S3 Quotas processed successfully")
+        log.debug("S3 Quotas processed successfully")
 
         # Process iSCSI Quotas
         for iscsi_quota in data.get("services", {}).get("iscsi", {}).get("quotas", []):
@@ -161,17 +163,17 @@ def update_account(data):
                 pool_id=iscsi_quota_obj.pool_id, account_id=iscsi_quota_obj.account_id
             ).first()
 
-            request_utils.log.debug(existing_iscsi_quota)
+            log.debug(existing_iscsi_quota)
             if existing_iscsi_quota:
                 for key, value in iscsi_quota.items():
                     setattr(existing_iscsi_quota, key, value)
             else:
                 db.session.add(iscsi_quota_obj)
 
-            request_utils.log.debug(iscsi_quota_obj)
+            log.debug(iscsi_quota_obj)
             db.session.commit()  # Commit once after all updates/additions
 
-        request_utils.log.debug("iSCSI Quotas processed successfully")
+        log.debug("iSCSI Quotas processed successfully")
 
         # Process iSCSI Configs and Gateways
         for iscsi_config in (
@@ -190,7 +192,7 @@ def update_account(data):
                     setattr(existing_iscsi_config, key, value)
             else:
                 db.session.add(iscsi_config_obj)
-                request_utils.log.debug(iscsi_config_obj)
+                log.debug(iscsi_config_obj)
                 db.session.commit()
 
             # Process Gateways
@@ -203,7 +205,7 @@ def update_account(data):
                 .first()[0]
             )
 
-            request_utils.log.debug(iscsi_config_obj_id)
+            log.debug(iscsi_config_obj_id)
 
             for gateway in gateways:
                 gateway["config_id"] = (
@@ -216,7 +218,7 @@ def update_account(data):
                     config_id=iscsi_config_obj_id
                 ).first()
 
-                request_utils.log.debug(f"Existing gateway: {existing_gateway}")
+                log.debug(f"Existing gateway: {existing_gateway}")
 
                 if existing_gateway:
                     # If found, update existing gateway's attributes
@@ -226,7 +228,7 @@ def update_account(data):
                     # If not found, add a new gateway record
                     db.session.add(iscsi_gateway_obj)
 
-                request_utils.log.debug(iscsi_gateway_obj)
+                log.debug(iscsi_gateway_obj)
 
             # Commit once after all updates/additions
             db.session.commit()
@@ -234,31 +236,26 @@ def update_account(data):
         # Prepare final response
         response_data = Accounts.query.filter_by(name=data["name"]).first().toDict()
 
-        request_utils.log.debug("Account and associated records updated successfully")
-        return request_utils.ok(response_data)
+        log.debug("Account and associated records updated successfully")
+        return response_data
 
     except Exception as e:
         db.session.rollback()  # Rollback in case of error
-        request_utils.log.error(
+        log.error(
             f"An error occurred while updating account and associated records: {e}"
         )
-        return request_utils.internal_server_error(
-            "Failed to update account and associated records"
-        )
+        abort(500, "Failed to update account and associated records")
 
 
-def delete_account(**kwargs):
+def delete_account(subject, account_name):
     """
     The delete_account function deletes an account along with its associated records and returns the ID of the deleted account.
-        @param kwargs: keyword arguments containing the account_name
-        @return: the ID of the deleted account
     """
-    account_name = kwargs["account_name"]
     account_obj = Accounts.query.filter_by(name=account_name).first()
 
     if account_obj is None:
-        request_utils.log.debug("Account not found")
-        return request_utils.not_found("Account not found: " + str(account_name))
+        log.debug("Account not found")
+        abort(404, "Account not found: " + str(account_name))
 
     if account_obj.id is not None:
         s3_quotas_obj = S3Quotas.get_by("account_id", account_obj.id)
@@ -270,13 +267,13 @@ def delete_account(**kwargs):
             getaways_obj = IscsiGateways.get_by("config_id", configs_obj.id)
 
         if getaways_obj is None:
-            request_utils.log.debug("iSCSI Gateways not found")
+            log.debug("iSCSI Gateways not found")
         else:
             resultIscsiGateway, message = IscsiGateways._delete_by(
                 "config_id", configs_obj.id
             )
             if resultIscsiGateway:
-                request_utils.log.debug(message)
+                log.debug(message)
 
         # If configs_obj is not None, attempt to delete it and its related records
         if configs_obj is not None:
@@ -284,37 +281,37 @@ def delete_account(**kwargs):
                 "account_id", account_obj.id
             )
             if resultIscsiConfig:
-                request_utils.log.debug(message)
+                log.debug(message)
 
         # Check and delete S3 quotas if they exist
         if s3_quotas_obj is None:
-            request_utils.log.debug("S3 Quotas not found")
+            log.debug("S3 Quotas not found")
         else:
             resultS3Quotas, message = S3Quotas._delete_by("account_id", account_obj.id)
             if resultS3Quotas:
-                request_utils.log.debug(message)
+                log.debug(message)
 
         # Check and delete iSCSI quotas if they exist
         if iscsi_quotas_obj is None:
-            request_utils.log.debug("iSCSI Quotas not found")
+            log.debug("iSCSI Quotas not found")
         else:
             resultIscsiQuotas, message = IscsiQuotas._delete_by(
                 "account_id", account_obj.id
             )
             if resultIscsiQuotas:
-                request_utils.log.debug(message)
+                log.debug(message)
 
         # Finally, delete the account itself
         result, message = Accounts._delete_by("id", account_obj.id)
         if result:
-            request_utils.log.debug(message)
+            log.debug(message)
 
-        request_utils.log.debug(
+        log.debug(
             "Account and associated records deleted successfully: "
             + str(account_obj.id)
         )
 
-        return request_utils.ok(account_obj.id)
+        return jsonify("No content")
 
 
 def get_accounts_all(subject):
@@ -322,25 +319,24 @@ def get_accounts_all(subject):
     Retrieve all accounts with optional filter parameters.
     """
 
-    return Accounts.get_all_accounts()
+    return jsonify(Accounts.get_all_accounts())
 
 
-def get_account_usage(**kwargs):
+def get_account_usage(subject, account_name):
     """
     This function retrieves the account usage for the specified account name.
     It takes in keyword arguments and returns a dictionary containing the usage
     for the "s3" and "iscsi" services.
     """
-    account_name = kwargs["account_name"]
     account_obj = Accounts.query.filter_by(name=account_name).first()
     usage = {
         "s3": _get_s3_account_usage_billing(account_obj),
         "iscsi": _get_iscsi_account_usage_billing(account_obj),
     }
-    return request_utils.ok(usage)
+    return jsonify(usage)
 
 
-def get_account_snapshots(**kwargs):
+def get_account_snapshots(kwargs):
     """
     Get list of Snapshots
     """
@@ -362,7 +358,7 @@ def get_account_snapshots(**kwargs):
     for client in iscsi_clients:
         for disk in client.disks:
             _ = [snapshots.append(snapshot.serialize()) for snapshot in disk.snapshots]
-    return request_utils.ok(snapshots)
+    return ok(snapshots)
 
 
 #############################################

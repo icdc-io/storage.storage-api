@@ -4,6 +4,7 @@ log:
 location:
   domain: dcz.lab.icdc.io
   admin_group: devel.admin
+  operator_group: devel.admin
 account:
   default: default
 ceph:

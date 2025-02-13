@@ -238,10 +238,8 @@ def update_s3_user(subject, user_id):
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters", e.messages)
 
-    if not subject.is_privileged_role():
+    if body.get("owner") != s3_user.owner and not subject.has_permission("set-owner"):
         body["owner"] = s3_user.owner
-    else:
-        body["owner"] = body.get("owner", s3_user.owner)
 
     if "quota" in body:
         cur_quota = s3_user.get_quota()
@@ -392,7 +390,6 @@ def get_buckets_info(subject):
     """
     schema = S3UserSchema(partial=True)
     parsed_filters = parse_jsonapi_filters(request.args)
-    print(parsed_filters)
     try:
         filters = schema.load(parsed_filters)
     except AttributeError as e:

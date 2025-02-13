@@ -70,7 +70,7 @@ class Accounts(db.Model, AbstractModel):
             "id": "self.id",
             "name": "self.name",
             "description": "self.description",
-            "quotas": "self._quotas(self.iscsi_quotas, self.s3_quotas)",
+            "quotas": "self._quotas()",
         }
         return self.response_filter(fields, hide_params)
 

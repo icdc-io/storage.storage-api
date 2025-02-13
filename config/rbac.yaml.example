@@ -7,6 +7,8 @@ roles:
         - update
         - delete
         - get
+        - snapshots
+        - usage
       filters: {}
     iscsi.limits:
       permissions:
@@ -33,7 +35,6 @@ roles:
         - get
         - update
         - delete
-        - regenerate_key
         - regenerate_key
       filters: {}
     s3.users.key:
@@ -67,6 +68,9 @@ roles:
         - create
         - update
         - delete
+        - assign
+        - unassign
+        - set-owner
       filters: {}
     iscsi.clients:
       permissions:
@@ -74,6 +78,7 @@ roles:
         - create
         - update
         - delete
+        - set-owner
       filters: {}
     iscsi.clients.disks:
       permissions:
@@ -146,6 +151,9 @@ roles:
         - create
         - update
         - delete
+        - assign
+        - unassign
+        - set-owner
       filters: {}
     iscsi.clients:
       permissions:
@@ -153,6 +161,7 @@ roles:
         - create
         - update
         - delete
+        - set-owner
       filters:
         account_id: account_id
     iscsi.clients.disks:
@@ -191,11 +200,8 @@ roles:
         - create
         - update
         - delete
-      filters:
-        account_id: account_id
-    s3.users.key:
-      permissions:
-        - create
+        - regenerate-keys
+        - set-owner
       filters:
         account_id: account_id
     s3.buckets:
@@ -227,6 +233,9 @@ roles:
         - create
         - update
         - delete
+        - assign
+        - unassign
+        - set-owner
       filters: {}
     iscsi.clients:
       permissions:
@@ -234,6 +243,7 @@ roles:
         - create
         - update
         - delete
+        - set-owner
       filters:
         account_id: account_id
     iscsi.clients.disks:
@@ -304,6 +314,8 @@ roles:
         - create
         - update
         - delete
+        - assign
+        - unassign
       filters:
         owner: owner
     iscsi.clients:
