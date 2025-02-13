@@ -22,8 +22,8 @@ def get_iscsi_limits(subject):
 
 @iscsi.route("/quotas", methods=["GET"])
 @auth.rbac("iscsi.quotas.list")
-def get_account_iscsi_quota(*args, **kwargs):
-    return quotas_controller.get_account_quotas(**kwargs), 200
+def get_account_iscsi_quota(subject):
+    return quotas_controller.get_account_quotas(subject), 200
 
 
 @iscsi.route("/quotas", methods=["POST"])
