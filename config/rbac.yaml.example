@@ -80,12 +80,6 @@ roles:
         - delete
         - set-owner
       filters: {}
-    iscsi.clients.disks:
-      permissions:
-        - list
-        - create
-        - delete
-      filters: {}
     iscsi.snapshots:
       permissions:
         - list
@@ -164,13 +158,6 @@ roles:
         - set-owner
       filters:
         account_id: account_id
-    iscsi.clients.disks:
-      permissions:
-        - list
-        - create
-        - delete
-      filters:
-        account_id: account_id
     iscsi.snapshots:
       permissions:
         - list
@@ -246,13 +233,6 @@ roles:
         - set-owner
       filters:
         account_id: account_id
-    iscsi.clients.disks:
-      permissions:
-        - list
-        - create
-        - delete
-      filters:
-        account_id: account_id
     iscsi.snapshots:
       permissions:
         - list
@@ -323,14 +303,6 @@ roles:
         - list
         - create
         - update
-        - delete
-      filters:
-        account_id: account_id
-        owner: owner
-    iscsi.clients.disks:
-      permissions:
-        - list
-        - create
         - delete
       filters:
         account_id: account_id
