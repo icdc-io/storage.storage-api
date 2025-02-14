@@ -89,7 +89,7 @@ def delete_disk(subject, disk_id):
 @iscsi.route("/disks/<disk_id>", methods=["PUT"])
 @auth.rbac("iscsi.disks.update")
 def update_disk(subject, disk_id):
-    return controller.update_disk(subject, disk_id)
+    return controller.update_disk(subject, disk_id), 200
 
 
 @iscsi.route("/configs/<config_id>/gateways", methods=["GET"])
