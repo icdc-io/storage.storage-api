@@ -39,10 +39,7 @@ class IscsiGateways(db.Model, AbstractModel):
             "id": "self.id",
             "name": "self.name",
             "portal_ip_address": "self.portal_ip_address",
-            "cloudgw_id": "self.cloudgw_id",
             "ip_address": "self.ip_address",
-            "api_user": "self.api_user",
-            "api_password": "self.api_password",
             "config": "self._config()",
         }
         return self.response_filter(fields, hide_params)
@@ -64,6 +61,6 @@ class IscsiGatewaySchema(Schema):
     name = fields.String()
     portal_ip_address = fields.String()
     ip_address = fields.String()
-    cloudgw_id = fields.String()
-    api_user = fields.String()
-    api_password = fields.String()
+    cloudgw_id = fields.String(load_only=True)
+    api_user = fields.String(load_only=True)
+    api_password = fields.String(load_only=True)
