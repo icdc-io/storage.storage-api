@@ -501,7 +501,9 @@ paths:
     # @DS: reviewed 2024-07-18, renamed from: /accounts/{account}/iscsi/quotas/{id}
     put:
       operationId: iscsi.quotas.update
-      tags: [Account]
+      tags:
+        - Account
+        - iSCSI
       summary: Modify account iSCSI quota
       description: >-
         Modify specific account's iSCSI quota for configured pools.
@@ -543,7 +545,39 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/Notfound'
-    #TODO: @DS: implemented DELETE endpoint, currently we can not remove quotas
+    delete:
+      operationId: iscsi.quotas.delete
+      tags:
+        - Account
+        - iSCSI
+      summary: Delete account iSCSI quota
+      description: >-
+        Delete specific account's iSCSI quota for configured pools.
+
+        Role-based access:
+          - `owner` can delete quotas in authorized account
+          - `operator` can delete quota in any account
+          - other roles can not delete quota
+      security:
+        - JWT: [ ]
+          Account: [ ]
+          Role: [ ]
+        - basicAuth: [ ]
+          Account: [ ]
+          Role: [ ]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Notfound'
 
 
   ###########################

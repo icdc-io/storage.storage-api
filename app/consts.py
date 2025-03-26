@@ -11,9 +11,9 @@ import yaml
 from app.loggers import log
 # NOTE: can use only log.info() level or higher, as real LOG_LEVEL is not loaded yet from configs
 
-def __defaults(file_name):
+def __defaults(file_name, directory_name):
     # /opt/app/config is a mounted ConfigMap directory with all configs
-    file_name = os.path.join(os.getcwd(), "config", file_name)
+    file_name = os.path.join(os.getcwd(), directory_name, file_name)
     if not os.path.exists(file_name):
         log.info(f"Config file {file_name} not found. Skipping it.")
         return {}
@@ -69,12 +69,9 @@ def config() -> None:
     log.info("Starting config...")
 
     # Read the configuration from the YAML files or environment variables
-    __set_consts("", __defaults("config.yaml"))
+    __set_consts("", __defaults("config.yaml", "config"))
 
-    # Set the constants using the configuration
-    __set_consts("", __defaults("secrets.yaml"))
-
-    __set_consts("", __defaults("rbac.yaml"))
+    __set_consts("", __defaults("rbac.yaml", "settings"))
 
     # Print the values of the constants
     for key, value in globals().items():

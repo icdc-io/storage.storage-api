@@ -336,30 +336,6 @@ def get_account_usage(subject, account_name):
     return jsonify(usage)
 
 
-def get_account_snapshots(kwargs):
-    """
-    Get list of Snapshots
-    """
-    account_name, role, requester_id = (
-        kwargs["account_name"],
-        kwargs["role"],
-        kwargs["requester_id"],
-    )
-    account_obj = Accounts.query.filter_by(name=account_name).first()
-    snapshots = []
-    if role == "member":
-        iscsi_clients = [
-            client
-            for client in account_obj.iscsi_clients
-            if client.owner == requester_id
-        ]
-    elif role in ["admin", "cloud"]:
-        iscsi_clients = account_obj.iscsi_clients
-    for client in iscsi_clients:
-        for disk in client.disks:
-            _ = [snapshots.append(snapshot.serialize()) for snapshot in disk.snapshots]
-    return ok(snapshots)
-
 
 #############################################
 # Default Account S3 and iSCSI Controller

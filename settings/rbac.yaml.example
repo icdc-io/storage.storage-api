@@ -7,15 +7,11 @@ roles:
         - update
         - delete
         - get
-        - snapshots
         - usage
       filters: {}
     iscsi.limits:
       permissions:
         - list
-        - create
-        - update
-        - delete
       filters: {}
     s3.limits:
       permissions:
@@ -35,7 +31,7 @@ roles:
         - get
         - update
         - delete
-        - regenerate_key
+        - regenerate-key
       filters: {}
     s3.users.key:
       permissions:
@@ -109,11 +105,8 @@ roles:
         - create
         - update
         - delete
-      filters:
-        account_id: account_id
-    s3.users.key:
-      permissions:
-        - create
+        - regenerate-keys
+        - set-owner
       filters:
         account_id: account_id
     s3.buckets:
@@ -259,12 +252,7 @@ roles:
         - create
         - update
         - delete
-      filters:
-        account_id: account_id
-        owner: owner
-    s3.users.key:
-      permissions:
-        - create
+        - regenerate-keys
       filters:
         account_id: account_id
         owner: owner

@@ -64,15 +64,6 @@ def delete_account(subject, account_name):
     return controller.delete_account(subject, account_name), 204
 
 
-@account_management.route("/<account_name>/iscsi/snapshots", methods=["GET"])
-@au.account_auth_required
-def get_account_snapshots(*args, **kwargs):
-    """
-    Get account snapshots for a given account name using the iSCSI protocol.
-    """
-    return process_response(controller.get_account_snapshots(*args, **kwargs))
-
-
 @account_management.route("/<account_name>/usage", methods=["GET"])
 @auth.rbac("accounts.usage")
 def get_account_usage(subject, account_name):
