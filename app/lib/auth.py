@@ -105,7 +105,7 @@ def is_operator(account, role):
     """
     Check operator permissions
     """
-    operator_group = consts.LOCATION_OPERATOR_GROUP
+    operator_group = consts.OPERATOR_GROUP
     operator = re.split(r"[./]", operator_group)
     separator = "." if "." in operator_group else "/"
     return role == operator[-1] and account == separator.join(operator[:-1])

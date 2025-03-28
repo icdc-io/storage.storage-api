@@ -73,6 +73,10 @@ def config() -> None:
 
     __set_consts("", __defaults("rbac.yaml", "settings"))
 
+    # Backward compatibility with old config
+    if 'OPERATOR_GROUP' not in globals():
+        globals()['OPERATOR_GROUP'] = globals()['LOCATION_ADMIN_GROUP']
+
     # Print the values of the constants
     for key, value in globals().items():
         if key.isupper():

@@ -34,7 +34,6 @@ methods = {
 
 SSO_TOKEN_ENDPOINT = f"realms/{consts.SSO_REALM}/protocol/openid-connect/token"
 SSO_CERTS_ENDPOINT = f"realms/{consts.SSO_REALM}/protocol/openid-connect/certs"
-LOCATION_ADMIN_GROUP = consts.LOCATION_ADMIN_GROUP
 JWT_ALGORITHM = "RS256"
 
 MEMBER_ROLE = "member"
@@ -457,7 +456,7 @@ def operator_required(view):
         """
         A wrapper function that checks for permission and then calls the original view function with a modified role parameter.
         """
-        role = LOCATION_ADMIN_GROUP.split(".")[1]
+        role = consts.OPERATOR_GROUP.split(".")[1]
         if not permission(role):
             abort(403)
         return view(role=role, *args, **kwargs)
