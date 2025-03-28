@@ -415,7 +415,7 @@ def get_disk_snapshots(subject, disk_id):
     disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
     if not disk:
         abort(404, "Disk not found or you haven't permission.")
-    return SnapshotSchema(many=True).dump(disk.snapshots)
+    return jsonify(SnapshotSchema(many=True).dump(disk.snapshots))
 
 
 def create_disk_snapshot(subject, disk_id):
