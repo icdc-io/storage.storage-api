@@ -56,7 +56,6 @@ def seed():
             pool = Pools(
                 type="s3",
                 name=pool_name,
-                s3_placement_target=pool_name,
                 klass=pool_name
             )
             pool.save()

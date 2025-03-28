@@ -45,6 +45,7 @@ ceph:
           data_size_mb: 178257920
           buckets: 10000
           users: 1000
+        klass: hdd
     iscsi:
       nvme:
         limits:

@@ -81,7 +81,7 @@ class IscsiConfigs(db.Model, AbstractModel):
         """
         Retrieve and serialize the pool with the given ID.
         """
-        return PoolSchema(exclude=["s3_placement_target"]).dump(Pools.get_by("id", self.pool_id))
+        return PoolSchema().dump(Pools.get_by("id", self.pool_id))
 
     def _account(self):
         """

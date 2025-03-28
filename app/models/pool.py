@@ -13,7 +13,6 @@ class Pools(db.Model, AbstractModel):
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(128))
     name = db.Column(db.String(128))
-    s3_placement_target = db.Column(db.String(128))
     klass = db.Column(db.String(128))
     config = db.relationship(
         "IscsiConfigs", backref="pool-config", cascade="all, delete-orphan"
@@ -23,8 +22,7 @@ class Pools(db.Model, AbstractModel):
     iscsi_quotas = db.relationship("IscsiQuotas", back_populates="pool", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"Pool('{self.id}', '{self.name}', '{self.type}', \
-            {self.s3_placement_target}, {self.klass})"
+        return f"Pool('{self.id}', '{self.name}', '{self.type}', {self.klass})"
 
     def save(self):
         """
@@ -44,7 +42,6 @@ class Pools(db.Model, AbstractModel):
             "id": "self.id",
             "name": "self.name",
             "type": "self.type",
-            "s3_placement_target": "self.s3_placement_target",
             "class": "self.klass",
         }
         return self.response_filter(fields, hide_params)
@@ -56,4 +53,3 @@ class PoolSchema(Schema):
     type                = fields.Str()
     name                = fields.Str()
     klass               = fields.Str()
-    s3_placement_target = fields.Str()

@@ -116,13 +116,13 @@ def list_pools():
 
         # List S3 pools
         cursor.execute(
-            "SELECT id, name, s3_placement_target FROM pools WHERE type = 's3'"
+            "SELECT id, name FROM pools WHERE type = 's3'"
         )
         s3_pools = cursor.fetchall()
         print("Available S3 pools:")
         if s3_pools:
             for idx, pool in enumerate(s3_pools, start=1):
-                print(f"{idx}: {pool[1]} (Placement Target: {pool[2]}, ID: {pool[0]})")
+                print(f"{idx}: {pool[1]} (ID: {pool[0]})")
         else:
             print("No S3 pools available.")
 
