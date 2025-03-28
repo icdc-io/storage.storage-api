@@ -1,7 +1,11 @@
 """
 iSCSI Config model
 """
+from sqlalchemy import event
+from flask import abort
 from app.database import db
+from app.lib.request_utils import is_failed
+from app.loggers import log
 from app.models.model import AbstractModel
 from app.models.pool import Pools, PoolSchema
 
@@ -116,3 +120,83 @@ class IscsiConfigSchema(Schema):
     pool = fields.Function(lambda config: config._pool(), dump_only=True)
     account = fields.Function(lambda config: config._account(), dump_only=True)
     gateways = fields.Function(lambda config: config._gateways(), dump_only=True)
+
+
+
+from app.lib.iscsi_utils import Iscsi
+from json import loads
+from flask import abort
+
+
+def before_delete(mapper, connection, config_instance):
+    """
+    Listener function, called before deleting an IscsiConfigs object.
+    """
+    log.info(f"Deleting target in Cloud Gateway (name={config_instance.name}).")
+
+    iscsi_service = Iscsi()
+    deleted_clients = []
+    if not config_instance.gateways:
+        log.warning(
+                f"No gateways found for config (target_iqn={config_instance.target_iqn})."
+            )
+        return
+    gateway = config_instance.gateways[0]
+
+    for disk in config_instance.disks:
+        for client in disk.clients:
+            if client.id in deleted_clients:
+                continue
+
+            log.info(
+                f"Attempting to delete client '{client.name}' "
+                f"for target (target_iqn={config_instance.target_iqn})."
+            )
+
+            response = iscsi_service.delete_client(
+                config_instance, gateway, client
+            )
+
+            if is_failed(response) and response.get("code") != 404:
+                error_message = response.get("data", "No error message provided")
+                log.error(
+                    f"Deletion failed for client '{client.name}' "
+                    f"(target_iqn={config_instance.target_iqn}): {error_message}"
+                )
+
+                check_response = iscsi_service.get_client(
+                    config=config_instance,
+                    gateway=gateway,
+                    client=client
+                )
+
+                if check_response.get("code") == 200:
+                    abort(response["code"], error_message)
+            else:
+                log.info(
+                    f"Successfully deleted client '{client.name}' "
+                    f"for target (target_iqn={config_instance.target_iqn})."
+                )
+
+            deleted_clients.append(client.id)
+
+    response = iscsi_service.delete_target(config_instance, gateway)
+
+    if is_failed(response) and response.get("code") != 404:
+        check_target = iscsi_service.get_target(config_instance, gateway)
+        if check_target == 200:
+            data = response.get("data", {})
+            message = (
+                loads(data).get("message") if isinstance(data, bytes) else data
+            )
+            log.error(
+                f"Deletion failed for target '{config_instance.name}': {message}"
+            )
+            abort(response["code"], message)
+
+    log.info(
+        f"Successfully deleted target in Cloud Gateway (name={config_instance.name})."
+    )
+
+
+event.listen(IscsiConfigs, "before_delete", before_delete)

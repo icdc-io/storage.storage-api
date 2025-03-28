@@ -250,68 +250,16 @@ def update_account(subject, account_name):
 def delete_account(subject, account_name):
     """
     The delete_account function deletes an account along with its associated records and returns the ID of the deleted account.
+        @param kwargs: keyword arguments containing the account_name
+        @return: the ID of the deleted account
     """
+
     account_obj = Accounts.query.filter_by(name=account_name).first()
+    if not account_obj:
+        abort(404, "Account not found.")
+    account_obj.destroy()
 
-    if account_obj is None:
-        log.debug("Account not found")
-        abort(404, "Account not found: " + str(account_name))
-
-    if account_obj.id is not None:
-        s3_quotas_obj = S3Quotas.get_by("account_id", account_obj.id)
-        iscsi_quotas_obj = IscsiQuotas.get_by("account_id", account_obj.id)
-        configs_obj = IscsiConfigs.get_by("account_id", account_obj.id)
-
-        getaways_obj = None  # Initialize getaways_obj to None before the if statement
-        if configs_obj is not None:
-            getaways_obj = IscsiGateways.get_by("config_id", configs_obj.id)
-
-        if getaways_obj is None:
-            log.debug("iSCSI Gateways not found")
-        else:
-            resultIscsiGateway, message = IscsiGateways._delete_by(
-                "config_id", configs_obj.id
-            )
-            if resultIscsiGateway:
-                log.debug(message)
-
-        # If configs_obj is not None, attempt to delete it and its related records
-        if configs_obj is not None:
-            resultIscsiConfig, message = IscsiConfigs._delete_by(
-                "account_id", account_obj.id
-            )
-            if resultIscsiConfig:
-                log.debug(message)
-
-        # Check and delete S3 quotas if they exist
-        if s3_quotas_obj is None:
-            log.debug("S3 Quotas not found")
-        else:
-            resultS3Quotas, message = S3Quotas._delete_by("account_id", account_obj.id)
-            if resultS3Quotas:
-                log.debug(message)
-
-        # Check and delete iSCSI quotas if they exist
-        if iscsi_quotas_obj is None:
-            log.debug("iSCSI Quotas not found")
-        else:
-            resultIscsiQuotas, message = IscsiQuotas._delete_by(
-                "account_id", account_obj.id
-            )
-            if resultIscsiQuotas:
-                log.debug(message)
-
-        # Finally, delete the account itself
-        result, message = Accounts._delete_by("id", account_obj.id)
-        if result:
-            log.debug(message)
-
-        log.debug(
-            "Account and associated records deleted successfully: "
-            + str(account_obj.id)
-        )
-
-        return jsonify("No content")
+    return jsonify("No content")
 
 
 def get_accounts_all(subject):

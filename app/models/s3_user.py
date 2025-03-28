@@ -1,7 +1,12 @@
 """
 S3 User Model
 """
+from flask import abort
+import rgwadmin.exceptions
+from sqlalchemy import event
+
 from app.database import db
+from app.loggers import log
 from app.models.account import Accounts, AccountSchema
 from app.models.model import AbstractModel
 from app.models.pool import Pools, PoolSchema
@@ -242,3 +247,24 @@ class S3UserSchema(Schema):
 
         if errors:
             raise ValidationError(errors)
+
+
+def before_delete(mapper, connection, s3_user_instance):
+    """
+    Listener function, called before deleting a S3_user object.
+    """
+    try:
+        log.info(f"Deleting s3 user in Ceph "
+                 f"(name = {s3_user_instance.name})")
+        rgwadmin_conn().remove_user(s3_user_instance.name, purge_data=True)
+        log.info(f"Delete s3 user in Ceph "
+                 f"(name = {s3_user_instance.name}) was successful")
+    except rgwadmin.exceptions.NoSuchUser as e:
+        log.warning(f"No such user: {s3_user_instance.name}")
+    except rgwadmin.exceptions.AccessDenied as e:
+        abort(403, str(e))
+    except rgwadmin.exceptions.RGWAdminException as e:
+        abort(400, str(e))
+
+
+event.listen(S3Users, "before_delete", before_delete)

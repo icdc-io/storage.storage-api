@@ -5,16 +5,14 @@ S3 Controller
 import os
 from json import JSONDecodeError
 
-import rgwadmin
 from flask import abort, jsonify, request
+import rgwadmin.exceptions
 from marshmallow import ValidationError
 from botocore.exceptions import ClientError
 
 from app.lib.ceph_utils import boto3_conn
 from app.lib.ceph_utils import ceph_connection as rgwadmin_conn
 from app.lib import paramiko
-from rgwadmin.exceptions import NoSuchUser
-from app.lib.perm import is_admin
 from app.lib.request_utils import (
     abort_detailed,
     log,
@@ -205,10 +203,6 @@ def delete_s3_user(subject, user_id):
     s3_user_obj = S3Users.filtered(subject).filter_by(id=user_id).first()
     if s3_user_obj is None:
         abort(404, "This account hasn't got the user with this ID or you haven't access for it.")
-    try:
-        rgwadmin_conn().remove_user(s3_user_obj.name, purge_data=True)
-    except rgwadmin.exceptions as e:
-        abort_detailed(500, "Server error.", e.messages)
     s3_user_obj.remove()
     return jsonify("No content.")
 

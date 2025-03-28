@@ -1,7 +1,13 @@
 """
 iSCSI Disk model
 """
+from engineio import json
+from flask import abort
+from sqlalchemy import event
+
 from app.database import db
+from app.lib.request_utils import is_failed
+from app.loggers import log
 from app.models.model import AbstractModel
 from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
 from app.models.iscsi_quota import IscsiQuotas
@@ -22,11 +28,11 @@ class IscsiDisks(db.Model, AbstractModel):
     clients = db.relationship(
         "IscsiClients",
         secondary=iscsi_assigned_clients,
-        backref="client",
-        overlaps="client,clients",
+        back_populates="disks",
+        overlaps="client,clients"
     )
     snapshots = db.relationship(
-        "Snapshots", backref="snapshots", cascade="all, delete-orphan"
+        "Snapshots", back_populates="disk", cascade="all, delete-orphan"
     )
 
     def __repr__(self):
@@ -144,3 +150,47 @@ class IscsiDiskSchema(Schema):
                 "disks": [f"Disk limit reached: maximum allowed is {quota.disk_limit}"]
             })
 
+
+def before_delete(mapper, connection, disk_instance):
+    """
+    Listener function, called before deleting an IscsiDisks object.
+    """
+    from app.lib.iscsi_utils import Iscsi
+
+    log.info(f"Deleting disk from cloud gateway (name={disk_instance.name}).")
+
+    iscsi_service = Iscsi()
+    config = IscsiConfigs.get_by("id", disk_instance.config_id)
+
+    if not config or not config.gateways:
+        log.warning(f"Config or gateways not found for disk (name={disk_instance.name}). Aborting deletion.")
+        return
+
+    gateway = config.gateways[0]
+
+    for client in disk_instance.clients:
+        response = iscsi_service.disconnect_disk(client, disk_instance, config, gateway)
+        if is_failed(response):
+            log.error(
+                f"Failed to disconnect disk for client '{client.name}' (disk={disk_instance.name}): "
+                f"{response.get('data', 'No error message provided')}"
+            )
+        else:
+            log.info(
+                f"Successfully disconnected disk for client '{client.name}' (disk={disk_instance.name})."
+            )
+
+    response = iscsi_service.delete_disk(
+        config=config, gateway=gateway, disk_name=disk_instance.name
+    )
+
+    if is_failed(response) and response.get("code") != 404:
+        check_response = iscsi_service.get_disk(config, gateway, disk_instance.name)
+        if check_response.get("code") == 200:
+            error_message = json.loads(response.get("data", "{}")).get("message", "Unknown error")
+            abort(response["code"], error_message)
+
+    log.info(f"Disk '{disk_instance.name}' deleted successfully.")
+
+
+event.listen(IscsiDisks, "before_delete", before_delete)

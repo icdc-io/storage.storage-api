@@ -3,6 +3,7 @@ Manage iSCSI module
 """
 
 import functools
+import json
 
 import rados
 import rbd
@@ -19,6 +20,7 @@ from app.lib.request_utils import (
     not_found,
     ok,
 )
+
 from app.models import account, iscsi_config, iscsi_disk, pool
 
 
@@ -63,6 +65,83 @@ class Iscsi:
         )
         return status_codes.get(response.status_code)(response.content)
 
+    def create_target(self, config, gateway):
+        """
+        Create iSCSI target
+        """
+        auth = (gateway.api_user, gateway.api_password)
+        request_url = f"target/{config.target_iqn}"
+        log.info(f"Create iSCSI target with target_iqn: {config.target_iqn}")
+
+        response = self.send_request("put", request=request_url, auth=auth, host=gateway.ip_address)
+        if is_failed(response):
+            return status_codes.get(response["code"])(response["data"])
+
+        config.save()
+        return config
+
+    def delete_target(self, config, gateway):
+        """
+        Delete iSCSI target
+        """
+        auth = (gateway.api_user, gateway.api_password)
+        request_url = f"target/{config.target_iqn}"
+        log.info(f"Delete iSCSI target with target_iqn: {config.target_iqn}")
+
+        response = self.send_request("delete", request=request_url, auth=auth, host=gateway.ip_address)
+        if is_failed(response):
+            return status_codes.get(response["code"])(response["data"])
+
+        return response
+
+    def get_target(self, config, gateway):
+        auth = (gateway.api_user, gateway.api_password)
+        request_url = "targets"
+
+        response = self.send_request(
+            method="get",
+            request=request_url,
+            auth=auth,
+            host=gateway.ip_address
+        )
+        if is_failed(response):
+            return status_codes.get(response.get("code"))(response.get("data"))
+
+        if isinstance(response.get('data'), bytes):
+            decoded_data = response['data'].decode('utf-8')
+            parsed_data = json.loads(decoded_data)
+        else:
+            parsed_data = response.get('data', {})
+        targets = parsed_data.get('targets', [])
+
+        if config.target_iqn in targets:
+            return ok(config.target_iqn)
+        else:
+            return not_found()
+
+    def create_portal(self, config, gateway):
+        auth = (gateway.api_user, gateway.api_password)
+        request_url = f"gateway/{config.target_iqn}/{gateway.name}"
+        log.info(f"Assign iSCSI portal {gateway.name} to {config.target_iqn}")
+
+        body = {"ip_address": gateway.portal_ip_address}
+        response = self.send_request("put", request=request_url, auth=auth, host=gateway.ip_address, body=body)
+        if is_failed(response):
+            return status_codes.get(response["code"])(response["data"])
+
+        return response
+
+    def delete_portal(self, config, gateway):
+        auth = (gateway.api_user, gateway.api_password)
+        request_url = f"gateway/{config.target_iqn}/{gateway.name}"
+        log.info(f"Assign iSCSI portal {gateway.name} to {config.target_iqn}")
+
+        response = self.send_request("delete", request=request_url, auth=auth, host=gateway.ip_address)
+        if is_failed(response):
+            return status_codes.get(response["code"])(response["data"])
+
+        return response
+
     def create_disk(self, config, gateway, image, body):
         """
         Create iSCSI disk
@@ -102,31 +181,7 @@ class Iscsi:
             return status_codes.get(response["code"])(response["data"])  
         return created()
 
-    def update_user(self, client_obj, disk, body):
-        """
-        Update iSCSI Client
-        """
-        """
-        Update iSCSI Client
-        """
-        config_obj = iscsi_config.IscsiConfigs.get_by("id", disk.config_id)
-        gateway = config_obj.gateways[0]
-        auth = (gateway.api_user, gateway.api_password)
-        request_url = f"client/{config_obj.target_iqn}/{client_obj.iqn}"
-        data = {"username": body["chap_username"], "password": body["chap_password"]}
-        request_url = f"clientauth/{config_obj.target_iqn}/{client_obj.iqn}"
-        response = self.send_request(
-            method="put",
-            request=request_url,
-            body=data,
-            host=gateway.ip_address,
-            auth=auth,
-        )
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
-        return no_content()
-
-    def delete_iscsi_disk(self, config, gateway, disk_name):
+    def delete_disk(self, config, gateway, disk_name):
         """
         Deletes rbd image (disk) from ceph, from the specified pool.
         All work is done by sending the following request to iscsi gateway:
@@ -160,11 +215,32 @@ class Iscsi:
 
         return no_content()
 
-<<<<<<< HEAD
-=======
+    def get_disk(self, config, gateway, disk_name):
+        """
+        Create iSCSI disk
+        """
+        pool_obj = pool.Pools.get_by("id", config.pool_id)
+        account_name = account.Accounts.get_by("id", config.account_id).name
 
->>>>>>> 71b9ae7 (Iscsi)
-    def create_iscsi_client(self, config, gateway, client):
+        log.info(f"Get iSCSI disk with {account_name}_{disk_name} name")
+
+        request_url = (
+            f"disk/{pool_obj.type}-{pool_obj.klass}/{account_name}_{disk_name}"
+        )
+        auth = (gateway.api_user, gateway.api_password)
+
+        response = self.send_request(
+            method="get",
+            request=request_url,
+            auth=auth,
+            host=gateway.ip_address
+        )
+        if is_failed(response):
+            return status_codes.get(response["code"])(response["data"])
+
+        return response
+
+    def create_client(self, config, gateway, client):
         """
         add client: curl -k --user admin:testiscsi -X PUT
         https://172.20.141.36:5000/api/client/iqn.2019-11.io.icdc:ceph-iscsi/iqn.1994-05.com.redhat:myhost4
@@ -198,11 +274,60 @@ class Iscsi:
             return status_codes.get(response["code"])(response["data"])
         return created()
 
+    def update_client(self, client_obj, disk, body):
+        """
+        Update iSCSI Client
+        """
+        config_obj = iscsi_config.IscsiConfigs.get_by("id", disk.config_id)
+        gateway = config_obj.gateways[0]
+        auth = (gateway.api_user, gateway.api_password)
+        request_url = f"client/{config_obj.target_iqn}/{client_obj.iqn}"
+        data = {"username": body["chap_username"], "password": body["chap_password"]}
+        request_url = f"clientauth/{config_obj.target_iqn}/{client_obj.iqn}"
+        response = self.send_request(
+            method="put",
+            request=request_url,
+            body=data,
+            host=gateway.ip_address,
+            auth=auth,
+        )
+        if is_failed(response):
+            return status_codes.get(response["code"])(response["data"])
+        return no_content()
+
+    def delete_client(self, config, gateway, client):
+        """
+        Delete iSCSI client.
+        """
+        log.info(f"Delete client for config: {config.id}")
+        auth = (gateway.api_user, gateway.api_password)
+        request_url = f"client/{config.target_iqn}/{client.iqn}"
+        response = self.send_request(
+            "delete", request=request_url, body=None, host=gateway.ip_address, auth=auth
+        )
+        if is_failed(response):
+            return status_codes.get(response["code"])(response["data"])
+        return no_content()
+
+    def get_client(self, config, gateway, client):
+        """
+        Get iSCSI client.
+        """
+        log.info(f"Get client with iqn {client.iqn} and target iqn {config.target_iqn}")
+        auth = (gateway.api_user, gateway.api_password)
+        request_url = f"_client/{config.target_iqn}/{client.iqn}"
+        response = self.send_request(
+            "get", request=request_url, host=gateway.ip_address, auth=auth
+        )
+        if is_failed(response):
+            return status_codes.get(response["code"])(response["data"])
+        return response
+
     def assign_disk(self, client_obj, disk_obj, config_obj, gateway_obj):
         """
         Connect iSCSI disk to Client
         """
-        self.create_iscsi_client(config_obj, gateway_obj, client_obj)
+        self.create_client(config_obj, gateway_obj, client_obj)
         request_url = f"clientlun/{config_obj.target_iqn}/{client_obj.iqn}"
         pool_obj = pool.Pools.get_by("id", config_obj.pool_id)
         account_obj = account.Accounts.get_by("id", config_obj.account_id)
@@ -228,6 +353,7 @@ class Iscsi:
         """
         Disconnect iSCSI disk to Client
         """
+        log.info(f"Disconnecting disk {disk_obj.name} from client {client_obj.name}")
         request_url = f"clientlun/{config_obj.target_iqn}/{client_obj.iqn}"
         pool_obj = pool.Pools.get_by("id", config_obj.pool_id)
         account_name = account.Accounts.get_by("id", config_obj.account_id).name
@@ -243,10 +369,8 @@ class Iscsi:
             auth=auth,
         )
         if is_failed(response):
+            log.error(f"Disconnecting disk {disk_obj.name} from client {client_obj.name} failed for: {response['data']}")
             return status_codes.get(response["code"])(response["data"])
-        disk_obj = iscsi_disk.IscsiDisks.get_by("id", disk_obj.id)
-        client_obj.disks.remove(disk_obj)
-        client_obj.save()
         return no_content()
 
     def update_disk(self, disk, config, body):
@@ -319,7 +443,12 @@ class Iscsi:
                 ioctx = cluster.open_ioctx(pool_name)
                 try:
                     rbd_inst = rbd.RBD()
-                    image = rbd.Image(ioctx, disk)
+                    try:
+                        image = rbd.Image(ioctx, disk)
+                    except rbd.ImageNotFound as e:
+                        log.error(f"Image '{disk}' not found in pool '{pool_name}'.")
+                        return not_found("Disk hasn't got the snapshot with such name.")
+
                     try:
                         kwargs["ioctx"], kwargs["rbd"], kwargs["image"] = (
                             ioctx,
@@ -382,7 +511,7 @@ class Iscsi:
             if image_instance.is_protected_snap(snapshot_name):
                 image_instance.unprotect_snap(snapshot_name)
             image_instance.remove_snap(snapshot_name)
-        except rbd.ImageNotFound:
+        except rbd.ImageNotFound as e:
             return not_found("Disk hasn't got the snapshot with such name.")
         return no_content()
 

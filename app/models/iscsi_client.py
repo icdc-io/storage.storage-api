@@ -1,10 +1,17 @@
 """
 iSCSI Client method
 """
+from flask import abort
+from sqlalchemy import event
+
 from app.database import db
+from app.lib.request_utils import is_failed, ok
+from app.loggers import log
+from app.models.iscsi_config import IscsiConfigs
 from app.models.model import AbstractModel
 from app.models.relationships import iscsi_assigned_clients
 from app.models.iscsi_disk import IscsiDiskSchema
+from app.lib.iscsi_utils import Iscsi
 
 
 class IscsiClients(db.Model, AbstractModel):
@@ -22,8 +29,8 @@ class IscsiClients(db.Model, AbstractModel):
     disks = db.relationship(
         "IscsiDisks",
         secondary=iscsi_assigned_clients,
-        backref="disks",
-        overlaps="client,clients",
+        back_populates="clients",
+        overlaps="client,clients"
     )
 
     def save(self):
@@ -91,3 +98,51 @@ class IscsiClientSchema(Schema):
     iqn = fields.String()
     owner = fields.String()
     disks = fields.Nested(IscsiDiskSchema(many=True, exclude=["snapshots", "clients"]), dump_only=True)
+
+
+def before_delete(mapper, connection, client_instance):
+    """
+    Listener function, called before deleting an IscsiClients object.
+    """
+    iscsi_service = Iscsi()
+    configs = IscsiConfigs.query.all()
+
+    for config in configs:
+        if not config.gateways:
+            log.warning(
+                f"No gateways found for config (target_iqn={config.target_iqn}). "
+                f"Skipping deletion for client '{client_instance.name}'."
+            )
+            continue
+
+        gateway = config.gateways[0]
+        log.info(
+            f"Attempting to delete client '{client_instance.name}' "
+            f"for target (target_iqn={config.target_iqn})."
+        )
+
+        response = iscsi_service.delete_client(
+            config=config, gateway=gateway, client=client_instance
+        )
+
+        if is_failed(response) and response.get("code") != 404:
+            error_message = response.get("data", "Unknown error")
+            log.error(
+                f"Deletion failed for client '{client_instance.name}' "
+                f"(target_iqn={config.target_iqn}): {error_message}"
+            )
+
+            client_status = iscsi_service.get_client(
+                config=config, gateway=gateway, client=client_instance
+            )
+
+            if client_status.get("code") == 200:
+                abort(response["code"], error_message)
+
+        log.info(
+            f"Client '{client_instance.name}' successfully deleted "
+            f"for target (target_iqn={config.target_iqn})."
+        )
+
+
+event.listen(IscsiClients, "before_delete", before_delete)

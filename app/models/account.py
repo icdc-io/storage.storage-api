@@ -1,16 +1,10 @@
 """
 Account Model
 """
-from typing import Any, Dict, Union
 from app.database import db
-from app.loggers import log
-from app.models.iscsi_config import IscsiConfigs
-from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
-from app.models.iscsi_gateway import IscsiGateways
+from app.models.iscsi_quota import IscsiQuotaSchema
+from app.models.s3_quota import S3QuotaSchema
 from app.models.model import AbstractModel
-from app.models.pool import Pools
-from app.models.s3_quota import S3Quotas, S3QuotaSchema
-from sqlalchemy.orm import joinedload
 
 
 class Accounts(db.Model, AbstractModel):
@@ -21,13 +15,17 @@ class Accounts(db.Model, AbstractModel):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False, unique=True)
     description = db.Column(db.String(128))
-    s3_quotas = db.relationship("S3Quotas", back_populates="account", cascade="all, delete-orphan")
+    s3_quotas = db.relationship(
+        "S3Quotas", back_populates="account", cascade="all, delete-orphan"
+    )
+    iscsi_configs = db.relationship(
+        "IscsiConfigs", backref="account-configs", cascade="all, delete-orphan"
+    )
     iscsi_quotas = db.relationship(
         "IscsiQuotas", backref="account_iscsiquotas", cascade="all, delete-orphan"
     )
-    s3_users = db.relationship("S3Users", back_populates="account", cascade="all, delete-orphan")
-    iscsi_configs = db.relationship(
-        "IscsiConfigs", backref="account-configs", cascade="all, delete-orphan"
+    s3_users = db.relationship(
+        "S3Users", back_populates="account", cascade="all, delete-orphan"
     )
     iscsi_clients = db.relationship(
         "IscsiClients", backref="clients", cascade="all, delete-orphan"

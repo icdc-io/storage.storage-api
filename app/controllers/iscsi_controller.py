@@ -5,11 +5,8 @@ iSCSI Controller
 import json
 from datetime import datetime
 from sqlite3 import IntegrityError
-
 from flask import abort, jsonify, request
 from marshmallow import ValidationError
-
-from app.controllers.auth import filter_response
 from app.lib.controller_utils import (
     _check_iscsi_account_quota,
     _check_iscsi_account_quota_disk_update,
@@ -275,6 +272,7 @@ def delete_disk(subject, disk_id):
     """
 
     log.debug(f"Delete disk with id {disk_id}")
+
     disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
     if not disk:
         abort(404, "There no disk with such id or you haven't permission.")
@@ -282,17 +280,8 @@ def delete_disk(subject, disk_id):
         abort(409, f"This disk is used by {len(disk.clients)} clients")
     if len(disk.snapshots):
         abort(409, "This disk cannot be deleted. Disk has snapshots.")
-
-    config = IscsiConfigs.filtered(subject).filter_by(id=disk.config_id).first()
-    if not config:
-        abort(404, "Config with this ID not found or you haven't permission.")
-    gateway = config.gateways[0]
-    response = Iscsi().delete_iscsi_disk(
-        config=config, gateway=gateway, disk_name=disk.name
-    )
-    if not is_failed(response):
-        disk.remove()
-    return no_content(IscsiDiskSchema().dump(disk))
+    disk.remove()
+    return IscsiDiskSchema().dump(disk)
 
 
 def get_iscsi_clients(subject):
@@ -372,14 +361,20 @@ def unassign_client_disk(subject, client_id, disk_id):
     client_obj = IscsiClients.filtered(subject).filter_by(id=client_id).first()
     if not client_obj:
         abort(404, "Client with this ID not found or you haven't permission.")
-    response = [_disconnect_disk(subject, client_obj, disk_id)]
-    for i in response:
-        if i['code'] == 409:
-            abort_detailed(409, "Invalid parameters.", i['data'])
-        elif i['code'] == 404:
-            abort_detailed(404, "Disk not found.", i['data'])
-        elif i['code'] == 500:
-            abort(500, "Server error.")
+    response = _disconnect_disk(subject, client_obj, disk_id)
+    data = response.get("data", {})
+    message = json.loads(data).get("message") if isinstance(data, bytes) else data
+    if response['code'] == 400:
+        abort_detailed(400, "Disk not mapped to client", message)
+    elif response['code'] == 409:
+        abort_detailed(409, "Invalid parameters.", message)
+    elif response['code'] == 404:
+        abort_detailed(404, "Disk not found.", message)
+    elif response['code'] == 500:
+        abort(500, "Server error.")
+    disk_obj = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
+    client_obj.disks.remove(disk_obj)
+    client_obj.save()
     return jsonify("No content.")
 
 
@@ -503,22 +498,10 @@ def delete_snapshot(subject, disk_id, snapshot_id):
     """
     Delete snapshot by name
     """
-    disk_obj = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
-    if not disk_obj:
-        abort(404, "Disk not found or you haven't permission.")
     snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
+    if not snapshot:
+        abort(404, "Snapshot with this ID not found.")
     log.debug(f"Delete snapshot {snapshot.name} from disk with id {disk_id}")
-    config_obj = IscsiConfigs.get_by("id", disk_obj.config_id)
-    account_obj = Accounts.get_by("id", config_obj.account_id)
-    pool_obj = Pools.get_by("id", config_obj.pool_id)
-    disk_name = f"{account_obj.name}_{disk_obj.name}"
-    body = {"snapshot_name": snapshot.name, "disk_id": disk_id, "pool": f"{pool_obj.type}-{pool_obj.klass}",
-            "disk": disk_name, "snapshot": snapshot.name}
-
-    response = Iscsi().delete_snapshot(body=body)
-    if is_failed(response):
-        abort(response["code"], json.loads(response["data"])["message"])
-
     snapshot.remove()
     return no_content()
 
@@ -680,7 +663,7 @@ def update_client(subject, client_id):
     client_disks = client_obj.disks
     if not client_disks == []:
         for disk in client_disks:
-            Iscsi().update_user(client_obj, disk, body)
+            Iscsi().update_client(client_obj, disk, body)
     client_obj.update(body)
     return IscsiClientSchema().dump(client_obj)
 
