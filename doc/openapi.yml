@@ -695,7 +695,7 @@ paths:
                 $ref: '#/components/schemas/iSCSI_Config'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented
+        '404':
           $ref: '#/components/responses/Notfound'
     # @DS: reviewed 2024-02-02
     delete:
@@ -725,7 +725,7 @@ paths:
           description: No content
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented
+        '404':
           $ref: '#/components/responses/Notfound'
   
   # @DS: reviewed 2024-02-02
@@ -799,12 +799,11 @@ paths:
                 $ref: '#/components/schemas/iSCSI_Disk'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': #
+        '404':
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
-  # TODO: @DS: May be better to move to /iscsi/disks/{id} as anyway is unique in database ID
-  /iscsi/configs/{config_id}/disks/{id}:
+  /iscsi/disks/{id}:
     # @DS: reviewed 2024-02-02
     put:
       operationId: iscsi.disks.update
@@ -854,7 +853,7 @@ paths:
                 $ref: '#/components/schemas/iSCSI_Disk'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented
+        '404': #
           $ref: '#/components/responses/Notfound'
     # @DS: reviewed 2024-02-02
     delete:
@@ -890,7 +889,7 @@ paths:
           description: No Content
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented
+        '404':
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
@@ -1094,9 +1093,39 @@ paths:
                 $ref: '#/components/schemas/iSCSI_Client'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented
+        '404':
           $ref: '#/components/responses/Notfound'
-        
+    delete:
+      operationId: iscsi.clients.delete
+      tags: [ iSCSI ]
+      summary: Delete iSCSI Client (consumer) devices
+      description: >-
+        Deleting ISCSI clients (aka consumer devices) which mounts iSCSI disks.
+        Client records are created and managed by end-users.
+        One client device can connect to multple pools so it can be involved in multiple iSCSI configs.
+        Client has one owner user.
+
+        Role-based access:
+          - `member` can delete only own clients
+          - `owner`\`admin` can delete clients in authorized account
+          - `operator` can delete clients in any account
+      security:
+        - JWT: [ ]
+          Account: [ ]
+          Role: [ ]
+        - basicAuth: [ ]
+          Account: [ ]
+          Role: [ ]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Notfound'
+
   # @DS: reviewed 2024-02-02
   /iscsi/clients/{client_id}/disks:
     # @DS: reviewed 2024-02-02
@@ -1129,7 +1158,7 @@ paths:
           $ref: '#/components/responses/iSCSI_Disk_List'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented
+        '404':
           $ref: '#/components/responses/Notfound'
     # @DS: reviewed 2024-02-02
     post:
@@ -1173,7 +1202,7 @@ paths:
           $ref: '#/components/responses/iSCSI_Disk_List'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented, client not found
+        '404':
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
@@ -1214,7 +1243,7 @@ paths:
           description: No Content
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented, client not found or disk not found
+        '404':
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
@@ -1278,7 +1307,7 @@ paths:
           $ref: '#/components/responses/iSCSI_Snapshot_List'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented, disk not found
+        '404':
           $ref: '#/components/responses/Notfound'
     # @DS: reviewed 2024-02-02
     post:
@@ -1315,13 +1344,12 @@ paths:
           $ref: '#/components/schemas/Snapshot'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented, disk not found
+        '404':
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
   # TODO: @DS: May be we should remove this endpoint as we can get all info from list of snapshot for specific disk
-  # TODO: At least should be refactored to replace snapshot_name => snapshot.id as identification parameter
-  /iscsi/disks/{disk_id}/snapshots/{snapshot_name}:
+  /iscsi/disks/{disk_id}/snapshots/{snapshot_id}:
     # @DS: reviewed 2024-02-02
     get:
       operationId: iscsi.snapshots.get
@@ -1359,7 +1387,7 @@ paths:
                 $ref: '#/components/schemas/Snapshot'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented, disk not found or snapshot not found
+        '404':
           $ref: '#/components/responses/Notfound'
     # @DS: reviewed 2024-02-02
     # @DV: Not used in UI
@@ -1406,7 +1434,7 @@ paths:
                 $ref: '#/components/schemas/Snapshot'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented, disk not found or snapshot not found
+        '404':
           $ref: '#/components/responses/Notfound'
     # @DS: reviewed 2024-02-02
     delete:
@@ -1442,7 +1470,7 @@ paths:
           description: No content
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented, disk not found or snapshot not found
+        '404':
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
@@ -2529,9 +2557,7 @@ components:
         name:
           type: string
           example: fast_pool
-        s3_placement_target:
-          type: string
-          example: fast_storage
+
 
     # @DS: reviewed 2024-01-26
     Account:
@@ -2627,11 +2653,6 @@ components:
           - limits
           - usage stats
           - configs (are really iscsi portals)
-          DEPRECATED info:
-          - max_quota (is actually a limit)
-          - stats:
-            - actual usage
-            - limits (is actually a quota values)
       type: object
       properties:
         id:
@@ -2660,7 +2681,6 @@ components:
           readOnly: true
           oneOf:
           - $ref: '#/components/schemas/Pool'
-        # TODO: @DS: currently not implemented
         configs:
           description: >-
             List of configs available for this quoted pools.
@@ -2669,7 +2689,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/iSCSI_Config'
-        # TODO: @DS: currently not implemented
         usage:
           description: >-
             Actual allocated disks and snapshots.
@@ -2677,28 +2696,12 @@ components:
           readOnly: true
           oneOf:
           - $ref: '#/components/schemas/iSCSI_QuotaValue'
-        # TODO: @DS: currently not implemented
         limits:
           description: >-
             Limits are maximum values to which current quota values can be changed to.
           readOnly: true
           oneOf:
           - $ref: '#/components/schemas/iSCSI_QuotaValue'
-        # For backward compatibility with current implementation (before review 2024-01-29) of iSCSI_Quota
-        stats:
-          description: >-
-            DEPRECATED, Actually includes usage ("actual") and current quota value itself ("limits")
-          readOnly: true
-          type: object
-          oneOf:
-            - $ref: '#/components/schemas/iSCSI_Stats'
-        max_quota:
-          description: >-
-            DEPRECATED, Actually a limit
-          readOnly: true
-          type: object
-          oneOf:
-            - $ref: '#/components/schemas/iSCSI_QuotaValue'
 
     # @DS: reviewed 2024-01-29
     iSCSI_Config:
@@ -2852,26 +2855,11 @@ components:
           readOnly: true
           oneOf:
           - $ref: '#/components/schemas/Account'
-        # TODO: @DS: cuurently (on review 2024-02-02) it's implemented in code
-        # do not know where it used, may be delete if not used anywhere
         disks:
           readOnly: true
           type: array
           items: 
             $ref: '#/components/schemas/iSCSI_Disk'
-
-    # TODO: @DS: remove when refactored iSCSI_Quota.stats
-    iSCSI_Stats:
-      type: object
-      properties:
-        clients:
-          $ref: "#/components/schemas/Stat_Item"
-        disks:
-          $ref: "#/components/schemas/Stat_Item"
-        snapshots:
-          $ref: "#/components/schemas/Stat_Item"
-        storage_gb:
-          $ref: "#/components/schemas/Stat_Item"
 
     # @DS: reviewed 2024-02-02
     Snapshot:
@@ -3136,18 +3124,6 @@ components:
             Bucket-specific quota on number of objects
           type: integer
           example: 30
-
-    # @DS: reviewed 2024-02-06
-    # TODO: remove when stop using s3user.stats
-    Stat_Item:
-      type: object
-      properties:
-        actual:
-          type: integer
-          example: 12
-        limit:
-          type: integer
-          example: 40
 
     # @DS: reviewed 2024-02-06
     Keys:
