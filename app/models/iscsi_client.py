@@ -105,7 +105,7 @@ def before_delete(mapper, connection, client_instance):
     Listener function, called before deleting an IscsiClients object.
     """
     iscsi_service = Iscsi()
-    configs = IscsiConfigs.query.all()
+    configs = IscsiConfigs.query.filter_by(account_id=client_instance.account_id).all()
 
     for config in configs:
         if not config.gateways:
