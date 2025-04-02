@@ -133,8 +133,8 @@ class S3QuotaSchema(Schema):
         name = obj.account.name
         location_domain = consts.LOCATION_DOMAIN
         return {
-                 "public": f"http://s3.{location_domain}/{name}, https://s3.{location_domain}/{name}",
-                 "private": f"http://s3.local.{location_domain}/{name}, https://s3.local.{location_domain}/{name}"
+                 "public": f"https://s3.{location_domain}/{name}",
+                 "private": f"http://s3.local.{location_domain}/{name}"
                }
 
     @pre_load
