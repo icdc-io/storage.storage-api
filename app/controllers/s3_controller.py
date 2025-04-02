@@ -378,24 +378,35 @@ def _create_bucket(access_key, secret_key, body, pool):
         raise e
 
 
-def get_buckets_info(subject):
+def list_buckets(subject):
     """
-    Get buckets info of s3 user.
+    Get buckets for s3 users.
     """
-    schema = S3UserSchema(partial=True)
-    parsed_filters = parse_jsonapi_filters(request.args)
-    try:
-        filters = schema.load(parsed_filters)
-    except AttributeError as e:
-        abort(400, "Invalid query parameters.")
+    api_filters = parse_jsonapi_filters(request.args)
+    s3user_filters = api_filters.pop("user", {})
+    # Backward compatibility with previous filters
+    if "user_name" in api_filters:
+        s3user_filters["name"] = api_filters.pop("user_name")
+    if s3user_filters:
+        try:
+            filters = S3UserSchema(partial=True).load(s3user_filters)
+        except AttributeError as e:
+            abort(400, "Invalid filter key for related user.")
     s3_users = S3Users.filtered(subject).filter_by(**filters).all()
 
     if not s3_users:
         abort(404, "User not found or you haven't permission.")
     buckets = []
+    # TODO: try to get all buckets in one request and then filter, instead loop over all users
     for s3_user in s3_users:
         for bucket_name in s3_user.get_buckets_name():
-            buckets.append(Bucket.from_user_and_bucket_name(s3_user.name, bucket_name))
+            bucket = Bucket.from_user_and_bucket_name(s3_user.name, bucket_name)
+            # Buckets are not stored in database, so we have to filter them iterating by fields
+            try:
+                if bucket.filter(api_filters):
+                    buckets.append(bucket)
+            except AttributeError as e:
+                abort(400, e.args[0])
 
     return jsonify(BucketSchema(many=True).dump(buckets))
 

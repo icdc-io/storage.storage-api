@@ -63,8 +63,8 @@ def create_bucket(subject):
 
 @s3.route("/buckets", methods=["GET"])
 @auth.rbac("s3.buckets.list")
-def get_bucket_info(subject):
-    return controller.get_buckets_info(subject), 200
+def list_buckets(subject):
+    return controller.list_buckets(subject), 200
 
 
 @s3.route("/buckets/<path:path>", methods=["PUT"])

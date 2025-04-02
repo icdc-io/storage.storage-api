@@ -62,6 +62,26 @@ class Bucket:
         }
         return usage
 
+    def filter(self, filters):
+        bucket_dict = self.to_dict()
+        for key in filters:
+            if key not in bucket_dict.keys(): # allow to filter by any field in serialization
+                raise AttributeError(f"Invalid filter key '{key}'")
+            # NOTE: Filter values are always a string or dict (for related objects)
+            filter_value = filters[key]
+            if isinstance(filter_value, dict): # filter by related objects
+                if isinstance(bucket_dict[key], dict):
+                    related_object = bucket_dict[key]
+                    for related_key in filter_value:
+                        if str(related_object.get(related_key)) != filter_value[related_key]:
+                            return False
+                else:
+                    raise AttributeError(f"Invalid data type for filter key '{key}'")
+            else: # filter by bucket fields
+                if str(bucket_dict.get(key)) != filter_value:
+                    return False
+        return True
+
     def to_dict(self):
         return BucketSchema().dump(self)
 

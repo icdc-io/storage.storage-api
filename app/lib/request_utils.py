@@ -41,7 +41,13 @@ def parse_jsonapi_filters(args: dict):
     for key, value in args.items():
         if key.startswith("filter[") and key.endswith("]"):
             field_name = key[7:-1]
-            filters[field_name] = value
+            if "." in field_name:
+                related_object, related_field = field_name.split(".", 1) # e.g. user.name
+                if related_object not in filters:
+                    filters[related_object] = {}
+                filters[related_object] = related_field
+            else:
+                filters[field_name] = value
     return filters
 
 
