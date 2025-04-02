@@ -535,13 +535,11 @@ def generate_quota_endpoints(account, location_domain):
     Generates public and private endpoints for the quota.
     """
     name = account.name
-    endpoints = [
-        f"http://s3.{location_domain}/{name}",
-        f"https://s3.{location_domain}/{name}",
-        f"http://s3.local.{location_domain}/{name}",
-        f"https://s3.local.{location_domain}/{name}",
-    ]
-    return {"public": ", ".join(endpoints[:2]), "private": ", ".join(endpoints[2:])}
+    endpoints = {
+        "public": f"https://s3.{location_domain}/{name}",
+        "private": f"http://s3.local.{location_domain}/{name}"
+    }
+    return endpoints
 
 
 def serialize_quota_and_cleanup(quota):
