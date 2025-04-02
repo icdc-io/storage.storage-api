@@ -18,11 +18,11 @@ class Accounts(db.Model, AbstractModel):
     s3_quotas = db.relationship(
         "S3Quotas", back_populates="account", cascade="all, delete-orphan"
     )
+    iscsi_quotas = db.relationship(
+        "IscsiQuotas", back_populates="account", cascade="all, delete-orphan"
+    )
     iscsi_configs = db.relationship(
         "IscsiConfigs", backref="account-configs", cascade="all, delete-orphan"
-    )
-    iscsi_quotas = db.relationship(
-        "IscsiQuotas", backref="account_iscsiquotas", cascade="all, delete-orphan"
     )
     s3_users = db.relationship(
         "S3Users", back_populates="account", cascade="all, delete-orphan"

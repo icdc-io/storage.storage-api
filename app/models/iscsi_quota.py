@@ -19,6 +19,7 @@ class IscsiQuotas(db.Model, AbstractModel):
     snapshots = db.Column(db.Integer)
     pool_id = db.Column(db.Integer, db.ForeignKey("pools.id"))
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"))
+    account = db.relationship("Accounts", back_populates="iscsi_quotas")
     pool = db.relationship("Pools", back_populates="iscsi_quotas")
     __table_args__ = (
         db.UniqueConstraint(
@@ -164,6 +165,10 @@ class IscsiQuotaSchema(Schema):
     pool_id = fields.Int(load_only=True)
     pool = fields.Nested(PoolSchema(), dump_only=True)
     account_id = fields.Int()
+    account = fields.Nested(
+        lambda: __import__('app.models.account', fromlist=['']).AccountSchema(),
+        dump_only=True
+    )
     limits = fields.Function(lambda quota: quota.get_limits(), dump_only=True)
     configs = fields.Function(lambda quota: quota._config_all(), dump_only=True)
     usage = fields.Function(lambda quota: quota.compute_usage(), dump_only=True)

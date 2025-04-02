@@ -118,7 +118,11 @@ class S3QuotaSchema(Schema):
     buckets      = fields.Int(validate=validate.Range(min=0))
     objects      = fields.Int(validate=validate.Range(min=0))
     data_size_mb = fields.Int(validate=validate.Range(min=0))
-    account_id   = fields.Int()
+    account_id   = fields.Int(load_only=True)
+    account = fields.Nested(
+        lambda: __import__('app.models.account', fromlist=['']).AccountSchema(),
+        dump_only=True
+    )
     pool_id      = fields.Int(load_only=True)
     pool         = fields.Nested(PoolSchema(), dump_only=True)
     endpoints    = fields.Method("generate_endpoints", dump_only=True)
