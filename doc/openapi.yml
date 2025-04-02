@@ -2265,7 +2265,9 @@ components:
                 buckets: 20
                 users: 10
                 data_size_mb: 10240
-                account_name: acc1
+                account:
+                  id: 17
+                  name: acc1
                 pool:
                   id: 13
                   type: s3 
@@ -2276,7 +2278,9 @@ components:
                 buckets: 300
                 users: 30
                 data_size_mb: 512
-                account_name: acc1
+                account:
+                  id: 17
+                  name: acc1
                 pool:
                   id: 14
                   type: s3
@@ -2385,7 +2389,9 @@ components:
                 data_size_gb: 200
                 disks: 10
                 snapshots: 15
-                account_name: acc1
+                account:
+                  id: 17
+                  name: acc1
                 pool:
                   id: 15
                   type: iscsi
@@ -2405,7 +2411,9 @@ components:
                 data_size_gb: 300
                 disks: 3
                 snapshots: 5
-                account_name: acc1
+                account:
+                  id: 17
+                  name: acc1
                 pool:
                   id: 16
                   type: iscsi
