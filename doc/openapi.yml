@@ -1850,8 +1850,10 @@ paths:
           - `owner`\`admin` can get list of buckets for all s3users in authorized account
           - `operator` can get list of buckets for all s3users in any account
         
+
         Filtering:
-          - `filter[user_name]` - filter by S3 user name
+          - `filter[user.name]` - filter by the name of related S3 user
+          - `filter[user_name]` - (deprecated) filter by S3 user name
       security:
         - JWT: []
           Account: []
@@ -1861,8 +1863,14 @@ paths:
           Role: []
       parameters:
         - in: query
+          name: filter[user.name]
+          description: Filter by the name of related S3 user
+          required: false
+          schema:
+            type: string
+        - in: query
           name: filter[user_name]
-          description: Filter by S3 user name
+          description: (deprecated) Filter by S3 user name
           required: false
           schema:
             type: string
@@ -2671,6 +2679,14 @@ components:
         snapshots:
           type: integer
           example: 30
+        account_id:
+          type: integer
+          example: 17
+          writeOnly: true
+        account:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/Account'
         pool_id:
           description: >-
             Configured only once during creation of quota.
@@ -2933,13 +2949,9 @@ components:
           - quota values (attributes)
           - limits
           - usage stats
+          - related account
+          - related pool
           - endpoints
-          - pool
-          DEPRECATED info:
-          - max_quota (is actually a limit)
-          - stats:
-            - actual usage
-            - limits (is actually a quota values)
       type: object
       properties:
         id:
@@ -2959,9 +2971,17 @@ components:
           type: integer
           example: 10240
         # TODO: add account name to all QuotaSet objects, as we moved it from account namespace.
-        account_name: 
+        account_name:
           type: string
           example: acc1
+        account_id:
+          type: integer
+          example: 17
+          writeOnly: true
+        account:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/Account'
         pool_id:
           writeOnly: true
           type: integer
