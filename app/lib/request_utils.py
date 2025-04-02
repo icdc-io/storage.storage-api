@@ -45,7 +45,7 @@ def parse_jsonapi_filters(args: dict):
                 related_object, related_field = field_name.split(".", 1) # e.g. user.name
                 if related_object not in filters:
                     filters[related_object] = {}
-                filters[related_object] = related_field
+                filters[related_object][related_field] = value
             else:
                 filters[field_name] = value
     return filters
