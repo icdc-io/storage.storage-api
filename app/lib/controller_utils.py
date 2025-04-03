@@ -560,7 +560,7 @@ def _get_s3_account_usage_billing(account):
 
     location_domain = consts.LOCATION_DOMAIN
 
-    default_account = Accounts.query.filter_by(name="default").first()
+    default_account = Accounts.query.filter_by(name=consts.ACCOUNT_DEFAULT).first()
 
     for quota in account.s3_quotas:
         pool_obj = Pools.query.filter_by(id=quota.pool_id).first()

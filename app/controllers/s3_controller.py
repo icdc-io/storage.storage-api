@@ -31,10 +31,10 @@ def get_s3_limits(subject):
     """
     List account's S3 per-pool limit-sets
     """
-    default = Accounts.query.filter_by(name=consts.ACCOUNT_DEFAULT).first()
-    limits = S3Quotas.query.filter_by(account_id=default.id).all()
-    limits = [limit.toDict() for limit in limits]
-    return jsonify(limits)
+    limitsets = S3Quotas.get_default_limitsets().all()
+    # NOTE: currently we do not support non-default limitsets
+    limitsets = [limitset.toDict() for limitset in limitsets]
+    return jsonify(limitsets)
 
 
 def create_s3_user(subject):

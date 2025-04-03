@@ -84,14 +84,27 @@ class S3Quotas(db.Model, AbstractModel):
 
         return usage
 
-    def get_limits(self):
-        import os
+    # Query for default LimitSets for all pools
+    # @DS: here we incapsulate logic with 'default' account
+    @classmethod
+    def get_default_limitsets(cls):
         from app.models.account import Accounts
-
         default_account = Accounts.query.filter_by(name=consts.ACCOUNT_DEFAULT).first()
-        limits = self.query.filter_by(account_id=default_account.id, pool_id=self.pool_id).first()
-        return {restriction: getattr(limits, restriction) for restriction in self.get_restriction_names()}
+        return cls.query.filter_by(account_id=default_account.id)
+    
+    # Get LimitSet for the pool
+    @classmethod
+    def get_pool_limitset(cls, pool_id):
+        return cls.get_default_limitsets().filter_by(pool_id=pool_id).first()
 
+    # Get LimitSet for the Quotas's pool
+    def get_limitset(self):
+        return self.get_pool_limitset(self.pool_id)
+
+    # Used to prepare marshmallow restrictions for JSON output with QuotaSchema
+    def get_schema_limits(self):
+        limitset = self.get_limitset()
+        return {restriction: getattr(limitset, restriction) for restriction in self.get_restriction_names()}
 
     def toDict(self):
         """
@@ -127,7 +140,7 @@ class S3QuotaSchema(Schema):
     pool         = fields.Nested(PoolSchema(), dump_only=True)
     endpoints    = fields.Method("generate_endpoints", dump_only=True)
     usage        = fields.Function(lambda quota: quota.compute_usage(), dump_only=True)
-    limits       = fields.Function(lambda quota: quota.get_limits(), dump_only=True)
+    limits       = fields.Function(lambda quota: quota.get_schema_limits(), dump_only=True)
 
     def generate_endpoints(self, obj):
         name = obj.account.name
@@ -139,11 +152,10 @@ class S3QuotaSchema(Schema):
 
     @pre_load
     def set_limits(self, data, many, **kwargs):
-        default_account = self.__get_default_account()
         if not data.get("pool_id"):
             return data
         pool = self.__get_pool(data.get("pool_id", None))
-        self.limits = S3Quotas.query.filter_by(account_id=default_account.id, pool_id=pool.id).first()
+        self.limits = S3Quotas.get_pool_limitset(pool.id)
         return data
 
     @validates_schema
@@ -160,12 +172,6 @@ class S3QuotaSchema(Schema):
                     errors[value] = [f"The {value} must be greater than current in usage. {usage[value]}/{data[value]}"]
         if errors:
             raise ValidationError(errors)
-
-    def __get_default_account(self):
-        import os
-        from app.models.account import Accounts
-
-        return Accounts.query.filter_by(name=consts.ACCOUNT_DEFAULT).first()
 
     def __get_pool(self, id):
         pool = Pools.query.filter_by(id=id).first()

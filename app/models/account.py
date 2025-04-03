@@ -5,7 +5,7 @@ from app.database import db
 from app.models.iscsi_quota import IscsiQuotaSchema
 from app.models.s3_quota import S3QuotaSchema
 from app.models.model import AbstractModel
-
+from app import consts
 
 class Accounts(db.Model, AbstractModel):
     """
@@ -90,7 +90,7 @@ class Accounts(db.Model, AbstractModel):
         """
         Get all accounts from the database, excluding accounts with the name 'default'.
         """
-        filtered_accounts = Accounts.query.filter(Accounts.name != "default").all()
+        filtered_accounts = Accounts.query.filter(Accounts.name != consts.ACCOUNT_DEFAULT).all()
         return [account.serialize() for account in filtered_accounts]
 
     @staticmethod

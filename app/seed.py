@@ -42,10 +42,10 @@ def seed():
         None
     """
     log.info("Seeding default limits for pools")
-    limits_account = Accounts.query.filter_by(name="default").first()
+    limits_account = Accounts.query.filter_by(name=consts.ACCOUNT_DEFAULT).first()
     log.info(f"Limits account: {limits_account}")
     if not limits_account:
-        limits_account = Accounts(name="default", description="Default limits")
+        limits_account = Accounts(name=consts.ACCOUNT_DEFAULT, description="Default limits")
         limits_account.save()
 
     for pool_name, pool_data in consts.CEPH_POOL_S3.items():

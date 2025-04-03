@@ -42,10 +42,10 @@ def get_iscsi_limits(subject):
     """
     List account's ISCSI per-pool limit-sets
     """
-    default = Accounts.query.filter_by(name=consts.ACCOUNT_DEFAULT).first()
-    limits = IscsiQuotas.query.filter_by(account_id=default.id).all()
-    limits = [limit.toDict() for limit in limits]
-    return jsonify(limits)
+    limitsets = IscsiQuotas.get_default_limitsets().all()
+    # NOTE: currently we do not support non-default limitsets
+    limitsets = [limitset.toDict() for limitset in limitsets]
+    return jsonify(limitsets)
 
 
 def set_iscsi_configs(subject):

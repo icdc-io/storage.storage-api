@@ -16,7 +16,8 @@ def get_account_quotas(subject):
         filters = schema.load(parsed_filters)
     except TypeError as e:
         abort(400, "Invalid query parameters.")
-    quotas = IscsiQuotas.filtered(subject).options(selectinload(IscsiQuotas.pool)).filter_by(**filters).all()
+    quotas = IscsiQuotas.filtered(subject).options(selectinload(IscsiQuotas.pool)) \
+             .filter_by(**filters).except_(IscsiQuotas.get_default_limitsets()).all()
     return jsonify(IscsiQuotaSchema(many=True).dump(quotas))
 
 
