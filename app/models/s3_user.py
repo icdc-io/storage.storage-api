@@ -1,6 +1,7 @@
 """
 S3 User Model
 """
+from enum import Enum
 from flask import abort
 import rgwadmin.exceptions
 from sqlalchemy import event
@@ -35,8 +36,20 @@ class S3Users(db.Model, AbstractModel):
     @property
     def user_info(self):
         if self._user_info_cache is None:
-            self._user_info_cache = rgwadmin_conn().get_user(self.name)
+            try:
+                self._user_info_cache = rgwadmin_conn().get_user(self.name)
+            except rgwadmin.exceptions.NoSuchUser as e:
+                return {}
         return self._user_info_cache
+
+    @property
+    def status(self):
+        if not self.user_info:
+            return S3UserStatus.DELETED.value
+        if self.user_info.get("suspended"):
+            return S3UserStatus.LOCKED.value
+
+        return S3UserStatus.ACTIVE.value
 
     def save(self):
         """
@@ -93,10 +106,18 @@ class S3Users(db.Model, AbstractModel):
         if cases.get(action) != self.user_info['suspended']:
             rgwadmin_conn().modify_user(uid=self.name, suspended=cases.get(action))
 
+    def is_deleted(self):
+        """
+        Check deletion of s3 user.
+        """
+        return self.status == S3UserStatus.DELETED.value
+
     def get_quota(self):
         """
         Get the S3 user's quota.
         """
+        if self.status == S3UserStatus.DELETED.value:
+            return S3UserQuota.default().to_dict()
         quota = S3UserQuota.from_user_info(self.user_info)
         return quota.to_dict()
 
@@ -104,33 +125,33 @@ class S3Users(db.Model, AbstractModel):
         """
         Get the S3 user's access keys and Swift keys.
         """
-        keys = {
-            's3': self.user_info.get("keys"),
-            'swift': self.user_info.get('swift_keys')
-        }
-        return keys
+        s3_keys_list = self.user_info.get("keys", [])
+        swift_keys_list = self.user_info.get("swift_keys", [])
 
-    def is_locked(self):
-        """
-        Check if the S3 user is locked (suspended).
-        """
-        return bool(self.user_info.get('suspended'))
+        return {
+            "s3": s3_keys_list[0] if s3_keys_list else {},
+            "swift": swift_keys_list[0] if swift_keys_list else {}
+        }
 
     def get_usage(self):
         """
         Get the usage statistics for the S3 user.
         """
-        keys = self.get_keys()
-        # EK TODO need better idea to compute usage for locked user
-        if not self.is_locked():
-            usage_info = rgwadmin_conn(access_key=keys['s3'][0]['access_key'], secret_key=keys['s3'][0]['secret_key']).request(
-                "GET",
-                "/?usage&format=json"
+        status = self.status
+
+        if status == S3UserStatus.DELETED.value:
+            return S3UserQuota.default().to_dict()
+
+        if status == S3UserStatus.ACTIVE.value:
+            keys = self.get_keys()
+            access_key = keys["s3"]["access_key"]
+            secret_key = keys["s3"]["secret_key"]
+            usage_info = rgwadmin_conn(access_key=access_key, secret_key=secret_key).request(
+                "GET", "/?usage&format=json"
             )
-            usage = S3UserQuota.from_usage_info(usage_info)
-        else:
-            usage = S3UserQuota.from_user_info(self.user_info)
-        return usage.to_dict()
+            return S3UserQuota.from_usage_info(usage_info).to_dict()
+
+        return S3UserQuota.from_user_info(self.user_info).to_dict()
 
     def get_buckets_name(self):
         """
@@ -144,6 +165,12 @@ class S3Users(db.Model, AbstractModel):
         return buckets_name
 
 
+class S3UserStatus(Enum):
+    DELETED = "deleted"
+    LOCKED = "locked"
+    ACTIVE = "active"
+
+
 class S3UserQuota:
     def __init__(self, data_size_mb=0, objects=0, buckets=0):
         self.data_size_mb = data_size_mb
@@ -152,9 +179,6 @@ class S3UserQuota:
 
     def __repr__(self):
         return f"<S3UserQuota(data_size_mb={self.data_size_mb}, objects={self.objects}, buckets={self.buckets})>"
-
-    def to_dict(self):
-        return S3UserQuotaSchema().dump(self)
 
     @classmethod
     def from_user_info(cls, user_info):
@@ -171,6 +195,17 @@ class S3UserQuota:
             objects=usage_info['Summary'][7],
             buckets=len(usage_info['CapacityUsed'][0]['Buckets'])
         )
+
+    @classmethod
+    def default(cls):
+        return cls(
+            data_size_mb=0,
+            objects=0,
+            buckets=0
+        )
+
+    def to_dict(self):
+        return S3UserQuotaSchema().dump(self)
 
 
 from marshmallow import Schema, fields, validate, validates_schema, ValidationError, EXCLUDE
@@ -195,7 +230,7 @@ class S3UserSchema(Schema):
     user_quota = fields.Function(lambda s3user: s3user.get_quota(), dump_only=True)
     keys = fields.Function(lambda s3user: s3user.get_keys(), dump_only=True)
     usage = fields.Function(lambda s3user: s3user.get_usage(), dump_only=True)
-    is_locked = fields.Function(lambda s3user: s3user.is_locked(), dump_only=True)
+    status = fields.Function(lambda s3user: s3user.status, dump_only=True)
 
     class Meta:
         unknown = EXCLUDE

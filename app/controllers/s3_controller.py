@@ -215,7 +215,8 @@ def update_s3_user(subject, user_id):
     s3_user = S3Users.filtered(subject).filter_by(id=user_id).first()
     if not s3_user:
         abort(404, "S3 User not found or you haven't access for it.")
-
+    if s3_user.is_deleted():
+        abort(409, "S3 user was deleted in storage.")
     account = Accounts.query.filter_by(id=s3_user.account_id).first()
     account_quota = S3Quotas.query.filter_by(
         account_id=account.id,
@@ -304,6 +305,8 @@ def create_bucket(subject):
     if s3_user is None:
         abort(404, "User with this name not found or you haven't permission for it.")
 
+    if s3_user.is_deleted():
+        abort(409, "User was deleted in storage.")
     try:
         BucketSchema(context={"user": s3_user}).load(body)
     except ValidationError as e:
@@ -322,8 +325,8 @@ def create_bucket(subject):
 
     try:
         _create_bucket(
-            access_key=keys["s3"][0]["access_key"],
-            secret_key=keys["s3"][0]["secret_key"],
+            access_key=keys["s3"].get("access_key"),
+            secret_key=keys["s3"].get("secret_key"),
             body=body,
             pool=pool
         )
@@ -387,6 +390,7 @@ def list_buckets(subject):
     # Backward compatibility with previous filters
     if "user_name" in api_filters:
         s3user_filters["name"] = api_filters.pop("user_name")
+
     if s3user_filters:
         try:
             filters = S3UserSchema(partial=True).load(s3user_filters)
@@ -482,6 +486,8 @@ def regenerate_keys(subject, user_id):
     s3_user_obj = S3Users.filtered(subject).filter_by(id=user_id).first()
     if not s3_user_obj:
         abort(404, "User with this ID not found or you haven't permission for it.")
+    if s3_user_obj.is_deleted():
+        abort(409, "User is deleted in storage.")
     s3_user_name = s3_user_obj.full_name()
     user_info = rgwadmin_conn().request(
         "GET", f"/admin/user?format=json&stats=true&uid={s3_user_name}"
