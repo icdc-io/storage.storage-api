@@ -54,12 +54,22 @@ class Bucket:
             "GET",
             f"/admin/bucket?format=json&stats=True&bucket={self.path}",
         )
-        usage_info = bucket_info["usage"].get("rgw.main", {})
-        usage = {}
-        usage |= {
-            "data_size_mb": usage_info.get("size_actual", 0) // 1024**2,
-            "objects": usage_info.get("num_objects", 0),
+
+        usage_info = bucket_info.get("usage", {})
+        main_usage = usage_info.get("rgw.main", {})
+        multimeta_usage = usage_info.get("rgw.multimeta", {})
+
+        objects = main_usage.get("num_objects", 0)
+        multipart_objects = multimeta_usage.get("num_objects", 0)
+        total_objects = objects + multipart_objects
+
+        usage = {
+            "data_size_mb": main_usage.get("size_actual", 0) // 1024**2,
+            "total_objects": total_objects,
+            "objects": objects,
+            "multipart_objects": multipart_objects
         }
+
         return usage
 
     def filter(self, filters):
