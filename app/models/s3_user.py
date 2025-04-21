@@ -1,7 +1,7 @@
 """
 S3 User Model
 """
-from enum import Enum
+from enum import StrEnum
 from flask import abort
 import rgwadmin.exceptions
 from sqlalchemy import event
@@ -45,11 +45,11 @@ class S3Users(db.Model, AbstractModel):
     @property
     def status(self):
         if not self.user_info:
-            return S3UserStatus.DELETED.value
+            return S3UserStatus.DELETED
         if self.user_info.get("suspended"):
-            return S3UserStatus.LOCKED.value
+            return S3UserStatus.LOCKED
 
-        return S3UserStatus.ACTIVE.value
+        return S3UserStatus.ACTIVE
 
     def save(self):
         """
@@ -110,13 +110,19 @@ class S3Users(db.Model, AbstractModel):
         """
         Check deletion of s3 user.
         """
-        return self.status == S3UserStatus.DELETED.value
+        return self.status == S3UserStatus.DELETED
+
+    def is_locked(self):
+        """
+        Check is user locked.
+        """
+        return self.status == S3UserStatus.LOCKED
 
     def get_quota(self):
         """
         Get the S3 user's quota.
         """
-        if self.status == S3UserStatus.DELETED.value:
+        if self.is_deleted():
             return S3UserQuota.default().to_dict()
         quota = S3UserQuota.from_user_info(self.user_info)
         return quota.to_dict()
@@ -137,21 +143,19 @@ class S3Users(db.Model, AbstractModel):
         """
         Get the usage statistics for the S3 user.
         """
-        status = self.status
-
-        if status == S3UserStatus.DELETED.value:
+        if self.is_deleted():
             return S3UserQuota.default().to_dict()
 
-        if status == S3UserStatus.ACTIVE.value:
-            keys = self.get_keys()
-            access_key = keys["s3"]["access_key"]
-            secret_key = keys["s3"]["secret_key"]
-            usage_info = rgwadmin_conn(access_key=access_key, secret_key=secret_key).request(
-                "GET", "/?usage&format=json"
-            )
-            return S3UserQuota.from_usage_info(usage_info).to_dict()
+        if self.is_locked():
+            return S3UserQuota.from_user_info(self.user_info).to_dict()
 
-        return S3UserQuota.from_user_info(self.user_info).to_dict()
+        keys = self.get_keys()
+        access_key = keys["s3"]["access_key"]
+        secret_key = keys["s3"]["secret_key"]
+        usage_info = rgwadmin_conn(access_key=access_key, secret_key=secret_key).request(
+            "GET", "/?usage&format=json"
+        )
+        return S3UserQuota.from_usage_info(usage_info).to_dict()
 
     def get_buckets_name(self):
         """
@@ -165,7 +169,7 @@ class S3Users(db.Model, AbstractModel):
         return buckets_name
 
 
-class S3UserStatus(Enum):
+class S3UserStatus(StrEnum):
     DELETED = "deleted"
     LOCKED = "locked"
     ACTIVE = "active"
