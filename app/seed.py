@@ -1,19 +1,12 @@
-# from sqlalchemy import create_engine
-# from sqlalchemy.orm import sessionmaker
-
 from app import consts
 from app.loggers import log
-# @DS: Importing is needed here for correct model queries in seeding
-#      
-from app.models import (  # noqa: E402
-    account,
+
+# Import models for correct queries during seeding
+from app.models import (
     iscsi_client,  # noqa: F401
     iscsi_config,  # noqa: F401
     iscsi_disk,  # noqa: F401
     iscsi_gateway,  # noqa: F401
-    iscsi_quota,
-    pool,
-    s3_quota,
     s3_user,  # noqa: F401
     snapshot,  # noqa: F401
 )
@@ -24,74 +17,88 @@ from app.models.iscsi_quota import IscsiQuotas
 
 log.info("Imported seed module")
 
-# Refactored function to seed the database with default data
+
+def get_or_create_account(name: str, description: str) -> Accounts:
+    """
+    Retrieve an account by name or create it if not found.
+
+    :param name: The account name.
+    :param description: A brief description of the account.
+    :return: An Accounts instance.
+    """
+    account = Accounts.query.filter_by(name=name).first()
+    if not account:
+        log.info(f"Creating account: {name}")
+        account = Accounts(name=name, description=description)
+        account.save()
+    return account
+
+
+def get_or_create_pool(pool_type: str, name: str, **kwargs) -> Pools:
+    """
+    Retrieve a pool by type and name or create it if it does not exist.
+
+    Additional parameters can be passed via kwargs.
+
+    :param pool_type: The type of the pool (e.g., 's3' or 'iscsi').
+    :param name: The pool name.
+    :param kwargs: Additional attributes for pool creation.
+    :return: A Pools instance.
+    """
+    pool = Pools.query.filter_by(type=pool_type, name=name).first()
+    if not pool:
+        log.info(f"Creating {pool_type.upper()} pool: {name}")
+        pool = Pools(type=pool_type, name=name, **kwargs)
+        pool.save()
+    return pool
+
+
+def create_or_update_quota(
+    quota_model, pool: Pools, account: Accounts, limits_data: dict
+):
+    """
+    Create or update quotas for the specified pool and account.
+
+    :param quota_model: The quota model (e.g., S3Quotas or IscsiQuotas).
+    :param pool: The pool instance.
+    :param account: The account instance.
+    :param limits_data: Dictionary containing limit values.
+    """
+    quota = quota_model.query.filter_by(pool_id=pool.id, account_id=account.id).first()
+    if quota:
+        log.debug(f"Updating limits for {quota_model.__name__} pool: {pool.name}")
+        quota.update(limits_data)
+    else:
+        log.debug(f"Creating limits for {quota_model.__name__} pool: {pool.name}")
+        quota = quota_model(pool_id=pool.id, account_id=account.id, **limits_data)
+    quota.save()
+
+
 def seed():
     """
-    Seeds the database with default set of per-pool limits (aka LimitSet).
+    Seeds the database with default limits for pools.
 
-    There can be default LimitSet and default QuotaSet:
-      - Default QuotaSet is assigned if S3/iSCSI quotas are not assigned during creation of account's resource partition.
-      - Default LimitSet is a maximum value to which QuotaSet can be extended for any account account
-
-    NOTE: Default QuotaSet currently is not implemented.
-
-    Parameters:
-        None
-
-    Returns:
-        None
+    For each pool type (S3 and iSCSI), the function retrieves or creates a pool,
+    then creates or updates the quotas associated with the default account.
     """
     log.info("Seeding default limits for pools")
-    limits_account = Accounts.query.filter_by(name=consts.ACCOUNT_DEFAULT).first()
+    limits_account = get_or_create_account("default", "Default limits")
     log.info(f"Limits account: {limits_account}")
-    if not limits_account:
-        limits_account = Accounts(name=consts.ACCOUNT_DEFAULT, description="Default limits")
-        limits_account.save()
 
+    # Process S3 pools
     for pool_name, pool_data in consts.CEPH_POOL_S3.items():
-        log.info(f"Initialize limits for S3 pool: {pool_name}")
-        pool = Pools.query.filter_by(type="s3", name=pool_name).first()
-        if not pool:
-            log.info(f"Creating S3 pool: {pool_name}")
-            pool = Pools(
-                type="s3",
-                name=pool_name,
-                klass=pool_name
-            )
-            pool.save()
-        limits = S3Quotas.query.filter_by(pool_id = pool.id, account_id = limits_account.id).first()
-        if not limits:
-            log.debug(f"Creating limits for S3 pool: {pool_name}")
-            limits = S3Quotas(
-                pool_id = pool.id,
-                account_id = limits_account.id,
-                **pool_data["limits"]
-            )
-        else:
-            log.debug(f"Updating limits for S3 pool: {pool_name}")
-            limits.update(pool_data["limits"])
-        limits.save()
+        log.info(f"Initializing limits for S3 pool: {pool_name}")
+        pool_klass = pool_data.get("klass", pool_name)
+        pool = get_or_create_pool(
+            "s3", pool_name, klass=pool_klass
+        )
+        create_or_update_quota(S3Quotas, pool, limits_account, pool_data["limits"])
 
+    # Process iSCSI pools
     for pool_name, pool_data in consts.CEPH_POOL_ISCSI.items():
-        log.info(f"Initialize limits for iSCSI pool: {pool_name}")
-        pool = Pools.query.filter_by(type="iscsi", name=pool_name).first()
-        if not pool:
-            log.info(f"Creating iSCSI pool: {pool_name}")
-            pool = Pools(
-                type="iscsi",
-                name=pool_name,
-                klass=pool_name
-            )
-            pool.save()
-        limits = IscsiQuotas.query.filter_by(pool_id = pool.id, account_id = limits_account.id).first()
-        if not limits:
-            log.debug(f"Creating limits for iSCSI pool: {pool_name}")
-            limits = IscsiQuotas(
-                pool_id = pool.id,
-                account_id = limits_account.id,
-                **pool_data["limits"]
-            )
-        else:
-            log.debug(f"Updating limits for iSCSI pool: {pool_name}")
-            limits.update(pool_data["limits"])
-        limits.save()
+        log.info(f"Initializing limits for iSCSI pool: {pool_name}")
+        pool_klass = pool_data.get("klass", pool_name)
+        pool = get_or_create_pool("iscsi", pool_name, klass=pool_klass)
+        create_or_update_quota(
+            IscsiQuotas, pool, limits_account, pool_data["limits"]
+        )
