@@ -390,6 +390,8 @@ def list_buckets(subject):
     # Backward compatibility with previous filters
     if "user_name" in api_filters:
         s3user_filters["name"] = api_filters.pop("user_name")
+    if "user_name" in request.args:
+        s3user_filters["name"] = request.args["user_name"]
 
     if s3user_filters:
         try:
