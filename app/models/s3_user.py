@@ -2,16 +2,17 @@
 S3 User Model
 """
 from enum import StrEnum
-from flask import abort
+
 import rgwadmin.exceptions
+from flask import abort
 from sqlalchemy import event
 
 from app.database import db
+from app.lib.ceph_utils import ceph_connection as rgwadmin_conn
 from app.loggers import log
 from app.models.account import Accounts, AccountSchema
 from app.models.model import AbstractModel
 from app.models.pool import Pools, PoolSchema
-from app.lib.ceph_utils import ceph_connection as rgwadmin_conn
 
 
 class S3Users(db.Model, AbstractModel):
@@ -212,14 +213,20 @@ class S3UserQuota:
         return S3UserQuotaSchema().dump(self)
 
 
-from marshmallow import Schema, fields, validate, validates_schema, ValidationError, EXCLUDE
+from marshmallow import (
+    EXCLUDE,
+    Schema,
+    ValidationError,
+    fields,
+    validate,
+    validates_schema,
+)
 
 
 class S3UserQuotaSchema(Schema):
     data_size_mb = fields.Int(validate=validate.Range(min=0))
     objects = fields.Int(validate=validate.Range(min=0))
     buckets = fields.Int(validate=validate.Range(min=0))
-
 
 class S3UserSchema(Schema):
     id = fields.Int(dump_only=True)

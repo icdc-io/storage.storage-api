@@ -506,5 +506,7 @@ def regenerate_keys(subject, user_id):
             "DELETE",
             f"/admin/user?format=json&key&uid={s3_user_name}&access-key={key['access_key']}",
         )
+    s3_user_obj._user_info_cache = None
+    s3_user_obj = S3Users.filtered(subject).filter_by(id=user_id).first()
     return S3UserSchema().dump(s3_user_obj)
 
