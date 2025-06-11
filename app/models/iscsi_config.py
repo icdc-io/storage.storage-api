@@ -1,14 +1,16 @@
 """
 iSCSI Config model
 """
-from sqlalchemy import event
+import re
+from json import loads
 from flask import abort
+from sqlalchemy import event
+
 from app.database import db
 from app.lib.request_utils import is_failed
 from app.loggers import log
 from app.models.model import AbstractModel
 from app.models.pool import Pools, PoolSchema
-
 
 class IscsiConfigs(db.Model, AbstractModel):
 
@@ -106,6 +108,20 @@ class IscsiConfigs(db.Model, AbstractModel):
             for i in self.gateways
         ]
 
+    def iscsi_service(self):
+        from app.lib.iscsi_utils import Iscsi
+
+        if not self.gateways:
+            log.warning(f"No gateway for config {self.target_iqn}")
+            raise ValueError("No gateway for this config.")
+        iscsi_service = Iscsi(config=self, gateway=self.gateways[0])
+
+        if is_failed(iscsi_service.get_target()):
+            log.warning(f"Target {self.target_iqn} was deleted.")
+            raise ValueError(f"Target {self.target_iqn} was deleted.")
+
+        return iscsi_service
+
 
 from marshmallow import Schema, fields
 from app import consts
@@ -122,26 +138,24 @@ class IscsiConfigSchema(Schema):
     gateways = fields.Function(lambda config: config._gateways(), dump_only=True)
 
 
-
-from app.lib.iscsi_utils import Iscsi
-from json import loads
-from flask import abort
-
-
 def before_delete(mapper, connection, config_instance):
     """
     Listener function, called before deleting an IscsiConfigs object.
     """
+    from app.lib.iscsi_utils import Iscsi
     log.info(f"Deleting target in Cloud Gateway (name={config_instance.name}).")
 
-    iscsi_service = Iscsi()
+    try:
+        iscsi_service = config_instance.iscsi_service()
+    except ValueError as e:
+        abort(400, str(e))
+
     deleted_clients = []
     if not config_instance.gateways:
         log.warning(
                 f"No gateways found for config (target_iqn={config_instance.target_iqn})."
             )
         return
-    gateway = config_instance.gateways[0]
 
     for disk in config_instance.disks:
         for client in disk.clients:
@@ -153,46 +167,16 @@ def before_delete(mapper, connection, config_instance):
                 f"for target (target_iqn={config_instance.target_iqn})."
             )
 
-            response = iscsi_service.delete_client(
-                config_instance, gateway, client
-            )
+            response = iscsi_service.delete_client(client)
 
-            if is_failed(response) and response.get("code") != 404:
-                error_message = response.get("data", "No error message provided")
-                log.error(
-                    f"Deletion failed for client '{client.name}' "
-                    f"(target_iqn={config_instance.target_iqn}): {error_message}"
-                )
-
-                check_response = iscsi_service.get_client(
-                    config=config_instance,
-                    gateway=gateway,
-                    client=client
-                )
-
-                if check_response.get("code") == 200:
-                    abort(response["code"], error_message)
-            else:
-                log.info(
-                    f"Successfully deleted client '{client.name}' "
-                    f"for target (target_iqn={config_instance.target_iqn})."
-                )
+            if is_failed(response):
+                abort(400, response["data"])
 
             deleted_clients.append(client.id)
 
-    response = iscsi_service.delete_target(config_instance, gateway)
-
-    if is_failed(response) and response.get("code") != 404:
-        check_target = iscsi_service.get_target(config_instance, gateway)
-        if check_target == 200:
-            data = response.get("data", {})
-            message = (
-                loads(data).get("message") if isinstance(data, bytes) else data
-            )
-            log.error(
-                f"Deletion failed for target '{config_instance.name}': {message}"
-            )
-            abort(response["code"], message)
+    response = iscsi_service.delete_target()
+    if is_failed(response):
+        abort(response["code"], response["data"])
 
     log.info(
         f"Successfully deleted target in Cloud Gateway (name={config_instance.name})."

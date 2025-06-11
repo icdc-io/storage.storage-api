@@ -63,6 +63,7 @@ roles:
         - assign
         - unassign
         - set-owner
+        - from-snapshot
       filters: {}
     iscsi.clients:
       permissions:
@@ -79,6 +80,7 @@ roles:
         - create
         - update
         - delete
+        - rollback
       filters: {}
 
   admin:
@@ -145,6 +147,7 @@ roles:
         - assign
         - unassign
         - set-owner
+        - from-snapshot
       filters: {}
     iscsi.clients:
       permissions:
@@ -162,6 +165,7 @@ roles:
         - create
         - update
         - delete
+        - rollback
       filters: {}
 
   owner:
@@ -228,6 +232,7 @@ roles:
         - assign
         - unassign
         - set-owner
+        - from-snapshot
       filters: {}
     iscsi.clients:
       permissions:
@@ -245,6 +250,7 @@ roles:
         - create
         - update
         - delete
+        - rollback
       filters: {}
 
   member:
@@ -304,6 +310,7 @@ roles:
         - delete
         - assign
         - unassign
+        - from-snapshot
       filters:
         owner: owner
     iscsi.clients:
@@ -322,4 +329,5 @@ roles:
         - create
         - update
         - delete
+        - rollback
       filters: {}

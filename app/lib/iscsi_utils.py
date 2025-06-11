@@ -4,6 +4,7 @@ Manage iSCSI module
 
 import functools
 import json
+import re
 
 import rados
 import rbd
@@ -19,10 +20,11 @@ from app.lib.request_utils import (
     no_content,
     not_found,
     ok,
+    HttpMethod as methods
 )
-
-from app.models import account, iscsi_config, iscsi_disk, pool
-
+from app.models.iscsi_client import IscsiClients
+from app.models.pool import Pools
+from app.models.account import Accounts
 
 class Iscsi:
     """
@@ -30,629 +32,804 @@ class Iscsi:
     """
 
     def __init__(
-        self,
-        protocol=None,
-        request=None,
-        host=None,
-        port=None,
-        method=None,
-        api_user=None,
-        api_password=None,
+            self,
+            gateway=None,
+            config=None,
+            target_iqn=None,
+            port=5000
     ):
-        self.protocol = protocol
-        self.req = request
-        self.host = host
+        self.gateway = gateway
+        self.config = config
+        self.target_iqn = config.target_iqn if config else target_iqn
+        self.pool_name = self._get_pool_name()
+        self.account_name = self._get_account_name()
         self.port = port
-        self.method = method
-        self.api_user = api_user
-        self.api_password = api_password
 
-    def send_request(
-        self, method, request, auth, host="localhost", port=5000, body=None
-    ):
-        """
-        Request to cloud gateway host
-        """
-        basic_url = f"http://{host}:{port}/api/"
-        request_url = basic_url + request
-        log.info(f"Request to {request_url}")
-        response = eval(f"requests.{method}")(
-            request_url, auth=auth, data=body, verify=False
-        )
-        log.info(
-            f"Response from {request_url} with status code {response.status_code} \
-            and content {response.content}"
-        )
-        return status_codes.get(response.status_code)(response.content)
+    def _get_account_name(self) -> str:
+        account = Accounts.get_by("id", self.config.account_id)
+        return account.name
 
-    def create_target(self, config, gateway):
+    def _get_pool_name(self) -> str:
+        pool = Pools.get_by("id", self.config.pool_id)
+        return f"{pool.type}-{pool.klass}"
+
+    def get_image_name(self, disk_name) -> str:
+        """
+        Get name of RBD image.
+        """
+        return f"{self.pool_name}/{self.account_name}_{disk_name}"
+
+    def get_full_disk_name(self, disk_name):
+        """
+        Get full name of disk with account prefix.
+        """
+        return f"{self.account_name}_{disk_name}"
+
+    def send_request(self, method: str, request_path: str, body: dict = None) -> dict:
+        """
+        Send an HTTP request to the cloud gateway API.
+
+        This method handles basic request construction, authentication,
+        and response parsing from the iSCSI cloud gateway.
+
+        Args:
+            method (str): HTTP method to use (e.g., "GET", "POST", "PUT", "DELETE").
+            request_path (str): API endpoint path (e.g., "disk/disk1").
+            body (dict, optional): Data to send in the request body (for POST/PUT).
+
+        Returns:
+            dict: Formatted response using status code mapping.
+
+        Raises:
+            ValueError: If an unsupported HTTP method is provided.
+        """
+        if not hasattr(requests, method.lower()):
+            raise ValueError(f"Unsupported HTTP method: {method}")
+
+        host = self.gateway.ip_address
+        request_url = f"http://{host}:{self.port}/api/{request_path.lstrip('/')}"
+        auth = (self.gateway.api_user, self.gateway.api_password)
+
+        log.info(f"Sending {method.upper()} request to {request_url}")
+
+        request_func = getattr(requests, method.lower())
+        try:
+            response = request_func(
+                request_url,
+                auth=auth,
+                data=body,
+                verify=False
+            )
+        except requests.RequestException as e:
+            log.error(f"HTTP request to {request_url} failed: {str(e)}")
+            return internal_server_error("Failed to connect to gateway.")
+
+        # Decode response content
+        data = response.content
+        if isinstance(data, bytes):
+            try:
+                data = json.loads(data)
+                message = data.get("message", data)
+            except json.JSONDecodeError:
+                message = data.decode("utf-8")
+        elif data is None:
+            message = "No information."
+        else:
+            message = data
+
+        log.info(f"Received {response.status_code} from {request_url}")
+        log.debug(f"Response content: {message}")
+
+        return status_codes.get(response.status_code)(message)
+
+    def create_target(self) -> dict:
         """
         Create iSCSI target
         """
-        auth = (gateway.api_user, gateway.api_password)
-        request_url = f"target/{config.target_iqn}"
-        log.info(f"Create iSCSI target with target_iqn: {config.target_iqn}")
+        if not is_failed(self.get_target()):
+            return ok("Target already created.")
 
-        response = self.send_request("put", request=request_url, auth=auth, host=gateway.ip_address)
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
+        request_url = f"/target/{self.target_iqn}"
+        log.info(f"Create iSCSI target with target_iqn: {self.target_iqn}")
 
-        config.save()
-        return config
+        response = self.send_request(methods.PUT, request_path=request_url)
 
-    def delete_target(self, config, gateway):
+        return status_codes.get(response["code"])(response["data"])
+
+    def delete_target(self) -> dict:
         """
         Delete iSCSI target
         """
-        auth = (gateway.api_user, gateway.api_password)
-        request_url = f"target/{config.target_iqn}"
-        log.info(f"Delete iSCSI target with target_iqn: {config.target_iqn}")
+        if is_failed(self.get_target()):
+            return ok("Target already deleted.")
 
-        response = self.send_request("delete", request=request_url, auth=auth, host=gateway.ip_address)
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
+        request_url = f"/target/{self.target_iqn}"
+        log.info(f"Delete iSCSI target with target_iqn: {self.target_iqn}")
+
+        response = self.send_request(methods.DELETE, request_path=request_url)
 
         return response
 
-    def get_target(self, config, gateway):
-        auth = (gateway.api_user, gateway.api_password)
-        request_url = "targets"
+    def get_target(self) -> dict:
+        """
+        Get iSCSI target
+        """
+        request_url = "/targets"
+        log.info(f"Get iSCSI target with target_ian: {self.target_iqn}")
 
         response = self.send_request(
-            method="get",
-            request=request_url,
-            auth=auth,
-            host=gateway.ip_address
+            method=methods.GET,
+            request_path=request_url,
         )
         if is_failed(response):
-            return status_codes.get(response.get("code"))(response.get("data"))
+            return response
 
-        if isinstance(response.get('data'), bytes):
-            decoded_data = response['data'].decode('utf-8')
-            parsed_data = json.loads(decoded_data)
+        data = response.get('data', {})
+        targets = data.get('targets', [])
+
+        if self.target_iqn in targets:
+            return ok(self.target_iqn)
         else:
-            parsed_data = response.get('data', {})
-        targets = parsed_data.get('targets', [])
+            return not_found("Target with such iqn not found.")
 
-        if config.target_iqn in targets:
-            return ok(config.target_iqn)
-        else:
-            return not_found()
+    def create_portal(self) -> dict:
+        request_url = f"/gateway/{self.target_iqn}/{self.gateway.name}"
+        log.info(f"Assign iSCSI portal {self.gateway.name} to {self.target_iqn}")
 
-    def create_portal(self, config, gateway):
-        auth = (gateway.api_user, gateway.api_password)
-        request_url = f"gateway/{config.target_iqn}/{gateway.name}"
-        log.info(f"Assign iSCSI portal {gateway.name} to {config.target_iqn}")
-
-        body = {"ip_address": gateway.portal_ip_address}
-        response = self.send_request("put", request=request_url, auth=auth, host=gateway.ip_address, body=body)
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
+        body = {"ip_address": self.gateway.portal_ip_address}
+        response = self.send_request(methods.PUT, request_path=request_url, body=body)
 
         return response
 
-    def delete_portal(self, config, gateway):
-        auth = (gateway.api_user, gateway.api_password)
-        request_url = f"gateway/{config.target_iqn}/{gateway.name}"
-        log.info(f"Assign iSCSI portal {gateway.name} to {config.target_iqn}")
+    def delete_portal(self) -> dict:
+        request_url = f"/gateway/{self.target_iqn}/{self.gateway.name}"
+        log.info(f"Delet iSCSI portal {self.gateway.name} to {self.target_iqn}")
 
-        response = self.send_request("delete", request=request_url, auth=auth, host=gateway.ip_address)
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
+        response = self.send_request("delete", request_path=request_url)
 
         return response
 
-    def create_disk(self, config, gateway, image, body):
+    def create_disk(self, body: dict) -> dict:
         """
-        Create iSCSI disk
+        Create a new iSCSI disk (Ceph RBD image) and assign it to the target IQN.
+
+        Args:
+            body (dict): Parameters for disk creation.
+                - name (str): Name of the disk to create.
+                - size_gb (int): Size of the disk in gigabytes.
+                - create_image (bool, optional): Whether to create the RBD image.
+                  If False, assumes the image already exists. Defaults to True.
+
+        Returns:
+            dict: API response from the storage backend or an error message.
         """
-        pool_obj = pool.Pools.get_by("id", config.pool_id)
-        account_name = account.Accounts.get_by("id", config.account_id).name
+        image_name = self.get_image_name(body["name"])
+        log.info(f"Creating RBD image with name '{image_name}'")
 
-        log.info(f"Create iSCSI disk with {account_name}_{body['name']} name")
-        log.info(f"Create iSCSI disk with {account_name}_{body['name']} name")
-
-        request_url = (
-            f"disk/{pool_obj.type}-{pool_obj.klass}/{account_name}_{body['name']}"
-        )
+        request_url = f"/disk/{image_name}"
 
         data = {
             "mode": "create",
-            "size": str(body["size_gb"]) + "g",
-            "pool": f"{pool_obj.type}-{pool_obj.klass}",
-            "create_image": str(image).lower(),
+            "size": f"{body['size_gb']}g",
+            "pool": self.pool_name,
+            "create_image": "true" if body.get("create_image", True) else "false",
         }
 
-        auth = (gateway.api_user, gateway.api_password)
-
         response = self.send_request(
-            method="put",
-            request=request_url,
-            auth=auth,
-            host=gateway.ip_address,
+            method=methods.PUT,
+            request_path=request_url,
             body=data,
         )
+
         if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
+            return response
 
-        response = self._add_disk_to_target_iqn(config, gateway, body)
-        print(response)
+        response = self._add_disk_to_target_iqn(image_name)
+
         if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])  
-        return created()
-
-    def delete_disk(self, config, gateway, disk_name):
-        """
-        Deletes rbd image (disk) from ceph, from the specified pool.
-        All work is done by sending the following request to iscsi gateway:
-        curl -k --user <user>:<password> -d preserve_image=false
-        -X DELETE https://172.20.141.36:5000/api/disk/<pool>/diskname
-        curl -k --user <user>:<password> -d preserve_image=false
-        -X DELETE https://172.20.141.36:5000/api/disk/<pool>/diskname
-        """
-
-        pool_obj = pool.Pools.get_by("id", config.pool_id)
-        account_name = account.Accounts.get_by("id", config.account_id).name
-        request_url = f"targetlun/{config.target_iqn}"
-        data = {"disk": f"{pool_obj.type}-{pool_obj.klass}/{account_name}_{disk_name}"}
-        auth = (gateway.api_user, gateway.api_password)
-        response = self.send_request(
-            "delete", request=request_url, body=data, host=gateway.ip_address, auth=auth
-        )
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
-
-        request_url = (
-            f"disk/{pool_obj.type}-{pool_obj.klass}/{account_name}_{disk_name}"
-        )
-
-        data = {"preserve_image": "false"}
-        response = self.send_request(
-            "delete", request=request_url, body=data, host=gateway.ip_address, auth=auth
-        )
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
-
-        return no_content()
-
-    def get_disk(self, config, gateway, disk_name):
-        """
-        Create iSCSI disk
-        """
-        pool_obj = pool.Pools.get_by("id", config.pool_id)
-        account_name = account.Accounts.get_by("id", config.account_id).name
-
-        log.info(f"Get iSCSI disk with {account_name}_{disk_name} name")
-
-        request_url = (
-            f"disk/{pool_obj.type}-{pool_obj.klass}/{account_name}_{disk_name}"
-        )
-        auth = (gateway.api_user, gateway.api_password)
-
-        response = self.send_request(
-            method="get",
-            request=request_url,
-            auth=auth,
-            host=gateway.ip_address
-        )
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
+            self.delete_disk(body["name"])
 
         return response
 
-    def create_client(self, config, gateway, client):
+    def _add_disk_to_target_iqn(self, image_name: str) -> dict:
         """
-        add client: curl -k --user admin:testiscsi -X PUT
-        https://172.20.141.36:5000/api/client/iqn.2019-11.io.icdc:ceph-iscsi/iqn.1994-05.com.redhat:myhost4
-        """
+        Assign an existing RBD image (disk) to the target IQN.
 
-        """
-        add client: curl -k --user admin:testiscsi -X PUT
-        https://172.20.141.36:5000/api/client/iqn.2019-11.io.icdc:ceph-iscsi/iqn.1994-05.com.redhat:myhost4
-        """
+        Args:
+            image_name (str): Name of the RBD image to assign.
 
-        auth = (gateway.api_user, gateway.api_password)
-        request_url = f"client/{config.target_iqn}/{client.iqn}"
+        Returns:
+            dict: API response indicating success or error.
+        """
+        log.info(f"Assigning image '{image_name}' to target IQN '{self.target_iqn}'")
+
+        data = {
+            "disk": image_name
+        }
+
+        request_url = f"targetlun/{self.target_iqn}"
 
         response = self.send_request(
-            "put", request=request_url, body=None, host=gateway.ip_address, auth=auth
-        )
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
-
-        # CHAP authentication
-        request_url = f"clientauth/{config.target_iqn}/{client.iqn}"
-        data = {"username": client.chap_username, "password": client.chap_password}
-        response = self.send_request(
-            "put", request=request_url, body=data, host=gateway.ip_address, auth=auth
-        )
-        if is_failed(response):
-            request_url = f"client/{config.target_iqn}/{client.iqn}"
-            self.send_request(
-                "delete", request=request_url, host=gateway.ip_address, auth=auth
-            )
-            return status_codes.get(response["code"])(response["data"])
-        return created()
-
-    def update_client(self, client_obj, disk, body):
-        """
-        Update iSCSI Client
-        """
-        config_obj = iscsi_config.IscsiConfigs.get_by("id", disk.config_id)
-        gateway = config_obj.gateways[0]
-        auth = (gateway.api_user, gateway.api_password)
-        request_url = f"client/{config_obj.target_iqn}/{client_obj.iqn}"
-        data = {"username": body["chap_username"], "password": body["chap_password"]}
-        request_url = f"clientauth/{config_obj.target_iqn}/{client_obj.iqn}"
-        response = self.send_request(
-            method="put",
-            request=request_url,
+            method=methods.PUT,
+            request_path=request_url,
             body=data,
-            host=gateway.ip_address,
-            auth=auth,
         )
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
-        return no_content()
 
-    def delete_client(self, config, gateway, client):
-        """
-        Delete iSCSI client.
-        """
-        log.info(f"Delete client for config: {config.id}")
-        auth = (gateway.api_user, gateway.api_password)
-        request_url = f"client/{config.target_iqn}/{client.iqn}"
-        response = self.send_request(
-            "delete", request=request_url, body=None, host=gateway.ip_address, auth=auth
-        )
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
-        return no_content()
-
-    def get_client(self, config, gateway, client):
-        """
-        Get iSCSI client.
-        """
-        log.info(f"Get client with iqn {client.iqn} and target iqn {config.target_iqn}")
-        auth = (gateway.api_user, gateway.api_password)
-        request_url = f"_client/{config.target_iqn}/{client.iqn}"
-        response = self.send_request(
-            "get", request=request_url, host=gateway.ip_address, auth=auth
-        )
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
         return response
 
-    def assign_disk(self, client_obj, disk_obj, config_obj, gateway_obj):
+    def update_disk(self, disk_name: str, body: dict) -> dict:
         """
-        Connect iSCSI disk to Client
-        """
-        self.create_client(config_obj, gateway_obj, client_obj)
-        request_url = f"clientlun/{config_obj.target_iqn}/{client_obj.iqn}"
-        pool_obj = pool.Pools.get_by("id", config_obj.pool_id)
-        account_obj = account.Accounts.get_by("id", config_obj.account_id)
-        data = {
-            "disk": f"{pool_obj.type}-{pool_obj.klass}/{account_obj.name}_{disk_obj.name}"
-        }
-        auth = (gateway_obj.api_user, gateway_obj.api_password)
-        response = self.send_request(
-            method="put",
-            request=request_url,
-            body=data,
-            host=gateway_obj.ip_address,
-            auth=auth,
-        )
-        if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
-        assigned_disks = client_obj.disks
-        assigned_disks.append(disk_obj)
-        client_obj.save()
-        return no_content()
+        Resize an existing iSCSI disk (Ceph RBD image).
 
-    def disconnect_disk(self, client_obj, disk_obj, config_obj, gateway_obj):
-        """
-        Disconnect iSCSI disk to Client
-        """
-        log.info(f"Disconnecting disk {disk_obj.name} from client {client_obj.name}")
-        request_url = f"clientlun/{config_obj.target_iqn}/{client_obj.iqn}"
-        pool_obj = pool.Pools.get_by("id", config_obj.pool_id)
-        account_name = account.Accounts.get_by("id", config_obj.account_id).name
-        data = {
-            "disk": f"{pool_obj.type}-{pool_obj.klass}/{account_name}_{disk_obj.name}"
-        }
-        auth = (gateway_obj.api_user, gateway_obj.api_password)
-        response = self.send_request(
-            method="delete",
-            request=request_url,
-            body=data,
-            host=gateway_obj.ip_address,
-            auth=auth,
-        )
-        if is_failed(response):
-            log.error(f"Disconnecting disk {disk_obj.name} from client {client_obj.name} failed for: {response['data']}")
-            return status_codes.get(response["code"])(response["data"])
-        return no_content()
+        Args:
+            disk_name (str): Name of the disk to update.
+            body (dict): Parameters for disk update.
+                - size_gb (int): New size of the disk in gigabytes.
 
-    def update_disk(self, disk, config, body):
+        Returns:
+            dict: API response from the storage backend or an error message.
         """
-        Resizes disk in ceph. All work is done by sending the following request to iscsi gateway:
-        curl -k --user admin:testiscsi -d mode=resize -d size=5g -d pool=iscsi \
-        -X PUT https://172.20.141.36:5000/api/disk/iscsi/disk2
-        """
-        pool_obj = pool.Pools.get_by("id", config.pool_id)
-        account_obj = account.Accounts.get_by("id", config.account_id)
-        gateway_obj = config.gateways[0]
-        request_url = (
-            f"disk/{pool_obj.type}-{pool_obj.klass}/{account_obj.name}_{disk.name}"
-        )
+        image_name = self.get_image_name(disk_name)
+        log.info(f"Resizing RBD image '{image_name}'")
+
+        request_url = f"/disk/{image_name}"
+
         data = {
             "mode": "resize",
             "size": f"{body['size_gb']}g",
-            "pool": f"{pool_obj.type}-{pool_obj.klass}",
+            "pool": self.pool_name,
         }
-        auth = (gateway_obj.api_user, gateway_obj.api_password)
+
         response = self.send_request(
-            method="put",
-            request=request_url,
+            method=methods.PUT,
+            request_path=request_url,
             body=data,
-            host=gateway_obj.ip_address,
-            auth=auth,
         )
+
+        return response
+
+    def delete_disk(self, disk_name: str) -> dict:
+        """
+        Delete an iSCSI disk (Ceph RBD image) and unassign it from the target IQN.
+
+        Args:
+            disk_name (str): Name of the disk to delete.
+
+        Returns:
+            dict: API response from the storage backend or an error message.
+        """
+        image_name = self.get_image_name(disk_name)
+
+        if is_failed(self.get_disk(image_name=image_name)):
+            log.info(f"Disk '{image_name}' already deleted.")
+            return ok("Disk already deleted.")
+
+        log.info(f"Deleting iSCSI disk '{image_name}'")
+
+        self._unassign_disk_from_target_iqn(image_name)
+
+        request_url = f"/disk/{image_name}"
+        data = {"preserve_image": "false"}
+
+        response = self.send_request(
+            method=methods.DELETE,
+            request_path=request_url,
+            body=data,
+        )
+
+        return response
+
+    def _unassign_disk_from_target_iqn(self, image_name: str) -> dict:
+        """
+        Unassign an iSCSI disk (Ceph RBD image) from the target IQN.
+
+        Args:
+            image_name (str): Name of the disk (RBD image) to unassign.
+
+        Returns:
+            dict: API response indicating success or an error message.
+        """
+        log.info(f"Unassigning disk '{image_name}' from target IQN '{self.target_iqn}'")
+
+        request_url = f"/targetlun/{self.target_iqn}"
+        data = {"disk": image_name}
+
+        response = self.send_request(
+            method=methods.DELETE,
+            request_path=request_url,
+            body=data,
+        )
+
+        return response
+
+    def get_disk(self, image_name: str) -> dict:
+        """
+        Retrieve information about an iSCSI disk (Ceph RBD image).
+
+        Args:
+            image_name (str): Either a short disk name (e.g., "disk1"),
+                or a full RBD image path including the pool (e.g., "pool1/disk1").
+
+        Returns:
+            dict: API response containing disk (image) information or an error message.
+        """
+        if '/' not in image_name:
+            image_name = self.get_image_name(image_name)
+
+        log.info(f"Retrieving RBD image '{image_name}'")
+
+        request_url = f"/disk/{image_name}"
+
+        response = self.send_request(
+            method=methods.GET,
+            request_path=request_url,
+        )
+
+        return response
+
+    def create_client(self, client: IscsiClients) -> dict:
+        """
+        Create an iSCSI client for the current target and configure CHAP authentication.
+
+        Args:
+            client (IscsiClients): Client object containing IQN and CHAP credentials.
+
+        Returns:
+            dict: API response indicating success or error.
+        """
+        if not is_failed(self.get_client(client.iqn)):
+            log.info(f"Client with IQN '{client.iqn}' already exists for target '{self.target_iqn}'")
+            return ok("Client for this target already created.")
+
+        log.info(f"Creating client with IQN '{client.iqn}' for target '{self.target_iqn}'")
+
+        request_url = f"client/{self.target_iqn}/{client.iqn}"
+        response = self.send_request(method=methods.PUT, request_path=request_url)
+
         if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
+            return response
 
-        return no_content()
-
-    def _add_disk_to_target_iqn(self, config, gateway, body):
-        pool_obj = pool.Pools.get_by("id", config.pool_id)
-        account_name = account.Accounts.get_by("id", config.account_id).name
-        log.info(
-            f"Add disk {account_name}_{body['name']} to target iqn {config.target_iqn}"
-        )
-        auth = (gateway.api_user, gateway.api_password)
+        # Configure CHAP authentication
+        request_url = f"/clientauth/{self.target_iqn}/{client.iqn}"
         data = {
-            "disk": f"{pool_obj.type}-{pool_obj.klass}/{account_name}_{body['name']}"
+            "username": client.chap_username,
+            "password": client.chap_password,
         }
-        request_url = f"targetlun/{config.target_iqn}"
+
+        log.info(f"Setting CHAP authentication for client '{client.iqn}' on target '{self.target_iqn}'")
+
         response = self.send_request(
-            method="put",
-            request=request_url,
+            method=methods.PUT,
+            request_path=request_url,
             body=data,
-            host=gateway.ip_address,
-            auth=auth,
         )
+
         if is_failed(response):
-            return status_codes.get(response["code"])(response["data"])
+            self.delete_client(client)
 
-        return created()
+        return response
 
+    def update_client(self, client: IscsiClients, body: str) -> dict:
+        """
+        Update CHAP authentication credentials for an existing iSCSI client.
+
+        Args:
+            client (IscsiClients): The client object with IQN.
+            body (dict): Dictionary containing updated authentication data.
+                - chap_username (str): New CHAP username.
+                - chap_password (str): New CHAP password.
+
+        Returns:
+            dict: API response indicating success or error.
+        """
+        request_url = f"/clientauth/{self.target_iqn}/{client.iqn}"
+        log.info(f"Updating client '{client.iqn}' for target '{self.target_iqn}'")
+
+        data = {
+            "username": body["chap_username"],
+            "password": body["chap_password"],
+        }
+
+        response = self.send_request(
+            method=methods.PUT,
+            request_path=request_url,
+            body=data,
+        )
+
+        return response
+
+    def delete_client(self, client: IscsiClients) -> dict:
+        """
+        Delete an iSCSI client from the target.
+
+        Args:
+            client (IscsiClients): The client object to be deleted.
+
+        Returns:
+            dict: API response indicating success or an error message.
+        """
+        if is_failed(self.get_client(client.iqn)):
+            log.info(f"Client '{client.iqn}' is already deleted from target '{self.target_iqn}'")
+            return ok("Client already deleted.")
+
+        request_url = f"/client/{self.target_iqn}/{client.iqn}"
+
+        log.info(f"Deleting client '{client.iqn}' from target '{self.target_iqn}'")
+
+        response = self.send_request(
+            method=methods.DELETE,
+            request_path=request_url,
+        )
+
+        return response
+
+    def get_client(self, client_iqn: str) -> dict:
+        """
+        Get iSCSI client.
+
+        Args:
+            client_iqn (str): IQN of the client
+
+        Returns:
+            Returns:
+            dict: API response with client info or error message.
+        """
+        request_url = f"/_client/{self.target_iqn}/{client_iqn}"
+        log.info(f"Get client with iqn {client_iqn} and target iqn {self.target_iqn}")
+
+        response = self.send_request(
+            methods.GET, request_path=request_url
+        )
+
+        return response
+
+    def assign_disk(self, client: IscsiClients, disk_name: str) -> dict:
+        """
+        Assign (connect) an iSCSI disk to a client.
+
+        Args:
+            client (IscsiClients): The iSCSI client to assign the disk to.
+            disk_name (str): Logical name of the disk to assign.
+
+        Returns:
+            dict: API response indicating success or an error message.
+        """
+        log.info(f"Assigning disk '{disk_name}' to client '{client.iqn}'")
+
+        image_name = self.get_image_name(disk_name)
+
+        response = self.create_client(client)
+        if is_failed(response):
+            return response
+
+        if image_name in self.get_client_disks(client.iqn):
+            log.info(f"Disk '{image_name}' is already assigned to client '{client.iqn}'")
+            return ok("Disk already assigned.")
+
+        request_url = f"/clientlun/{self.target_iqn}/{client.iqn}"
+        data = {"disk": image_name}
+
+        response = self.send_request(
+            method=methods.PUT,
+            request_path=request_url,
+            body=data,
+        )
+
+        return response
+
+    def disconnect_disk(self, client_iqn: str, disk_name: str) -> dict:
+        """
+        Disconnect an iSCSI disk from a client.
+
+        Args:
+            client_iqn (str): IQN of the client.
+            disk_name (str): Name of the disk.
+
+        Returns:
+            dict: API response indicating success or error message.
+        """
+        image_name = self.get_image_name(disk_name)
+
+        log.info(f"Disconnecting image '{image_name}' from client '{client_iqn}'")
+        print("image_name", image_name)
+        print("list", self.get_client_disks(client_iqn))
+        if is_failed(self.get_disk(image_name)) or image_name not in self.get_client_disks(client_iqn):
+            log.info(f"Disk '{image_name}' is already unassigned from client '{client_iqn}'")
+            return ok("Disk already unassigned.")
+
+        request_url = f"/clientlun/{self.target_iqn}/{client_iqn}"
+        data = {"disk": image_name}
+
+        response = self.send_request(
+            method=methods.DELETE,
+            request_path=request_url,
+            body=data,
+        )
+
+        return response
+
+    def get_client_disks(self, client_iqn: str) -> list[str]:
+        """
+        Retrieve the list of image names assigned to a specific iSCSI client.
+
+        Args:
+            client_iqn (str): IQN of the client.
+
+        Returns:
+            list[str]: A list of image names assigned to the client.
+                       Returns an empty list if the request fails.
+        """
+        log.info(f"Getting list of disks for client '{client_iqn}'")
+
+        request_url = f"/_clientlun/{self.target_iqn}/{client_iqn}"
+
+        response = self.send_request(
+            method=methods.GET,
+            request_path=request_url,
+        )
+
+        if is_failed(response):
+            log.warning(f"Failed to get disks for client '{client_iqn}'")
+            return []
+
+        data = response.get("data", {})
+        return list(data.keys())
+
+    @staticmethod
     def _ceph_image_decorator(func):
-        @functools.wraps(func)
-        def wrapper(self, **kwargs):
-            """
-            Wrapper wich connect to ceph and does all the needed things
-            before the actual snapshot action is executed
-            """
-            kwargs = kwargs["body"]
-            pool_name, disk = kwargs["pool"], kwargs["disk"]
+        """
+        Decorator that sets up Ceph connection context and provides
+        image, rbd instance, and ioctx to the decorated method.
 
-            # TODO Make used const.py for  name='client.storage'
+        Injects:
+            - ioctx (rados.ioctx): Ceph I/O context.
+            - rbd (rbd.RBD): RBD API object.
+            - image (rbd.Image): Opened RBD image based on disk name.
+
+        Returns:
+            Callable: Wrapped method with Ceph context.
+        """
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            pool_name = self._get_pool_name()
+
+            disk_name = self.get_full_disk_name(kwargs["disk_name"])
+
+            log.debug(f"Connecting to Ceph pool '{pool_name}' for image '{disk_name}'")
+
+            # Connect to Ceph cluster
             cluster = rados.Rados(conffile="/etc/ceph/ceph.conf", name="client.storage")
             try:
                 cluster.connect()
                 ioctx = cluster.open_ioctx(pool_name)
+
                 try:
                     rbd_inst = rbd.RBD()
                     try:
-                        image = rbd.Image(ioctx, disk)
-                    except rbd.ImageNotFound as e:
-                        log.error(f"Image '{disk}' not found in pool '{pool_name}'.")
+                        image = rbd.Image(ioctx, disk_name)
+                    except rbd.ImageNotFound:
+                        log.error(f"Image '{disk_name}' not found in pool '{pool_name}'.")
                         return not_found("Disk hasn't got the snapshot with such name.")
 
                     try:
-                        kwargs["ioctx"], kwargs["rbd"], kwargs["image"] = (
-                            ioctx,
-                            rbd_inst,
-                            image,
-                        )
-                        result = func(self, **kwargs)
+                        # Inject Ceph context into kwargs
+                        kwargs.update({
+                            "ioctx": ioctx,
+                            "rbd": rbd_inst,
+                            "image": image,
+                        })
+                        return func(self,*args, **kwargs)
                     finally:
                         image.close()
+
                 finally:
                     ioctx.close()
+
             finally:
                 cluster.shutdown()
-
-            return result
 
         return wrapper
 
     @_ceph_image_decorator
-    def create_snapshot(self, **kwargs):
+    def create_snapshot(self, disk_name: str, **kwargs) -> dict:
         """
-        Create iSCSI Snapshot
+        Create a snapshot for the given iSCSI disk.
+
+        Args:
+            disk_name (str): Logical name of the disk.
+            kwargs: Additional injected context including:
+                - body (dict): Request payload containing 'snapshot_name'.
+                - image (rbd.Image): Ceph image object.
+
+        Returns:
+            dict: API response indicating success or error.
         """
-        snapshot_name, image_instance = kwargs["name"], kwargs["image"]
+        body = kwargs["body"]
+        image_instance = kwargs["image"]
+
+        snapshot_name = body["name"]
+        log.info(f"Creating snapshot '{snapshot_name}' for disk '{disk_name}'.")
+
         try:
             image_instance.create_snap(snapshot_name)
+            log.debug(f"Snapshot '{snapshot_name}' successfully created.")
         except rbd.ImageExists:
+            log.warning(f"Snapshot '{snapshot_name}' already exists for disk '{disk_name}'.")
             return conflict("Snapshot with such name already exists.")
-        return [
-            snap
-            for snap in list(image_instance.list_snaps())
-            if snap["name"] == snapshot_name
-        ][0]
+
+        snapshot_info = next(
+            (s for s in image_instance.list_snaps() if s["name"] == snapshot_name), None
+        )
+
+        log.debug(f"Snapshot info: {snapshot_info}")
+        return ok(snapshot_info)
 
     @_ceph_image_decorator
-    def update_snapshot(self, **kwargs):
+    def update_snapshot(self, disk_name: str, snapshot_name: str, **kwargs) -> dict:
         """
-        Update iSCSI Snapshot
+        Rename an existing iSCSI snapshot.
+
+        Args:
+            disk_name (str): Name of the disk containing the snapshot.
+            snapshot_name (str): Current name of the snapshot.
+            kwargs: Additional context injected by the decorator, including:
+                - body (dict): Request data containing new snapshot name.
+                - image (rbd.Image): Ceph image instance.
+
+        Returns:
+            dict: API response indicating success or error.
         """
-        snapshot_name, new_name, image_instance = (
-            kwargs["snapshot_name"],
-            kwargs["new_snapshot_name"],
-            kwargs["image"],
+        body = kwargs["body"]
+        image_instance = kwargs["image"]
+        new_name = body["name"]
+
+        log.info(
+            f"Renaming snapshot from '{snapshot_name}' to '{new_name}' "
+            f"on disk '{disk_name}'."
         )
+
         try:
             image_instance.rename_snap(snapshot_name, new_name)
+            log.debug(f"Snapshot '{snapshot_name}' renamed to '{new_name}'.")
         except rbd.ImageNotFound:
+            log.error(f"Snapshot '{snapshot_name}' not found on disk '{disk_name}'.")
             return not_found("Disk hasn't got the snapshot with such name.")
         except rbd.ImageExists:
-            return conflict("New name of snapshot can't be the same as previous.")
+            log.warning(f"Snapshot name '{new_name}' already exists on disk '{disk_name}'.")
+            return conflict("New snapshot name already exists.")
+
         return no_content()
 
     @_ceph_image_decorator
-    def delete_snapshot(self, **kwargs):
+    def delete_snapshot(self, disk_name: str, snapshot_name: str, **kwargs) -> dict:
         """
-        Delete iSCSI Snapshot
+        Delete an iSCSI snapshot.
+
+        Args:
+            disk_name (str): Name of the disk containing the snapshot.
+            snapshot_name (str): Name of the snapshot to delete.
+            kwargs: Context injected by the decorator, including:
+                - image (rbd.Image): Ceph image instance.
+
+        Returns:
+            dict: API response indicating success or error.
         """
-        snapshot_name, image_instance = kwargs["snapshot_name"], kwargs["image"]
+        image_instance = kwargs["image"]
+
+        log.info(f"Deleting snapshot '{snapshot_name}' from disk '{disk_name}'.")
+
         try:
             if image_instance.is_protected_snap(snapshot_name):
+                log.debug(f"Snapshot '{snapshot_name}' is protected. Attempting to unprotect.")
                 image_instance.unprotect_snap(snapshot_name)
+                log.debug(f"Snapshot '{snapshot_name}' successfully unprotected.")
+
             image_instance.remove_snap(snapshot_name)
-        except rbd.ImageNotFound as e:
+            log.debug(f"Snapshot '{snapshot_name}' successfully removed.")
+
+        except rbd.ImageNotFound:
+            log.error(f"Snapshot '{snapshot_name}' not found on disk '{disk_name}'.")
             return not_found("Disk hasn't got the snapshot with such name.")
+
         return no_content()
 
     @_ceph_image_decorator
-    def new_disk_from_snapshot(self, **kwargs):
+    def new_disk_from_snapshot(self, disk_name, snapshot_name, **kwargs):
         """
-        Create iSCSI disk based on iSCSI Snapshot
+        Create a new iSCSI disk from a snapshot.
         """
-        kwargs["body"] = kwargs
-        self._clone_from_snapshot(**kwargs)
-        response = self.create_disk(
-            config=kwargs["config"],
-            gateway=kwargs["gateway"],
-            image=False,
-            body={
-                "size_gb": int(kwargs["snapshot_params"]["size_gb"]),
-                "config_id": kwargs["config"].id,
-                "name": kwargs["name"],
-                "owner": kwargs["owner"],
-            },
-        )
+        body = kwargs["body"]
+        disk_name = self.get_full_disk_name(disk_name)
 
-        kwargs["disk"] = f"{kwargs['account_name']}_{kwargs['name']}"
-        params = {}
-        params["pool"] = kwargs["pool"]
-        params["disk"] = f"{kwargs['account_name']}_{kwargs['name']}"
-        params["body"] = kwargs
+        log.info(f"Starting new_disk_from_snapshot: disk_name='{disk_name}', snapshot_name='{snapshot_name}'")
 
-        self._flatten_created_disk(**params)
-        # if is_failed(response):
-        # self._delete_cloned_disk(**kwargs)
+        self._clone_from_snapshot(disk_name, snapshot_name, **kwargs)
+        log.info(f"Cloned from snapshot '{snapshot_name}' to new disk '{body['name']}'")
+
+        response = self.create_disk(body=body)
+        log.info(f"Created disk entry for '{body['name']}', proceeding to flatten")
+
+        self._flatten_created_disk(disk_name=body["name"])
+        log.info(f"Successfully created and flattened disk '{body['name']}'")
+
         return ok(response["data"])
-        # self._delete_cloned_disk(**kwargs)
 
     @_ceph_image_decorator
-    def rollback_snapshot(self, **kwargs):
+    def _flatten_created_disk(self, disk_name: str, **kwargs) -> None:
         """
-        Rollback snapshot
+        Flatten a cloned RBD image to remove its dependency on the snapshot.
         """
-        try:
-            image = kwargs["image"]
-            image.rollback_to_snap(kwargs["snapshot_params"]["name"])
-            return ok(image.size())
-        except rbd.IOError:
-            return internal_server_error("Something went wrong while Disk rollback")
-
-    @_ceph_image_decorator
-    def _flatten_created_disk(self, **kwargs):
+        log.debug(f"Flattening disk '{disk_name}'")
         kwargs["image"].flatten()
+        log.debug(f"Disk '{disk_name}' successfully flattened")
 
-    @_ceph_image_decorator
-    def _clone_from_snapshot(self, **kwargs):
-        """Clones a new disk from a snapshot
-
-        Creates new clone disk  from the snapshot and triggers a background flatten operation
-        which  breaks the link betweeen the new disk  and snapshot
-
-        :param pool: ceph pool
-        :type pool: str
-        :param disk: rbd image in provided pool
-        :type disk: str
-        :param snapshot_name:
-        :type snapshot_name: str
-        :param new_disk_name:
-        :type new_disk_name: str
-        :rtype: RESULT_OK or RESULT_IMAGE_EXISTS or \
-        Exception will be raised and caught at upper level
+    def _clone_from_snapshot(self, disk_name, snapshot_name, **kwargs):
         """
+        Clone a new RBD image from a snapshot.
+        """
+        ioctx = kwargs["ioctx"]
+        image = kwargs["image"]
+        rbd_inst = kwargs["rbd"]
+        body = kwargs["body"]
 
-        ioctx, image, rbd, snapshot_name, disk_name, new_disk_name, account_name = (
-            kwargs["ioctx"],
-            kwargs["image"],
-            kwargs["rbd"],
-            kwargs["snapshot"],
-            kwargs["disk"],
-            kwargs["name"],
-            kwargs["account_name"],
-        )
+        log.debug(f"Initiating clone from snapshot '{snapshot_name}' for disk '{disk_name}'")
+
         need_unprotect = False
         if not image.is_protected_snap(snapshot_name):
+            log.debug(f"Snapshot '{snapshot_name}' is not protected. Protecting it temporarily.")
             need_unprotect = True
             image.protect_snap(snapshot_name)
+
+        new_disk_name = self.get_full_disk_name(body["name"])
+        log.debug(f"New disk will be created as '{new_disk_name}'")
+
         try:
-            rbd.clone(
+            rbd_inst.clone(
                 ioctx,
                 disk_name,
                 snapshot_name,
                 ioctx,
-                f"{account_name}_{new_disk_name}",
+                new_disk_name,
             )
+            log.info(f"Successfully cloned snapshot '{snapshot_name}' to image '{new_disk_name}'")
         except rbd.ImageExists:
+            log.warning(f"Image '{new_disk_name}' already exists. Skipping clone.")
             if need_unprotect:
+                log.debug(f"Unprotecting snapshot '{snapshot_name}' after failed clone.")
                 image.unprotect_snap(snapshot_name)
-                return conflict("Disk already exists")
-        return no_content
+            return conflict("Disk already exists")
 
-    # # @_ceph_image_decorator
-    # def _delete_cloned_disk(self, **kwargs):
-    #     """
+        return no_content()
 
+    @_ceph_image_decorator
+    def rollback_snapshot(self, disk_name: str, snapshot_name: str, **kwargs) -> dict:
+        """
+        Rollback an RBD image to a specified snapshot.
 
-# Deletes image and removes an entry from the flatten list and attempts to unprotect  snapshot
+        This operation discards all changes made to the image since the snapshot was taken,
+        effectively restoring the image to its previous state. The snapshot must exist.
 
-#     :param pool: ceph pool
-#     :type pool: str
-#     :param disk: rbd image, which  needs to  be flattened
-#     :type disk: str
-#     :param ioctx: io context for the pool
-#     :type ioctx: rados.Ioctx
-#     :param rbd_instance: rbd instance for performing rbd operations
-#     :type rbd_instance: rbd.RBD
-#     :param image_instance: image instance for performing image operations
-#     :type image_instance: rbd.Image
+        Args:
+            disk_name (str): Logical name of the iSCSI disk to rollback.
+            snapshot_name (str): Name of the snapshot to rollback to.
+            **kwargs: Context injected by decorator, includes:
+                - image (rbd.Image): Ceph RBD image instance with the snapshot.
 
-# Deletes image and removes an entry from the flatten list and attempts to unprotect  snapshot
+        Returns:
+            dict: API response with the current image size on success,
+                  or error message if the rollback fails.
 
-#     ioctx, image, rbd, snapshot_name, disk, new_disk = \
-#       kwargs["ioctx"], kwargs["image"], kwargs["rbd"], kwargs["snapshot_name"],\
-#       kwargs["disk_name"], kwargs["new_disk_name"]
+        Raises:
+            rbd.IOError: If the snapshot does not exist or rollback fails due to I/O issues.
+        """
+        image = kwargs["image"]
+        log.info(f"Rolling back disk '{disk_name}' to snapshot '{snapshot_name}'.")
 
-#     # close the image, since it was opened in decorator
-#     # but we do not need image instance for remove operation
-#     image.close()
-#     rbd.remove(ioctx, disk)
-
-
-#     try:
-#         parent_image = rbd.Image(ioctx, new_disk)
-#         try:
-#             if parent_image.is_protected_snap(parent_snapshot):
-#                 parent_image.unprotect_snap(parent_snapshot)
-#         except rbd.ImageBusy:
-#             # not an error theoretically  another flatten operation may  be in progress
-#             common_utils.log.debug(
-#           'Failed to unprotect snapshot %s' % (pool + '/' + parent_disk + '@' + parent_snapshot))
-#         finally:
-#             parent_image.close()
-#     except Exception as ex:
-#         # Well, we did all we could. Just log the error  and continue
-#         common_utils.log.error(
-#             'flatten_image: got exception %s during unprotect' % str(ex))
-
-#     common_utils.log.debug(
-#         'delete_cloned_disk(): exiting for %s' % (pool + '/' + disk))
+        try:
+            image.rollback_to_snap(snapshot_name)
+            image_size = image.size()
+            log.info(f"Rollback successful. Current size: {image_size} bytes.")
+            return ok(image_size)
+        except rbd.IOError:
+            log.error(f"Failed to rollback disk '{disk_name}' to snapshot '{snapshot_name}'.")
+            return internal_server_error("Something went wrong while rolling back the disk.")

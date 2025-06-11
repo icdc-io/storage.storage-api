@@ -5,6 +5,7 @@ import logging as log
 import sys
 
 from flask import abort, jsonify
+from enum import StrEnum
 
 from app import consts
 
@@ -14,6 +15,14 @@ log.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+
+
+class HttpMethod(StrEnum):
+    GET = "get"
+    POST = "post"
+    PUT = "put"
+    DELETE = "delete"
+    PATCH = "patch"
 
 
 def handle_exception(e):

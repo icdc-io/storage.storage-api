@@ -6,13 +6,12 @@ from sqlalchemy import event
 from sqlalchemy.sql import func
 
 from app.database import db
-from app.lib.iscsi_utils import Iscsi
 from app.lib.request_utils import is_failed
 from app.loggers import log
-from app.models.account import Accounts
 from app.models.iscsi_config import IscsiConfigs
+from app.models.iscsi_disk import IscsiDisks
 from app.models.model import AbstractModel
-from app.models.pool import Pools
+
 
 
 class Snapshots(db.Model, AbstractModel):
@@ -65,7 +64,7 @@ class Snapshots(db.Model, AbstractModel):
         UPDATE SET SQL
         """
         self.description = body.get("description", self.description)
-        self.name = body.get("new_snapshot_name", self.name)
+        self.name = body.get("name", self.name)
         self.save()
 
 
@@ -87,21 +86,17 @@ def before_delete(mapper, connection, snapshot_instance):
     Listener function, called before deleting a Snapshots object.
     """
     log.info(f"Deleting snapshot in RBD with name: {snapshot_instance.name}")
-    iscsi_service = Iscsi()
+
     config = IscsiConfigs.get_by("id", snapshot_instance.disk.config_id)
-    pool = Pools.get_by("id", config.pool_id)
-    account = Accounts.get_by("id", config.account_id)
 
-    disk_name = f"{account.name}_{snapshot_instance.disk.name}"
-    pool_name = f"{pool.type}-{pool.klass}"
+    try:
+        iscsi_service = config.iscsi_service()
+    except ValueError as e:
+        abort(400, str(e))
 
-    body = {
-        "pool": pool_name,
-        "disk": disk_name,
-        "snapshot_name": snapshot_instance.name,
-    }
+    disk = IscsiDisks.get_by("id", snapshot_instance.disk_id)
 
-    response = iscsi_service.delete_snapshot(body=body)
+    response = iscsi_service.delete_snapshot(snapshot_name=snapshot_instance.name, disk_name=disk.name)
     if is_failed(response) and response["code"] != 404:
         abort(response["code"], response["data"])
 

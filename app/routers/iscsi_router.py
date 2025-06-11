@@ -172,16 +172,12 @@ def delete_snapshot(subject, disk_id, snapshot_id):
 
 
 @iscsi.route("/disks/<disk_id>/snapshots/<snapshot_name>/new_disk", methods=["POST"])
-@au.account_auth_required
-def new_disk_from_snapshot(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    data = controller.new_disk_from_snapshot(*args, **kwargs)
-    return process_response(data)
+@auth.rbac("iscsi.disks.from-snapshot")
+def new_disk_from_snapshot(subject, disk_id, snapshot_name):
+    return controller.new_disk_from_snapshot(subject, disk_id, snapshot_name)
 
 
 @iscsi.route("/disks/<disk_id>/snapshots/<snapshot_name>/rollback", methods=["POST"])
-@au.account_auth_required
-def rollback_snapshot(*args, **kwargs):
-    kwargs["body"] = request_json(request)
-    data = controller.rollback_snapshot(*args, **kwargs)
-    return process_response(data)
+@auth.rbac("iscsi.snapshots.rollback")
+def rollback_snapshot(subject, disk_id, snapshot_name):
+    return controller.rollback_snapshot(subject, disk_id, snapshot_name)
