@@ -173,7 +173,7 @@ def get_account_s3_users(subject):
     """
     Get list of S3 User which are assigned to account
     """
-    schema = S3QuotaSchema(partial=True)
+    schema = S3UserSchema(partial=True)
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
         filters = schema.load(parsed_filters)

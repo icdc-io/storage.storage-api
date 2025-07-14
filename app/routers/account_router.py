@@ -5,7 +5,6 @@ Account Router module
 from flask import Blueprint, request, jsonify
 from werkzeug.exceptions import HTTPException
 
-import app.controllers.auth as au
 import app.lib.auth as auth
 from app.controllers import account_controller as controller
 from app.lib.request_utils import process_response, request_json, handle_exception

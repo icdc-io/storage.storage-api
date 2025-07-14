@@ -1,9 +1,9 @@
 """
 Gateway Router module
 """
-from flask import Blueprint, request
+from flask import Blueprint, request, abort
 
-import app.controllers.auth as auth
+from app.lib import auth
 from app.controllers import gateway_controller as controller
 from app.lib.request_utils import process_response, request_json
 
@@ -11,17 +11,12 @@ gw = Blueprint(name="gateway_management", import_name=__name__)
 
 
 @gw.route("/<gateway_id>", methods=["GET"])
-@auth.account_auth_required
-def get_gateway(*args, **kwargs):  # pylint: disable=missing-function-docstring
-    data = controller.get_gateway(*args, **kwargs)
-    return process_response(data)
+@auth.rbac("iscsi.gateways.get")
+def get_gateway(subject, gateway_id):  # pylint: disable=missing-function-docstring
+    return controller.get_gateway(subject, gateway_id)
 
 
-gw.route("/", methods=["POST"])
-
-
-@auth.account_auth_required
-def set_gateway(*args, **kwargs):  # pylint: disable=missing-function-docstring
-    kwargs["body"] = request_json(request)
-    data = controller.set_gateway(*args, **kwargs)
-    return process_response(data)
+@gw.route("/", methods=["POST"])
+@auth.rbac("iscsi.gateways.create")
+def set_gateway(subject):  # pylint: disable=missing-function-docstring
+    return controller.set_gateway(subject)

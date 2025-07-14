@@ -3,7 +3,6 @@ iSCSI Router module
 """
 from flask import Blueprint, request
 
-import app.controllers.auth as au
 from app.controllers import iscsi_controller as controller
 from app.lib.request_utils import process_response, request_json, handle_exception
 from app.controllers.iscsi import quotas_controller
@@ -92,11 +91,11 @@ def update_disk(subject, disk_id):
     return controller.update_disk(subject, disk_id), 200
 
 
-@iscsi.route("/configs/<config_id>/gateways", methods=["GET"])
-@au.account_auth_required
-def get_config_gateways(*args, **kwargs):
-    data = controller.get_config_gateways(*args, **kwargs)
-    return process_response(data)
+# @iscsi.route("/configs/<config_id>/gateways", methods=["GET"])
+# @au.account_auth_required
+# def get_config_gateways(*args, **kwargs):
+#     data = controller.get_config_gateways(*args, **kwargs)
+#     return process_response(data)
 
 
 @iscsi.route("/clients", methods=["POST"])

@@ -82,6 +82,16 @@ roles:
         - delete
         - rollback
       filters: {}
+    iscsi.gateways:
+      permissions:
+        - list
+        - post
+        - get
+      filters: {}
+    pools:
+      permissions:
+        -list
+      filters: {}
 
   admin:
     accounts:
@@ -166,6 +176,10 @@ roles:
         - update
         - delete
         - rollback
+      filters: {}
+    pools:
+      permissions:
+        -list
       filters: {}
 
   owner:
@@ -252,6 +266,10 @@ roles:
         - delete
         - rollback
       filters: {}
+    pools:
+      permissions:
+        -list
+      filters: {}
 
   member:
     accounts:
@@ -330,4 +348,8 @@ roles:
         - update
         - delete
         - rollback
+      filters: {}
+    pools:
+      permissions:
+        -list
       filters: {}

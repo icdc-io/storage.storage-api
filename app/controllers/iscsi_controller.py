@@ -168,23 +168,20 @@ def get_iscsi_gateways(**kwargs):
     return ok([i.serialize() for i in account_obj.iscsi_gateways])
 
 
-def get_config_gateways(**kwargs):
-    """
-    Get iSCSI Config Gateways
-    """
-    """
-    Get iSCSI Config Gateways
-    """
-    config_id = kwargs["config_id"]
-    config_obj = IscsiConfigs.get_by("id", config_id)
-    response = []
-    for gateway in config_obj.gateways:
-        gateway = gateway.serialize()
-        gateway["account"] = Accounts.get_by("id", config_obj.account_id).serialize(
-            ["quotas"]
-        )
-        response.append(gateway)
-    return ok(response)
+# def get_config_gateways(**kwargs):
+#     """
+#     Get iSCSI Config Gateways
+#     """
+#     config_id = kwargs["config_id"]
+#     config_obj = IscsiConfigs.get_by("id", config_id)
+#     response = []
+#     for gateway in config_obj.gateways:
+#         gateway = gateway.serialize()
+#         gateway["account"] = Accounts.get_by("id", config_obj.account_id).serialize(
+#             ["quotas"]
+#         )
+#         response.append(gateway)
+#     return ok(response)
 
 
 def get_config_disks(subject, config_id):

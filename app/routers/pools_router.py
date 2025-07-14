@@ -2,20 +2,20 @@
 Pools Router module
 """
 from flask import Blueprint, request
+from werkzeug.exceptions import HTTPException
 
-import app.controllers.auth as auth
+from app.lib import auth
 from app.controllers import pools_controller as controller
-from app.lib.request_utils import process_response, query
+from app.lib.request_utils import handle_exception
 
 pools = Blueprint(name="pools", import_name=__name__)
+pools.register_error_handler(HTTPException, handle_exception)
 
 
 @pools.route("", methods=["GET"])
-@auth.account_auth_required
+@auth.rbac("pools.list")
 def get_pools(*args, **kwargs):
     """
     A function to handle GET requests for pools, with authentication required.
     """
-    kwargs["filter"] = query(request)
-    data = controller.get_pools(*args, **kwargs)
-    return process_response(data)
+    return controller.get_pools(*args, **kwargs)

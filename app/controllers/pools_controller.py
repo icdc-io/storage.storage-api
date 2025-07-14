@@ -1,27 +1,25 @@
 """
 Pools Controller
 """
+from flask import abort, request, jsonify
 
 from app.lib.controller_utils import trytest
-from app.lib.request_utils import ok
+from app.lib.request_utils import ok, parse_jsonapi_filters
 from app.loggers import log
-from app.models.pool import Pools
+from app.models.pool import Pools, PoolSchema
+from marshmallow import ValidationError
 
 
-@trytest
-def get_pools(**kwargs):
+def get_pools(subject):
     """
     Get pools based on the provided filter parameter.
-
-    Args:
-        **kwargs: keyword arguments to filter the pools.
-
-    Returns:
-        list: A list of filtered pools.
     """
+    parsed_filters = parse_jsonapi_filters(request.args)
+    try:
+        filters = PoolSchema(partial=True).load(parsed_filters)
+    except ValidationError as e:
+        abort(400, "Incorrect filter parameters.")
 
-    filter_param = kwargs["filter"]
-    pools = Pools.query.all()
-    filtered_pools = [i.serialize() for i in pools if i.type == filter_param["type"]]
-    log.debug(f"Filtered pools: {filtered_pools}")
-    return ok(filtered_pools)
+    pools = Pools.query.filter_by(**filters).all()
+    log.debug(f"Filtered pools: {pools}")
+    return jsonify(PoolSchema(many=True).dump(pools))
