@@ -90,7 +90,7 @@ roles:
       filters: {}
     pools:
       permissions:
-        -list
+        - list
       filters: {}
 
   admin:
@@ -179,7 +179,7 @@ roles:
       filters: {}
     pools:
       permissions:
-        -list
+        - list
       filters: {}
 
   owner:
@@ -268,7 +268,7 @@ roles:
       filters: {}
     pools:
       permissions:
-        -list
+        - list
       filters: {}
 
   member:
@@ -351,5 +351,5 @@ roles:
       filters: {}
     pools:
       permissions:
-        -list
+        - list
       filters: {}
