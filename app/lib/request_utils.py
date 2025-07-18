@@ -37,9 +37,30 @@ def handle_exception(e):
 
 
 def abort_detailed(code, message, errors):
-    response = jsonify({"errors": errors})
+    response = jsonify({"errors": format_validation_errors(errors)})
     response.status_code = code
     abort(code, message, response)
+
+
+def format_validation_errors(errors: any) -> list[str]:
+    errors_list = []
+
+    if isinstance(errors, dict):
+        for field, messages in errors.items():
+            if isinstance(messages, (list, tuple)):
+                for msg in messages:
+                    errors_list.append(f"{field}: {msg}")
+            else:
+                errors_list.append(f"{field}: {messages}")
+    elif isinstance(errors, str):
+        errors_list.append(errors)
+    elif isinstance(errors, list):
+        for msg in errors:
+            errors_list.append(str(msg))
+    else:
+        errors_list.append(str(errors))
+
+    return errors_list
 
 
 def parse_jsonapi_filters(args: dict):

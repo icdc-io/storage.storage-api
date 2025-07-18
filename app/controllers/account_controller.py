@@ -5,22 +5,22 @@ Account controller
 import os
 
 from flask import request, abort, jsonify
-
+from marshmallow import ValidationError
 from app.database import db
 from app.lib import paramiko
 from app.lib.controller_utils import (
     _get_iscsi_account_usage_billing,
     _get_s3_account_usage_billing,
 )
-from app.lib.request_utils import request_json, log, ok
+from app.lib.request_utils import request_json, log, ok, abort_detailed
 
 # Import models
-from app.models.account import Accounts
+from app.models.account import Accounts, AccountSchema
 
-from app.models.iscsi_config import IscsiConfigs
-from app.models.iscsi_gateway import IscsiGateways
-from app.models.iscsi_quota import IscsiQuotas
-from app.models.s3_quota import S3Quotas
+from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
+from app.models.iscsi_gateway import IscsiGateways, IscsiGatewaySchema
+from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
+from app.models.s3_quota import S3Quotas, S3QuotaSchema
 from app.models.s3_user import S3Users
 
 #############################################
@@ -45,6 +45,8 @@ def create_account(subject):
     log.debug(f"Data: {data}")
 
     try:
+        data = AccountSchema().load(data)
+
         # Attempt to create Account (assuming unique constraint or similar check exists)
         account_obj = Accounts(
             **{k: v for k, v in data.items() if k not in ["services"]}
@@ -59,6 +61,7 @@ def create_account(subject):
         # Process S3 Quotas
         for s3_quota in data.get("services", {}).get("s3", {}).get("quotas", []):
             s3_quota["account_id"] = account_obj.id
+            s3_quota = S3QuotaSchema(partial=True).load(s3_quota)
             s3_quota_obj = S3Quotas(**s3_quota)
             s3_quota_obj.save()
         log.debug("S3 Quotas processed successfully")
@@ -66,6 +69,7 @@ def create_account(subject):
         # Process iSCSI Quotas
         for iscsi_quota in data.get("services", {}).get("iscsi", {}).get("quotas", []):
             iscsi_quota["account_id"] = account_obj.id
+            iscsi_quota = IscsiQuotaSchema(partial=True).load(iscsi_quota)
             iscsi_quota_obj = IscsiQuotas(**iscsi_quota)
             iscsi_quota_obj.save()
         log.debug("iSCSI Quotas processed successfully")
@@ -76,12 +80,14 @@ def create_account(subject):
         ):
             iscsi_config["account_id"] = account_obj.id
             gateways = iscsi_config.pop("gateways", [])
+            iscsi_config = IscsiConfigSchema(partial=True).load(iscsi_config)
             iscsi_config_obj = IscsiConfigs(**iscsi_config)
 
             iscsi_config_obj.save()
 
             for gateway in gateways:
                 gateway["config_id"] = iscsi_config_obj.id
+                gateway = IscsiGatewaySchema(partial=True).load(gateway)
                 gateway_obj = IscsiGateways(**gateway)
                 gateway_obj.save()
 
@@ -92,7 +98,8 @@ def create_account(subject):
 
         log.debug("Account and associated records created successfully")
         return response_data
-
+    except ValidationError as e:
+        abort_detailed(400, "Invalid input data.", e.messages)
     except Exception as e:
         log.error(
             f"An error occurred while creating account and associated records: {e}"
@@ -133,6 +140,7 @@ def update_account(subject, account_name):
         # Process S3 Quotas
         for s3_quota in data.get("services", {}).get("s3", {}).get("quotas", []):
             s3_quota["account_id"] = account_obj.id
+            s3_quota = S3QuotaSchema(partial=True).load(s3_quota)
             s3_quota_obj = S3Quotas(**s3_quota)
 
             existing_s3_quota = S3Quotas.query.filter_by(
@@ -157,6 +165,7 @@ def update_account(subject, account_name):
         # Process iSCSI Quotas
         for iscsi_quota in data.get("services", {}).get("iscsi", {}).get("quotas", []):
             iscsi_quota["account_id"] = account_obj.id
+            iscsi_quota = IscsiQuotaSchema(partial=True).load(iscsi_quota)
             iscsi_quota_obj = IscsiQuotas(**iscsi_quota)
 
             existing_iscsi_quota = IscsiQuotas.query.filter_by(
@@ -181,6 +190,7 @@ def update_account(subject, account_name):
         ):
             iscsi_config["account_id"] = account_obj.id
             gateways = iscsi_config.pop("gateways", [])
+            iscsi_config = IscsiConfigSchema(partial=True).load(iscsi_config)
             iscsi_config_obj = IscsiConfigs(**iscsi_config)
 
             existing_iscsi_config = IscsiConfigs.query.filter_by(

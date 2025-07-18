@@ -105,15 +105,22 @@ class IscsiDisks(db.Model, AbstractModel):
         return usage
 
 
-from marshmallow import Schema, fields, validates_schema, ValidationError, pre_load
+from marshmallow import Schema, fields, validates_schema, ValidationError, validate
 from app import consts
 
 
 class IscsiDiskSchema(Schema):
+    DISK_NAME_PATTERN = r"^[a-z0-9._\-]+$"
+
     id = fields.Int(dump_only=True)
-    owner = fields.String()
-    size_gb = fields.Int()
-    name = fields.String()
+    owner = fields.String(validate=validate.Email())
+    size_gb = fields.Int(validate=validate.Range(min=0))
+    name = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=24),
+            validate.Regexp(regex=DISK_NAME_PATTERN)
+        )
+    )
     config_id = fields.Int()
     clients = fields.Function(lambda disk: disk._clients(), dump_only=True)
     snapshots = fields.Function(lambda disk: disk._snapshots(), dump_only=True)

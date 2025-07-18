@@ -86,17 +86,42 @@ class IscsiClients(db.Model, AbstractModel):
         self.save()
 
 
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, validate
 
 
 class IscsiClientSchema(Schema):
+    CLIENT_IQN_PATTERN = r"^iqn\.\d{4}-\d{2}\.[a-z0-9\-.]+(:[a-z0-9.@_\-]+)?$"
+    CLIENT_NAME_PATTERN = r"^[a-z0-9._\-]+$"
+    CHAP_USERNAME_PATTERN = r"^[A-Za-z0-9._@:\-]+$"
+    CHAP_PASSWORD_PATTERN = r"^[A-Za-z0-9._@:/\-]+$"
+
     id = fields.Int(dump_only=True)
-    account_id = fields.Int()
-    name = fields.String()
-    chap_username = fields.String()
-    chap_password = fields.String()
-    iqn = fields.String()
-    owner = fields.String()
+    name = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=24),
+            validate.Regexp(regex=CLIENT_NAME_PATTERN)
+        )
+    )
+    chap_username = fields.String(
+        validate=validate.And(
+            validate.Length(min=8, max=64),
+            validate.Regexp(CHAP_USERNAME_PATTERN)
+        )
+    )
+    chap_password = fields.String(
+        validate=validate.And(
+            validate.Length(min=12, max=16),
+            validate.Regexp(CHAP_PASSWORD_PATTERN)
+        )
+    )
+    iqn = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=128),
+            validate.Regexp(CLIENT_IQN_PATTERN)
+        )
+    )
+    owner = fields.String(validate=validate.Email())
+    account_id = fields.Int(load_only=True)
     disks = fields.Nested(IscsiDiskSchema(many=True, exclude=["snapshots", "clients"]), dump_only=True)
 
 

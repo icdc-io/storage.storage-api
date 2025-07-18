@@ -176,10 +176,28 @@ class Accounts(db.Model, AbstractModel):
         }
 
 
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, validate, INCLUDE
 
 
 class AccountSchema(Schema):
+    ACCOUNT_NAME_PATTERN = r"^[a-z0-9]+$"
+    ACCOUNT_DESCRIPTION_PATTERN = r"^[\w ,.:/;\[\]!@^*()_\-+=]*$"
+
     id = fields.Int()
-    name = fields.String()
-    description = fields.String()
+
+    name = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=24),
+            validate.Regexp(regex=ACCOUNT_NAME_PATTERN)
+        )
+    )
+
+    description = fields.String(
+        validate=validate.And(
+            validate.Length(min=0, max=24),
+            validate.Regexp(regex=ACCOUNT_DESCRIPTION_PATTERN)
+        )
+    )
+
+    class Meta:
+        unknown = INCLUDE

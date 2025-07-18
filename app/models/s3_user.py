@@ -229,15 +229,30 @@ class S3UserQuotaSchema(Schema):
     buckets = fields.Int(validate=validate.Range(min=0))
 
 class S3UserSchema(Schema):
+    USER_NAME_PATTERN = r"^[a-z0-9._@\-]+$"
+    USER_DESCRIPTION_PATTERN = r"^[\w ,.:/;\[\]!@^*()_\-+=]*$"
+
     id = fields.Int(dump_only=True)
-    description = fields.String()
-    owner = fields.String()
-    name = fields.String()
+    description = fields.String(
+        validate=validate.And(
+            validate.Length(min=0, max=64),
+            validate.Regexp(regex=USER_DESCRIPTION_PATTERN)
+        )
+    )
+    name = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=64),
+            validate.Regexp(regex=USER_NAME_PATTERN)
+        )
+    )
+    owner = fields.String(validate=validate.Email())
     account_id = fields.Int(load_only=True)
     pool_id = fields.Int(load_only=True)
+
     account = fields.Nested(AccountSchema(), dump_only=True)
     pool = fields.Nested(PoolSchema(), dump_only=True)
     quota = fields.Nested(S3UserQuotaSchema(), load_only=True)
+
     user_quota = fields.Function(lambda s3user: s3user.get_quota(), dump_only=True)
     keys = fields.Function(lambda s3user: s3user.get_keys(), dump_only=True)
     usage = fields.Function(lambda s3user: s3user.get_usage(), dump_only=True)
@@ -257,7 +272,10 @@ class S3UserSchema(Schema):
         if not account_quota:
             return
 
-        errors.update(S3UserQuotaSchema().validate(new_quota))
+        try:
+            new_quota = S3UserQuotaSchema().load(new_quota)
+        except ValidationError as e:
+            raise e
 
         cur_quota = {"data_size_mb": 0, "objects": 0, "buckets": 0}
         usage = None

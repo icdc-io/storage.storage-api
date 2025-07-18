@@ -200,8 +200,7 @@ class IscsiQuotaSchema(Schema):
     def validates_limits_exceeding(self, data, **kwargs):
         errors = {}
         usage = self.context.get("usage")
-        if not usage:
-            return
+
         for value in ["clients", "data_size_gb", "disks", "snapshots"]:
             if value in data:
                 if data[value] > getattr(self.limits, value):

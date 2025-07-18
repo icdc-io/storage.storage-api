@@ -68,15 +68,28 @@ class Snapshots(db.Model, AbstractModel):
         self.save()
 
 
-from marshmallow import Schema, ValidationError, fields
+from marshmallow import Schema, ValidationError, fields, validate
 
 
 class SnapshotSchema(Schema):
+    SNAPSHOT_NAME_PATTERN = r'^[a-z0-9_.\-]+$'
+    SNAPSHOT_DESCRIPTION_PATTERN = r"^[\w ,.:/;\[\]!@^*()_\-+=]*$"
+
     id = fields.Int(dump_only=True)
-    name = fields.String()
-    size_gb = fields.Int(dump_only=True)
+    name = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=32),
+            validate.Regexp(regex=SNAPSHOT_NAME_PATTERN)
+        )
+    )
+    description = fields.String(
+        validate=validate.And(
+            validate.Length(min=0, max=64),
+            validate.Regexp(regex=SNAPSHOT_DESCRIPTION_PATTERN)
+        )
+    )
     provisioned = fields.Int()
-    description = fields.String()
+    size_gb = fields.Int(dump_only=True)
     creation_time = fields.DateTime(dump_only=True)
     disk_id = fields.Int(dump_only=True)
 

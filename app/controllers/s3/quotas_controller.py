@@ -27,13 +27,13 @@ def create(subject):
         abort(404, "Account with this name not found.")
     body.pop("account_name")
     try:
-        S3QuotaSchema().load(body)
+        validated_body = S3QuotaSchema().load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters", e.messages)
 
-    if S3Quotas.query.filter_by(account_id=account.id, pool_id=body["pool_id"]).first():
+    if S3Quotas.query.filter_by(account_id=account.id, pool_id=validated_body["pool_id"]).first():
         abort(409, "Only one account quota can be configured for specific pool.")
-    quota = S3Quotas(**body)
+    quota = S3Quotas(**validated_body)
     account.s3_quotas.append(quota)
     account.save()
     
@@ -48,11 +48,11 @@ def update(subject, quota_id):
     usage = quota.compute_usage()
     schema = S3QuotaSchema(context={"usage": usage})
     try:
-        schema.load(body | {"pool_id": quota.pool_id})
+        validated_body = schema.load(body | {"pool_id": quota.pool_id})
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters", e.messages)
 
-    quota.update(body)
+    quota.update(validated_body)
 
     return S3QuotaSchema().dump(quota)
 

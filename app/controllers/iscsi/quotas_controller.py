@@ -32,14 +32,13 @@ def create(subject):
 
     if IscsiQuotas.query.filter_by(account_id=account.id, pool_id=body["pool_id"]).first():
         abort(409, "Quota for this pool already exists.")
-
     try:
-        IscsiQuotaSchema().load(body)
+        validated_body = IscsiQuotaSchema().load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters.", e.messages)
 
-    body |= {"account_id": account.id}
-    quota = IscsiQuotas(**body)
+    validated_body |= {"account_id": account.id}
+    quota = IscsiQuotas(**validated_body)
     quota.save()
     return IscsiQuotaSchema().dump(quota)
 
@@ -51,11 +50,11 @@ def update(subject, quota_id):
         abort(404, "Quota with this ID not found or you haven't access for it.")
     schema = IscsiQuotaSchema(context={"usage": quota.compute_usage()})
     try:
-        schema.load(body | {"pool_id": quota.pool_id})
+        validated_body = schema.load(body | {"pool_id": quota.pool_id})
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters.", e.messages)
 
-    quota.update(body)
+    quota.update(validated_body)
     return IscsiQuotaSchema().dump(quota)
 
 

@@ -2,7 +2,7 @@
 S3 Bucket Model
 """
 
-from marshmallow import Schema, fields, ValidationError, validates_schema
+from marshmallow import Schema, fields, ValidationError, validates_schema, validate
 from app.lib.ceph_utils import ceph_connection as rgwadmin_conn
 
 
@@ -122,8 +122,21 @@ class BucketQuotaSchema(Schema):
 
 
 class BucketSchema(Schema):
+    BUCKET_NAME_PATTERN = (
+        r'^(?!xn--)'
+        r'^(?!(\d{1,3}\.){3}\d{1,3})$'
+        r'(?!.*\.\.)'
+        r'^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+    )
+
     path = fields.String()
-    name = fields.String()
+    name = fields.String(
+        validate=validate.And(
+            validate.Length(min=3, max=63),
+            validate.Regexp(regex=BUCKET_NAME_PATTERN)
+        )
+    )
+
     user_name = fields.String()
     quota = fields.Nested(BucketQuotaSchema())
     usage = fields.Function(lambda bucket: bucket.get_usage(), dump_only=True)

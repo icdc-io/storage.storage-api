@@ -59,36 +59,34 @@ def create_s3_user(subject):
         abort(404, "Account quota not found.")
 
     try:
-        S3UserSchema(context={"account_quota": account_quota}).load(body)
+        validated_body = S3UserSchema(context={"account_quota": account_quota}).load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters", e.messages)
 
-    if "$" not in body["name"]:
-        body["name"] = f"{account_name}${body['name']}"
+    if "$" not in validated_body["name"]:
+        validated_body["name"] = f"{account_name}${validated_body['name']}"
 
     try:
-        _create_s3user_ceph(account_name, body, pool.klass)
+        _create_s3user_ceph(account_name, validated_body, pool.klass)
     except rgwadmin.exceptions.UserExists as e:
-        abort_detailed(400, f"Failed to create S3 user {body['name']}", str(e))
+        abort_detailed(400, f"Failed to create S3 user {validated_body['name']}", str(e))
     except rgwadmin.exceptions.RGWAdminException as e:
-        abort_detailed(400, f"Failed to create S3 user {body['name']}", str(e))
+        abort_detailed(400, f"Failed to create S3 user {validated_body['name']}", str(e))
     except TypeError as e:
-        abort_detailed(400, f"Failed to create S3 user {body['name']}", str(e))
+        abort_detailed(400, f"Failed to create S3 user {validated_body['name']}", str(e))
     except JSONDecodeError as e:
-        abort_detailed(400, f"Failed to create S3 user {body['name']}", e.msg)
-    except paramiko.ssh_exception.SSHException as e:
-        abort_detailed(400, f"Failed to create S3 user {body['name']}", str(e))
+        abort_detailed(400, f"Failed to create S3 user {validated_body['name']}", e.msg)
     except ValueError as e:
-        abort_detailed(400, f"Failed to create S3 user {body['name']}", str(e))
+        abort_detailed(400, f"Failed to create S3 user {validated_body['name']}", str(e))
     except KeyError as e:
-        abort_detailed(400, f"Failed to create S3 user {body['name']}", str(e))
+        abort_detailed(400, f"Failed to create S3 user {validated_body['name']}", str(e))
     except Exception as e:
-        abort_detailed(500, f"Failed to create S3 user {body['name']}", str(e))
+        abort_detailed(500, f"Failed to create S3 user {validated_body['name']}", str(e))
 
-    body |= {"account_id": account.id}
-    body.pop("quota", None)
+    validated_body |= {"account_id": account.id}
+    validated_body.pop("quota", None)
 
-    s3user = S3Users(**body)
+    s3user = S3Users(**validated_body)
     s3user.save()
 
     return S3UserSchema().dump(s3user)
@@ -224,7 +222,7 @@ def update_s3_user(subject, user_id):
     ).first()
 
     try:
-        S3UserSchema(
+        validated_body = S3UserSchema(
             context={
                 'account_quota': account_quota,
                 'user': s3_user
@@ -233,24 +231,24 @@ def update_s3_user(subject, user_id):
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters", e.messages)
 
-    if body.get("owner") != s3_user.owner and not subject.has_permission("set-owner"):
-        body["owner"] = s3_user.owner
+    if validated_body.get("owner") != s3_user.owner and not subject.has_permission("set-owner"):
+        validated_body["owner"] = s3_user.owner
 
-    if "quota" in body:
+    if "quota" in validated_body:
         cur_quota = s3_user.get_quota()
         new_quota = {
-            key: body["quota"].get(key, cur_quota[key])
+            key: validated_body["quota"].get(key, cur_quota[key])
             for key in ["data_size_mb", "objects", "buckets"]
         }
-        body["quota"] = new_quota
+        validated_body["quota"] = new_quota
         try:
-            _modify_user_ceph(s3_user.name, body)
+            _modify_user_ceph(s3_user.name, validated_body)
         except rgwadmin.exceptions.NoSuchUser as e:
             abort_detailed(400, "User not found during quota update.", str(e))
         except rgwadmin.exceptions as e:
             abort_detailed(500, "Failed to retrieve user information.", str(e))
 
-    s3_user.update(body)
+    s3_user.update(validated_body)
     return S3UserSchema().dump(s3_user)
 
 
@@ -308,26 +306,26 @@ def create_bucket(subject):
     if s3_user.is_deleted():
         abort(409, "User was deleted in storage.")
     try:
-        BucketSchema(context={"user": s3_user}).load(body)
+        validated_body = BucketSchema(context={"user": s3_user}).load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters", e.messages)
 
     pool = Pools.get_by("id", s3_user.pool_id)
     keys = s3_user.get_keys()
 
-    if not body.get("quota"):
-        body["quota"] = {}
+    if not validated_body.get("quota"):
+        validated_body["quota"] = {}
 
-    body["quota"] = {
-        "data_size_mb": body["quota"].get("data_size_mb", -1),
-        "objects": body["quota"].get("objects", -1)
+    validated_body["quota"] = {
+        "data_size_mb": validated_body["quota"].get("data_size_mb", -1),
+        "objects": validated_body["quota"].get("objects", -1)
     }
 
     try:
         _create_bucket(
             access_key=keys["s3"].get("access_key"),
             secret_key=keys["s3"].get("secret_key"),
-            body=body,
+            body=validated_body,
             pool=pool
         )
     except ClientError as e:
@@ -335,7 +333,7 @@ def create_bucket(subject):
     except Exception as e:
         abort(500, f"Unexpected error: {str(e)}")
 
-    bucket = Bucket.from_user_and_bucket_name(user_name, body["name"])
+    bucket = Bucket.from_user_and_bucket_name(user_name, validated_body["name"])
     return bucket.to_dict()
 
 
@@ -435,7 +433,7 @@ def update_bucket(subject, path):
         abort(401, "You haven't permission for this bucket.")
 
     try:
-        BucketSchema(
+        validated_body = BucketSchema(
             context={
                 "user": s3_user,
                 "bucket": bucket
@@ -445,9 +443,9 @@ def update_bucket(subject, path):
         abort_detailed(400, "Invalid parameters!", e.messages)
 
     quota = bucket.quota.to_dict()
-    body["quota"] = {
-        "data_size_mb": body["quota"].get("data_size_mb", quota["data_size_mb"]),
-        "objects": body["quota"].get("objects", quota["objects"])
+    validated_body["quota"] = {
+        "data_size_mb": validated_body["quota"].get("data_size_mb", quota["data_size_mb"]),
+        "objects": validated_body["quota"].get("objects", quota["objects"])
     }
     if '$' in s3_user.name:
         bucket_name = path.split('/')[1]
@@ -457,7 +455,7 @@ def update_bucket(subject, path):
     update_bucket_quota(
         bucket_name=bucket_name,
         user_name=bucket.user_name,
-        quota=body["quota"]
+        quota=validated_body["quota"]
     )
     bucket = Bucket.from_bucket_path(path)
     return bucket.to_dict()

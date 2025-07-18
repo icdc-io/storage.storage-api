@@ -132,12 +132,14 @@ class S3QuotaSchema(Schema):
     objects      = fields.Int(validate=validate.Range(min=0))
     data_size_mb = fields.Int(validate=validate.Range(min=0))
     account_id   = fields.Int(load_only=True)
+    pool_id      = fields.Int(load_only=True)
+
     account = fields.Nested(
         lambda: __import__('app.models.account', fromlist=['']).AccountSchema(),
         dump_only=True
     )
-    pool_id      = fields.Int(load_only=True)
     pool         = fields.Nested(PoolSchema(), dump_only=True)
+
     endpoints    = fields.Method("generate_endpoints", dump_only=True)
     usage        = fields.Function(lambda quota: quota.compute_usage(), dump_only=True)
     limits       = fields.Function(lambda quota: quota.get_schema_limits(), dump_only=True)
@@ -162,8 +164,7 @@ class S3QuotaSchema(Schema):
     def validates_limit_exceeding(self, data, **kwargs):
         errors = {}
         usage = self.context.get("usage")
-        if not usage:
-            return
+
         for value in ["users", "objects", "buckets", "data_size_mb"]:
             if value in data:
                 if data[value] > getattr(self.limits, value):

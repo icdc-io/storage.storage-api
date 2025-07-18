@@ -123,16 +123,30 @@ class IscsiConfigs(db.Model, AbstractModel):
         return iscsi_service
 
 
-from marshmallow import Schema, fields
-from app import consts
+from marshmallow import Schema, fields, validate
 
 
 class IscsiConfigSchema(Schema):
+    CONFIG_IQN_PATTERN = r"^iqn\.\d{4}-\d{2}\.[a-z0-9\-.]+(:[a-z0-9.@_\-]+)?$"
+    CONFIG_NAME_PATTERN = r"^[a-z0-9._\-]+$"
+
     id = fields.Int(dump_only=True)
-    target_iqn = fields.String()
     pool_id = fields.Int(load_only=True)
     account_id = fields.Int(load_only=True)
-    name = fields.String()
+
+    target_iqn = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=64),
+            validate.Regexp(regex=CONFIG_IQN_PATTERN)
+        )
+    )
+    name = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=64),
+            validate.Regexp(regex=CONFIG_NAME_PATTERN)
+        )
+    )
+
     pool = fields.Function(lambda config: config._pool(), dump_only=True)
     account = fields.Function(lambda config: config._account(), dump_only=True)
     gateways = fields.Function(lambda config: config._gateways(), dump_only=True)

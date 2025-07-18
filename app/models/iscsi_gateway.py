@@ -53,14 +53,30 @@ class IscsiGateways(db.Model, AbstractModel):
         return IscsiConfigs.get_by("id", self.config_id).serialize(["gateways"])
 
 
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, validate, ValidationError
+from ipaddress import ip_address
+
+
+def validate_ip(value: str):
+    try:
+        ip_address(value)
+    except ValueError:
+        raise ValidationError("Invalid IPv4 or IPv6 address.")
 
 
 class IscsiGatewaySchema(Schema):
+    GATEWAY_NAME_PATTERN = r'^[a-z0-9._\-]+$'
+
     id = fields.Int()
-    name = fields.String()
-    portal_ip_address = fields.String()
-    ip_address = fields.String()
+    name = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=64),
+            validate.Regexp(regex=GATEWAY_NAME_PATTERN)
+        )
+    )
+    portal_ip_address = fields.String(validate=validate_ip)
+    ip_address = fields.String(validate=validate_ip)
+
     cloudgw_id = fields.String(load_only=True)
     api_user = fields.String(load_only=True)
     api_password = fields.String(load_only=True)

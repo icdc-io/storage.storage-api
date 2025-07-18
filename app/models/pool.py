@@ -46,10 +46,28 @@ class Pools(db.Model, AbstractModel):
         }
         return self.response_filter(fields, hide_params)
 
-from marshmallow import Schema, fields
+
+from marshmallow import Schema, fields, validate
+
 
 class PoolSchema(Schema):
-    id                  = fields.Int()
-    type                = fields.Str()
-    name                = fields.Str()
-    klass               = fields.Str()
+    POOL_NAME_PATTERN = r"^[a-z0-9\-]$"
+    POOL_KLASS_PATTERN = r"^[a-z\-]$"
+    POOL_TYPE_CHOICES = ("iscsi", "s3")
+
+    id = fields.Int()
+    pool_name = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=128),
+            validate.Regexp(POOL_NAME_PATTERN)
+        )
+    )
+    pool_klass = fields.String(
+        validate=validate.And(
+            validate.Length(min=1, max=128),
+            validate.Regexp(POOL_KLASS_PATTERN)
+        )
+    )
+    pool_type = fields.String(
+        validate=validate.OneOf(POOL_TYPE_CHOICES)
+    )
