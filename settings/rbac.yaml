@@ -85,8 +85,7 @@ roles:
     iscsi.gateways:
       permissions:
         - list
-        - post
-        - get
+        - create
       filters: {}
     pools:
       permissions:
@@ -177,6 +176,10 @@ roles:
         - delete
         - rollback
       filters: {}
+    iscsi.gateways:
+      permissions:
+        - list
+      filters: {}
     pools:
       permissions:
         - list
@@ -266,6 +269,10 @@ roles:
         - delete
         - rollback
       filters: {}
+    iscsi.gateways:
+      permissions:
+        - list
+      filters: {}
     pools:
       permissions:
         - list
@@ -348,6 +355,10 @@ roles:
         - update
         - delete
         - rollback
+      filters: {}
+    iscsi.gateways:
+      permissions:
+        - list
       filters: {}
     pools:
       permissions:

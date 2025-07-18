@@ -893,7 +893,6 @@ paths:
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
-  # TODO: @DS: POST endpoint assign gateways is not implemented yet, move here from /configs/{config_id}/gateways
   /iscsi/configs/{config_id}/gateways:
     # @DS: reviewed 2024-02-02
     get:
@@ -923,10 +922,9 @@ paths:
           $ref: '#/components/responses/iSCSI_Gateway_List'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented, config not found
+        '404': #
           $ref: '#/components/responses/Notfound'
     # @DS: reviewed 2024-02-02
-    # TODO: @DS: move here from /configs/{config_id}/gateways
     post:
       operationId: iscsi.gateways.create
       tags: [iSCSI]
@@ -971,7 +969,7 @@ paths:
                 $ref: '#/components/schemas/Gateway'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented
+        '404': #
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
@@ -2029,158 +2027,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404': #
           $ref: '#/components/responses/Notfound'
-
-
-  ############################
-  ##  Gateway Endpoints     ##
-  ############################
-
-  # @DS: reviewed 2024-02-06
-  /gateways:
-    # TODO: @DS: currently it's implemented in a wrong way
-    post:
-      operationId: gateway_create
-      tags:
-      - Gateway
-      - Private
-      description: >
-        Register new unassigned gateway in Storage database.
-        Such new gateway entry stores used credentials and IP addresses, but is not assigned to any account or iSCSI Target/Config.
-        This endpoint may be used by [not implemented yet] Gateway API automation during provisioning of a new CloudGateway.
-
-        Role-based access:
-          - `operator` can create new gateway records in any account
-          - other roles has no access to this endpoint
-      security:
-        - JWT: []
-          Account: []
-          Role: []
-        - basicAuth: []
-          Account: []
-          Role: []
-      requestBody:
-        description: iSCSI Gateway, without Account and Config parameters
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Gateway'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Gateway'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  # @DS: reviewed 2024-02-06
-  # TODO: @DS: currently it's implemented in a wrong way
-  /gateways/{gateway_id}:
-    get:
-      tags:
-        - Gateway
-        - Private
-      summary: Get specific iSCSI Gateway by ID
-      description: >
-        Get info on specific iSCSI Gateway (hosted on CloudGateway).
-        iSCSI Gateways are create by provisioning automation (Setup API) or manually by operator users.
-        Gateway may belong only to one iSCSI Target/Config and as well to one pool.
-        Gateways have no specific owner user, they are account-owner access level objects.
-
-        Role-based access:
-          - `operator` can get information on any gateway in any account
-          - other roles can get information on any gateway assigned to own iSCSI Config.
-      security:
-        - JWT: []
-          Account: []
-          Role: []
-        - basicAuth: []
-          Account: []
-          Role: []
-      parameters:
-        - in: path
-          name: gateway_id
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: iSCSI Gateway object by ID
-          content:
-            application/json:
-              schema:
-                type: object
-                oneOf:
-                 - $ref: '#/components/schemas/Gateway'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS: not implemented
-          $ref: '#/components/responses/Notfound'
-
-  ############################
-  ##  Config Endpoints     ##
-  ############################
-  
-  # @DS: reviewed 2024-02-02
-  # TODO: @DS: we should get rid of this endpoints in favor of : /iscsi/configs/{config_id}/gateways
-  /configs/{config_id}/gateways:
-    get:
-      operationId: iscsi_config_gateway_list
-      tags: [Config]
-      summary: Get iSCSI Gateways defined in iSCSI Target/Config
-      description: >-
-        Get list of iSCSI Portals (aka iSCSI Gateways) for specific iSCSI Target/Config.
-        iSCSI Gateways are assigned by provisioning automation (or manually operator users).
-        Gateway may belong only to one iSCSI Target/Config and as well to one pool.
-        For a moment we provide only one iSCSI configuration per storage type (aka Pool).
-
-        Role-based access:
-          - all roles can get list of gateways in any config for authorized account
-          - `operator` can get list of gateways in any config for any account
-      security:
-        - JWT: []
-          Account: []
-          Role: []
-        - basicAuth: []
-          Account: []
-          Role: []
-      parameters:
-        - $ref: '#/components/parameters/ConfigId'
-      responses:
-        '200':
-          description: List of iSCSI Gateways defined in iSCSI Target/Config
-          $ref: '#/components/responses/iSCSI_Gateway_List'
-    post:
-      operationId: iscsi_config_gateway_create
-      tags: [Config]
-      description: >
-        Create new iSCSI Gateway record.
-        This API is intended to be used by Setup API to configure CloudGateway.
-      security:
-        - JWT: []
-          Account: []
-          Role: []
-        - basicAuth: []
-          Account: []
-          Role: []
-      parameters:
-        - $ref: '#/components/parameters/ConfigId'
-      requestBody:
-        description: iSCSI Config
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Gateway'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Gateway'
 
 components:
   responses:

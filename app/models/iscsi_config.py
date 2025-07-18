@@ -108,7 +108,7 @@ class IscsiConfigs(db.Model, AbstractModel):
             for i in self.gateways
         ]
 
-    def iscsi_service(self):
+    def iscsi_service(self, ensure_exist: bool = True):
         from app.lib.iscsi_utils import Iscsi
 
         if not self.gateways:
@@ -116,7 +116,7 @@ class IscsiConfigs(db.Model, AbstractModel):
             raise ValueError("No gateway for this config.")
         iscsi_service = Iscsi(config=self, gateway=self.gateways[0])
 
-        if is_failed(iscsi_service.get_target()):
+        if ensure_exist and is_failed(iscsi_service.get_target()):
             log.warning(f"Target {self.target_iqn} was deleted.")
             raise ValueError(f"Target {self.target_iqn} was deleted.")
 
@@ -148,7 +148,7 @@ def before_delete(mapper, connection, config_instance):
     try:
         iscsi_service = config_instance.iscsi_service()
     except ValueError as e:
-        abort(400, str(e))
+        return
 
     deleted_clients = []
     if not config_instance.gateways:

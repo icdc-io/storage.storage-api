@@ -32,7 +32,7 @@ from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
 from app.models.iscsi_client import IscsiClients, IscsiClientSchema
 from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
 from app.models.iscsi_disk import IscsiDisks, IscsiDiskSchema
-from app.models.iscsi_gateway import IscsiGateways
+from app.models.iscsi_gateway import IscsiGateways, IscsiGatewaySchema
 from app.models.pool import Pools
 from app.models.snapshot import Snapshots, SnapshotSchema
 from app import consts
@@ -57,20 +57,21 @@ def set_iscsi_configs(subject):
     log.debug(
         f"Set iSCSI config to account {account_name} with params {body}"
     )
-    try:
-        account = Accounts.filtered(subject).filter_by(name=account_name).first()
-        if not account:
-            abort(404, "Account with this name not found.")
-        if IscsiConfigs.query.filter_by(account_id=account.id, pool_id=body["pool_id"]).first():
-            abort(409, "Config for this pool already exist.")
-        body["account_id"] = account.id
-        config = IscsiConfigs(**body)
-        config.save()
-        if not config.id:
-            abort(400, "Invalid parameters.")
-        return IscsiConfigSchema().dump(config)
-    except TypeError as e:
-        abort(400, "Invalid parameters")
+
+    account = Accounts.filtered(subject).filter_by(name=account_name).first()
+    if not account:
+        abort(404, "Account with this name not found.")
+    if IscsiConfigs.query.filter_by(account_id=account.id, pool_id=body["pool_id"]).first():
+        abort(409, "Config for this pool already exist.")
+
+    body["account_id"] = account.id
+    config = IscsiConfigs(**body)
+    config.save()
+
+    if not config.id:
+        abort(409, "Config already exist")
+
+    return IscsiConfigSchema().dump(config)
 
 
 def get_configs(subject):
@@ -107,6 +108,46 @@ def get_config(subject, config_id):
     if not config_obj:
         abort(404, "Config with this ID not found or you have not permission.")
     return IscsiConfigSchema().dump(config_obj)
+
+
+def set_config_gateway(subject, config_id):
+    """
+    Set iSCSI gateway to iSCSI target
+    """
+    body = request_json(request)
+
+    config = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
+    if not config:
+        abort(404, "Config with such id not found or you haven't permission.")
+
+    try:
+        validated_body = IscsiGatewaySchema().load(body)
+    except ValidationError as e:
+        abort(400, "Invalid input data.")
+
+    validated_body["config_id"] = config_id
+    gateway = IscsiGateways(**validated_body)
+    config.gateways.append(gateway)
+
+    iscsi_service = config.iscsi_service(ensure_exist=False)
+    response = iscsi_service.assign_gateway()
+
+    if is_failed(response):
+        abort(response["code"], response["data"])
+
+    gateway.save()
+    return IscsiGatewaySchema().dump(gateway)
+
+
+def get_config_gateways(subject, config_id):
+    """
+    Get iSCSI Config Gateways
+    """
+    config = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
+    if not config:
+        abort(404, "Config not found or you haven't permission")
+
+    return jsonify(IscsiGatewaySchema(many=True).dump(config.gateways))
 
 
 @trytest
@@ -166,22 +207,6 @@ def get_iscsi_gateways(**kwargs):
     account_name = kwargs["account_name"]
     account_obj = Accounts.get_by("name", account_name)
     return ok([i.serialize() for i in account_obj.iscsi_gateways])
-
-
-# def get_config_gateways(**kwargs):
-#     """
-#     Get iSCSI Config Gateways
-#     """
-#     config_id = kwargs["config_id"]
-#     config_obj = IscsiConfigs.get_by("id", config_id)
-#     response = []
-#     for gateway in config_obj.gateways:
-#         gateway = gateway.serialize()
-#         gateway["account"] = Accounts.get_by("id", config_obj.account_id).serialize(
-#             ["quotas"]
-#         )
-#         response.append(gateway)
-#     return ok(response)
 
 
 def get_config_disks(subject, config_id):

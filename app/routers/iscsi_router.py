@@ -67,6 +67,18 @@ def delete_config(subject, config_id):
     return controller.delete_config(subject, config_id), 204
 
 
+@iscsi.route("/configs/<config_id>/gateways", methods=["GET"])
+@auth.rbac("iscsi.gateways.list")
+def get_config_gateways(subject, config_id):
+    return controller.get_config_gateways(subject, config_id)
+
+
+@iscsi.route("/configs/<config_id>/gateways", methods=["POST"])
+@auth.rbac("iscsi.gateways.create")
+def set_gateway(subject, config_id):
+    return controller.set_config_gateway(subject, config_id)
+
+
 @iscsi.route("/configs/<config_id>/disks", methods=["GET"])
 @auth.rbac("iscsi.disks.list")
 def get_config_disks(subject, config_id):
@@ -89,13 +101,6 @@ def delete_disk(subject, disk_id):
 @auth.rbac("iscsi.disks.update")
 def update_disk(subject, disk_id):
     return controller.update_disk(subject, disk_id), 200
-
-
-# @iscsi.route("/configs/<config_id>/gateways", methods=["GET"])
-# @au.account_auth_required
-# def get_config_gateways(*args, **kwargs):
-#     data = controller.get_config_gateways(*args, **kwargs)
-#     return process_response(data)
 
 
 @iscsi.route("/clients", methods=["POST"])

@@ -7,8 +7,6 @@ from flask_cors import CORS
 
 # Routers import
 from app.routers.account_router import account_management
-from app.routers.config_router import config
-from app.routers.gateway_router import gw
 from app.routers.health_check import health_check_bp
 from app.routers.iscsi_router import iscsi
 from app.routers.pools_router import pools
@@ -24,5 +22,3 @@ flask_app.register_blueprint(account_management, url_prefix="/api/v2/accounts")
 flask_app.register_blueprint(iscsi, url_prefix="/api/v2/iscsi")
 flask_app.register_blueprint(s3, url_prefix="/api/v2/s3")
 flask_app.register_blueprint(pools, url_prefix="/api/v2/pools")
-flask_app.register_blueprint(gw, url_prefix="/api/v2/gateways")
-flask_app.register_blueprint(config, url_prefix="/api/v2/configs")

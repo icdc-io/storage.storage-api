@@ -122,19 +122,53 @@ class Iscsi:
 
         return status_codes.get(response.status_code)(message)
 
+    def assign_gateway(self) -> dict:
+        """
+        Ensure that an iSCSI target is created and assigned to a portal.
+
+        Workflow:
+        1. Verify whether the iSCSI target already exists.
+        2. If it does not exist, create it.
+        3. Assign the portal to the target.
+        4. If binding fails and the target was newly created, roll back by deleting the target.
+
+        Returns:
+            dict: API response of the failing step, or a success message.
+        """
+        log.info(f"Starting configuration of iSCSI target {self.target_iqn}")
+
+        target_created = False  # Flag indicating if the target was newly created in this method
+
+        # step 1: check the target existing
+        if is_failed(self.get_target()):
+            # step 2: create the target
+            response = self.create_target()
+            if is_failed(response):
+                return response
+            target_created = True
+
+        # step 3: assign the portal to the target
+        response = self.assign_portal_to_target()
+        if is_failed(response):
+            # step 4: rollback on failure
+            if target_created:
+                self.delete_target()
+            return response
+
+        log.info(f"Successfully configured iSCSI target {self.target_iqn} with portal {self.gateway.name}")
+
+        return ok("Target configured successfully")
+
     def create_target(self) -> dict:
         """
         Create iSCSI target
         """
-        if not is_failed(self.get_target()):
-            return ok("Target already created.")
-
         request_url = f"/target/{self.target_iqn}"
         log.info(f"Create iSCSI target with target_iqn: {self.target_iqn}")
 
         response = self.send_request(methods.PUT, request_path=request_url)
 
-        return status_codes.get(response["code"])(response["data"])
+        return response
 
     def delete_target(self) -> dict:
         """
@@ -172,16 +206,22 @@ class Iscsi:
         else:
             return not_found("Target with such iqn not found.")
 
-    def create_portal(self) -> dict:
+    def assign_portal_to_target(self) -> dict:
+        """
+        Assign an iSCSI portal on the gateway to the iSCSI target.
+        """
         request_url = f"/gateway/{self.target_iqn}/{self.gateway.name}"
-        log.info(f"Assign iSCSI portal {self.gateway.name} to {self.target_iqn}")
+        log.info(f"Assign iSCSI portal {self.gateway.name} to target {self.target_iqn}")
 
         body = {"ip_address": self.gateway.portal_ip_address}
         response = self.send_request(methods.PUT, request_path=request_url, body=body)
 
         return response
 
-    def delete_portal(self) -> dict:
+    def unassign_portal_from_target(self) -> dict:
+        """
+        Unassign an iSCSI portal on the gateway from the target.
+        """
         request_url = f"/gateway/{self.target_iqn}/{self.gateway.name}"
         log.info(f"Delet iSCSI portal {self.gateway.name} to {self.target_iqn}")
 
