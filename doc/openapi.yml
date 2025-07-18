@@ -1470,55 +1470,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/Notfound'
-
   # @DS: reviewed 2024-02-02
-  # TODO: @DS: replace with /iscsi/config/{config_id}/disks with parameter "from_snapshot"
-  /iscsi/disks/{disk_id}/snapshots/{snapshot_name}/new_disk:
-    post:
-      operationId: iscsi.snapshots.disks.create
-      tags: [iSCSI]
-      summary: Create a new iSCSI disk from existing snapshot of iSCSI disk
-      description: >-
-        Create iSCSI disk from snapshot of iSCSI disk.
-        Disks and snapshots are created by end-users.
-        Making disk is time consuming operation, so we don't guarantee return in before default 30 sec UI timeout.
-
-        Role-based access:
-          - `member` can create disk only from snapshots of own disk.
-          - `owner`\`admin` can create disk from any snapshot in authorized account
-          - `operator` can create disk from any snapshot in any account
-      security:
-        - JWT: []
-          Account: []
-          Role: []
-        - basicAuth: []
-          Account: []
-          Role: []
-      parameters:
-        - $ref: '#/components/parameters/DiskId'
-        - in: path
-          name: snapshot_name
-          required: true
-          schema:
-            type: string
-      requestBody:
-        description: iSCSI Disk
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/iSCSI_Disk'
-      responses:
-        '200':
-          description: iSCSI Disk
-          $ref: '#/components/schemas/iSCSI_Disk'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented, disk not found
-          $ref: '#/components/responses/Notfound'
-  
-  # @DS: reviewed 2024-02-02
-  # TODO: @DS: replace with /iscsi/snapshots/{id}/restore
   # @DV: 2024-02-07 Not used in UI
   /iscsi/disks/{disk_id}/snapshots/{snapshot_name}/rollback:
     post:
@@ -1554,7 +1506,7 @@ paths:
           $ref: '#/components/schemas/iSCSI_Disk'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': # TODO: @DS not implemented, disk not found or snapshot not found
+        '404': '#/components/responses/Notfound'
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02

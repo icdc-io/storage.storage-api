@@ -658,7 +658,7 @@ class Iscsi:
                             "rbd": rbd_inst,
                             "image": image,
                         })
-                        return func(self,*args, **kwargs)
+                        return func(self, *args, **kwargs)
                     finally:
                         image.close()
 
@@ -776,19 +776,45 @@ class Iscsi:
     @_ceph_image_decorator
     def new_disk_from_snapshot(self, disk_name, snapshot_name, **kwargs):
         """
-        Create a new iSCSI disk from a snapshot.
+        Create a new iSCSI disk from an existing snapshot.
+
+        Workflow:
+            1. Clone the RBD image from the specified snapshot.
+            2. Create a new disk entry in CloudGW without recreating the image.
+            3. Flatten the cloned disk to remove its dependency on the snapshot.
+
+        Args:
+            disk_name (str): Base name of the disk from which the snapshot was created (before full naming).
+            snapshot_name (str): Name of the snapshot to clone from.
+            kwargs: Additional context provided by the decorator and information about new disk:
+                body (dict): New disk information:
+                    name (str): New disk name that will create from snapshot.
+                    size_gb(int): Size of the new disk in gigabytes.
+                ioctx (rados.ioctx): I/O context for the pool.
+                rbd   (rbd.RBD): RBD API object.
+                image (rbd.Image): RBD image instance of the source snapshot.
+
+        Returns:
+            dict: API response indicating success or failure.
         """
         body = kwargs["body"]
         disk_name = self.get_full_disk_name(disk_name)
 
-        log.info(f"Starting new_disk_from_snapshot: disk_name='{disk_name}', snapshot_name='{snapshot_name}'")
+        log.info(f"Creating new disk from snapshot: {snapshot_name}, base_disk_name: {disk_name}, new_disk_name: {body['name']}")
 
-        self._clone_from_snapshot(disk_name, snapshot_name, **kwargs)
+        # Step 1: Clone RBD image from snapshot
+        response = self._clone_from_snapshot(disk_name, snapshot_name, **kwargs)
+        if is_failed(response):
+            return response
         log.info(f"Cloned from snapshot '{snapshot_name}' to new disk '{body['name']}'")
 
-        response = self.create_disk(body=body)
+        # Step 2: Create disk entry without recreating the image
+        response = self.create_disk(body=body | {"create_image": False})
+        if is_failed(response):
+            return response
         log.info(f"Created disk entry for '{body['name']}', proceeding to flatten")
 
+        # Step 3: Flatten the newly created RBD image
         self._flatten_created_disk(disk_name=body["name"])
         log.info(f"Successfully created and flattened disk '{body['name']}'")
 
@@ -798,6 +824,16 @@ class Iscsi:
     def _flatten_created_disk(self, disk_name: str, **kwargs) -> None:
         """
         Flatten a cloned RBD image to remove its dependency on the snapshot.
+
+        Args:
+            disk_name (str): Full name of the cloned disk image to flatten.
+            **kwargs: Context injected by the decorator, containing:
+                ioctx (rados.ioctx): I/O context for the pool.
+                rbd   (rbd.RBD): RBD API object.
+                image (rbd.Image): RBD image instance for the cloned disk.
+
+        Returns:
+            None
         """
         log.debug(f"Flattening disk '{disk_name}'")
         kwargs["image"].flatten()
@@ -806,6 +842,20 @@ class Iscsi:
     def _clone_from_snapshot(self, disk_name, snapshot_name, **kwargs):
         """
         Clone a new RBD image from a snapshot.
+
+        Args:
+            disk_name (str): Base name of the disk from which the snapshot was created (before full naming).
+            snapshot_name (str): Name of the snapshot to clone from.
+            kwargs: Additional context provided by the decorator and information about new disk:
+                body (dict): New disk information:
+                    name (str): New disk name that will create from snapshot.
+                    size_gb(int): Size of the new disk in gigabytes.
+                ioctx (rados.ioctx): I/O context for the pool.
+                rbd   (rbd.RBD): RBD API object.
+                image (rbd.Image): RBD image instance of the source snapshot.
+
+        Returns:
+            dict: API response indicating success or failure.
         """
         ioctx = kwargs["ioctx"]
         image = kwargs["image"]

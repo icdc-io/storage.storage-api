@@ -87,8 +87,8 @@ def get_config_disks(subject, config_id):
 
 @iscsi.route("/configs/<config_id>/disks", methods=["POST"])
 @auth.rbac("iscsi.disks.create")
-def create_config_disk(subject, config_id):
-    return controller.create_config_disk(subject, config_id), 201
+def create_disk(subject, config_id):
+    return controller.create_disk(subject, config_id), 201
 
 
 @iscsi.route("/disks/<disk_id>", methods=["DELETE"])

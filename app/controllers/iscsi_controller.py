@@ -217,7 +217,7 @@ def get_config_disks(subject, config_id):
     return jsonify(IscsiDiskSchema(many=True).dump(disks))
 
 
-def create_config_disk(subject, config_id):
+def create_disk(subject, config_id):
     """
     Create iSCSI disk and assign it to iSCSI Config
     """
@@ -226,6 +226,8 @@ def create_config_disk(subject, config_id):
         f"Create disk with params {body} and assign disk to config with id {config_id}"
     )
 
+    snapshot_id = body.pop("from_snapshot_id", None)
+
     config = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
     if config is None:
         abort(400, "There is no config with such id or you haven't permission or you haven't permission.")
@@ -233,6 +235,27 @@ def create_config_disk(subject, config_id):
     quota = IscsiQuotas.query.filter_by(account_id=config.account_id, pool_id=config.pool_id).first()
     if not quota:
         abort(400, "Account doesn't have quota for this pool")
+
+    # Prepare arguments for service call
+    # Two flows: simple disk creation and snapshot-based creation
+    args = dict(body=body)
+    if snapshot_id:
+        # Snapshot-based disk creation flow
+        snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
+        if not snapshot:
+            abort(404, "Snapshot with this id not found.")
+
+        base_disk = IscsiDisks.filtered(subject).filter_by(id=snapshot.disk_id).first()
+        if not base_disk:
+            abort(403, "You have not permission for this disk.")
+
+        args.update(
+            disk_name=base_disk.name,
+            snapshot_name=snapshot.name
+        )
+
+        # Set disk size to snapshot size
+        body["size_gb"] = snapshot.size_gb
 
     body["config_id"] = config_id
     try:
@@ -247,7 +270,13 @@ def create_config_disk(subject, config_id):
     except ValueError as e:
         abort(400, str(e))
 
-    response = iscsi_service.create_disk(body=body)
+    # Select appropriate service method based on mode
+    iscsi_service_method = (
+        iscsi_service.new_disk_from_snapshot if snapshot_id
+        else iscsi_service.create_disk
+    )
+
+    response = iscsi_service_method(**args)
     if is_failed(response):
         abort(response["code"], response["data"])
 
