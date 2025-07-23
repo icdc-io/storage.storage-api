@@ -56,18 +56,18 @@ class PoolSchema(Schema):
     POOL_TYPE_CHOICES = ("iscsi", "s3")
 
     id = fields.Int()
-    pool_name = fields.String(
+    name = fields.String(
         validate=validate.And(
             validate.Length(min=1, max=128),
             validate.Regexp(POOL_NAME_PATTERN)
         )
     )
-    pool_klass = fields.String(
+    klass = fields.String(
         validate=validate.And(
             validate.Length(min=1, max=128),
             validate.Regexp(POOL_KLASS_PATTERN)
         )
     )
-    pool_type = fields.String(
+    type = fields.String(
         validate=validate.OneOf(POOL_TYPE_CHOICES)
     )
