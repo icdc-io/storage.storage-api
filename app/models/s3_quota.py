@@ -145,11 +145,10 @@ class S3QuotaSchema(Schema):
     limits       = fields.Function(lambda quota: quota.get_schema_limits(), dump_only=True)
 
     def generate_endpoints(self, obj):
-        name = obj.account.name
         location_domain = consts.LOCATION_DOMAIN
         return {
-                 "public": f"https://s3.{location_domain}/{name}",
-                 "private": f"http://s3.local.{location_domain}/{name}"
+                 "public": f"https://s3.{location_domain}",
+                 "private": f"http://s3.local.{location_domain}"
                }
 
     @pre_load
