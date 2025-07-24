@@ -1506,7 +1506,7 @@ paths:
           $ref: '#/components/schemas/iSCSI_Disk'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': '#/components/responses/Notfound'
+        '404':
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
