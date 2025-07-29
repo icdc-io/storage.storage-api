@@ -24,8 +24,9 @@ def get_account_quotas(subject):
     return jsonify(IscsiQuotaSchema(many=True).dump(quotas))
 
 
-def create(subject):
-    body = request_json(request)
+def create(subject, body=None):
+    if not body:
+        body = request_json(request)
     account_name = body.pop("account_name")
     log.debug(f"Set iSCSI quota to account {account_name} with params {body}")
 

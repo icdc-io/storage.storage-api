@@ -23,8 +23,9 @@ def index(subject):
     return jsonify(S3QuotaSchema(many=True).dump(quotas))
 
 
-def create(subject):
-    body = request_json(request)
+def create(subject, body=None):
+    if not body:
+        body = request_json(request)
     account = Accounts.filtered(subject).filter_by(name=body["account_name"]).first()
     if not account:
         abort(404, "Account with this name not found.")

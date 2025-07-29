@@ -35,16 +35,16 @@ def get_iscsi_limits(subject):
     return jsonify(limitsets)
 
 
-def set_iscsi_configs(subject):
+def set_iscsi_configs(subject, body=None):
     """
     Store iSCSI config in Postgres
     """
-    body = request_json(request)
+    if not body:
+        body = request_json(request)
     account_name = body.pop("account_name")
     log.debug(
         f"Set iSCSI config to account {account_name} with params {body}"
     )
-
     account = Accounts.filtered(subject).filter_by(name=account_name).first()
     if not account:
         abort(404, "Account with this name not found.")
@@ -102,11 +102,12 @@ def get_config(subject, config_id):
     return IscsiConfigSchema().dump(config_obj)
 
 
-def set_config_gateway(subject, config_id):
+def set_config_gateway(subject, config_id, body=None):
     """
     Set iSCSI gateway to iSCSI target
     """
-    body = request_json(request)
+    if not body:
+        body = request_json(request)
 
     config = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
     if not config:

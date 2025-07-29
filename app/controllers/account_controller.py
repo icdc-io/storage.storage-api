@@ -17,6 +17,10 @@ from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
 from app.models.s3_quota import S3Quotas, S3QuotaSchema
 from app.models.s3_user import S3Users
 
+from app.controllers.s3.quotas_controller import create as create_s3_quota
+from app.controllers.iscsi.quotas_controller import create as create_iscsi_quota
+from app.controllers.iscsi_controller import set_iscsi_configs as set_config
+from app.controllers.iscsi_controller import set_config_gateway as set_gateway
 #############################################
 # Account Controller
 #############################################
@@ -40,65 +44,48 @@ def create_account(subject):
 
     try:
         data = AccountSchema().load(data)
-
-        # Attempt to create Account (assuming unique constraint or similar check exists)
-        account_obj = Accounts(
-            **{k: v for k, v in data.items() if k not in ["services"]}
-        )
-        account_obj.save()
-        # Check if account creation was successful
-        if account_obj.id is None:
-            log.error("Failed to create account")
-            abort(409, "Account already exist.")
-        log.debug("Account created successfully")
-
-        # Process S3 Quotas
-        for s3_quota in data.get("services", {}).get("s3", {}).get("quotas", []):
-            s3_quota["account_id"] = account_obj.id
-            s3_quota = S3QuotaSchema(partial=True).load(s3_quota)
-            s3_quota_obj = S3Quotas(**s3_quota)
-            s3_quota_obj.save()
-        log.debug("S3 Quotas processed successfully")
-
-        # Process iSCSI Quotas
-        for iscsi_quota in data.get("services", {}).get("iscsi", {}).get("quotas", []):
-            iscsi_quota["account_id"] = account_obj.id
-            iscsi_quota = IscsiQuotaSchema(partial=True).load(iscsi_quota)
-            iscsi_quota_obj = IscsiQuotas(**iscsi_quota)
-            iscsi_quota_obj.save()
-        log.debug("iSCSI Quotas processed successfully")
-
-        # Process iSCSI Configs and Gateways
-        for iscsi_config in (
-                data.get("services", {}).get("iscsi", {}).get("configs", [])
-        ):
-            iscsi_config["account_id"] = account_obj.id
-            gateways = iscsi_config.pop("gateways", [])
-            iscsi_config = IscsiConfigSchema(partial=True).load(iscsi_config)
-            iscsi_config_obj = IscsiConfigs(**iscsi_config)
-
-            iscsi_config_obj.save()
-
-            for gateway in gateways:
-                gateway["config_id"] = iscsi_config_obj.id
-                gateway = IscsiGatewaySchema(partial=True).load(gateway)
-                gateway_obj = IscsiGateways(**gateway)
-                gateway_obj.save()
-
-        log.debug("iSCSI Configs and Gateways processed successfully")
-
-        # Prepare final response
-        response_data = account_obj.toDict()
-
-        log.debug("Account and associated records created successfully")
-        return response_data
     except ValidationError as e:
-        abort_detailed(400, "Invalid input data.", e.messages)
-    except Exception as e:
-        log.error(
-            f"An error occurred while creating account and associated records: {e}"
-        )
-        abort(500, "Failed to create account and associated records")
+        abort_detailed(400, "Invalid account parameters.", e.messages)
+
+    # Attempt to create Account (assuming unique constraint or similar check exists)
+    account = Accounts(
+        **{k: v for k, v in data.items() if k not in ["services"]}
+    )
+    account.save()
+
+    # Check if account creation was successful
+    if account.id is None:
+        log.error("Failed to create account")
+        abort(409, "Account already exist.")
+    log.debug("Account created successfully")
+
+    # Process S3 Quotas
+    for s3_quota in data.get("services", {}).get("s3", {}).get("quotas", []):
+        s3_quota["account_name"] = account.name
+        create_s3_quota(subject, s3_quota)
+    log.debug("S3 Quotas processed successfully")
+
+    # Process iSCSI Quotas
+    for iscsi_quota in (data.get("services", {}).get("iscsi", {}).get("quotas", [])):
+        iscsi_quota["account_name"] = account.name
+        create_iscsi_quota(subject, iscsi_quota)
+    log.debug("iSCSI Quotas processed successfully")
+
+    # Process iSCSI Configs and Gateways
+    for iscsi_config in (
+            data.get("services", {}).get("iscsi", {}).get("configs", [])
+    ):
+        iscsi_config["account_name"] = account.name
+        gateways = iscsi_config.pop("gateways", [])
+
+        iscsi_config = set_config(subject, iscsi_config)
+        for gateway in gateways:
+            set_gateway(subject, iscsi_config["id"], gateway)
+
+    log.debug("iSCSI Configs and Gateways processed successfully")
+    log.debug("Account and associated records created successfully")
+
+    return AccountSchema().dump(account)
 
 
 def get_account_info(subject, account_name):
