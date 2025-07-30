@@ -228,8 +228,9 @@ class S3UserQuotaSchema(Schema):
     objects = fields.Int(validate=validate.Range(min=0))
     buckets = fields.Int(validate=validate.Range(min=0))
 
+
 class S3UserSchema(Schema):
-    USER_NAME_PATTERN = r"^[a-z0-9._@\-]+$"
+    USER_NAME_PATTERN = r"^(?:[^$]*\$)?([a-z0-9._@\-]+)$"
     USER_DESCRIPTION_PATTERN = r"^[\w ,.:/;\[\]!@^*()_\-+=]*$"
 
     id = fields.Int(dump_only=True)

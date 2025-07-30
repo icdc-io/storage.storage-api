@@ -58,13 +58,11 @@ def create_s3_user(subject):
     if not account_quota:
         abort(404, "Account quota not found.")
 
+    body["name"] = f"{account_name}${body['name']}"
     try:
         validated_body = S3UserSchema(context={"account_quota": account_quota}).load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters", e.messages)
-
-    if "$" not in validated_body["name"]:
-        validated_body["name"] = f"{account_name}${validated_body['name']}"
 
     try:
         _create_s3user_ceph(account_name, validated_body, pool.klass)
