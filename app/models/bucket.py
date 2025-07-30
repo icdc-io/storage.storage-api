@@ -124,7 +124,7 @@ class BucketQuotaSchema(Schema):
 class BucketSchema(Schema):
     BUCKET_NAME_PATTERN = (
         r'^(?!xn--)'
-        r'^(?!(\d{1,3}\.){3}\d{1,3})$'
+        r'^(?!(\d{1,3}\.){3}\d{1,3}$)'
         r'(?!.*\.\.)'
         r'^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
     )
