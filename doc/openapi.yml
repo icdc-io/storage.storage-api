@@ -2628,6 +2628,10 @@ components:
         size_gb:
           type: integer
           example: 100
+        from_snapshot_id:
+          writeOnly: true
+          type: integer
+          example: 71
         owner:
           type: string
           example: user@example.net
