@@ -41,3 +41,6 @@ requests==2.31.0
 prometheus_client==0.16.0
 websockets
 eventlet
+
+# Access Control
+flask-rbac-icdc

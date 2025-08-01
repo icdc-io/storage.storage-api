@@ -7,7 +7,10 @@ roles:
         - update
         - delete
         - get
-        - usage
+      filters: {}
+    account.usage:
+      permissions:
+        - get
       filters: {}
     iscsi.limits:
       permissions:
@@ -94,7 +97,7 @@ roles:
 
   admin:
     accounts:
-      permissions: {}
+      permissions: []
       filters:
         name: account_name
     iscsi.limits:
@@ -187,7 +190,7 @@ roles:
 
   owner:
     accounts:
-      permissions: {}
+      permissions: []
       filters:
         name: account_name
     iscsi.limits:
@@ -280,7 +283,7 @@ roles:
 
   member:
     accounts:
-      permissions: {}
+      permissions: []
       filters:
         name: account_name
     iscsi.limits:

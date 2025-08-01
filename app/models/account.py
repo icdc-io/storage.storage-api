@@ -1,13 +1,16 @@
 """
 Account Model
 """
+from typing import Optional
+from flask_rbac_icdc import RbacAccount, PermissionException
 from app.database import db
 from app.models.iscsi_quota import IscsiQuotaSchema
 from app.models.s3_quota import S3QuotaSchema
 from app.models.model import AbstractModel
+from app.lib.auth import is_operator
 from app import consts
 
-class Accounts(db.Model, AbstractModel):
+class Accounts(db.Model, AbstractModel, RbacAccount):
     """
     Define columns in database and methods of model
     """
@@ -92,6 +95,29 @@ class Accounts(db.Model, AbstractModel):
         """
         filtered_accounts = Accounts.query.filter(Accounts.name != consts.ACCOUNT_DEFAULT).all()
         return [account.serialize() for account in filtered_accounts]
+
+    @classmethod
+    def get_by_name(cls, account_name: str) -> Optional["Accounts"]:
+        """Retrive account by name"""
+        return cls.query.filter_by(name=account_name).first()
+
+    def get_role(self, requested_role: str) -> str:
+        """
+        Determines the effective role of the account based on provided authentication
+        information.
+
+        This method validates the requested role and returns the appropriate role value
+        for the subject.
+
+        Raises:
+            PermissionException: If the provided operator role is invalid.
+        """
+        operator = is_operator(self.name, requested_role)
+        if requested_role == "operator" and not operator:
+            raise PermissionException("You are not operator")
+        if operator:
+            return "operator"
+        return requested_role
 
     @staticmethod
     def validate_account_data(data):

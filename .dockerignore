@@ -1,0 +1,26 @@
+# IDE settings
+.vscode/
+
+# Virtual environments
+.venv/
+venv/
+
+# Git-related files
+.gitignore
+
+# Docker files
+Dockerfile
+.dockerignore
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Documentation files
+doc/
+*.md
+
+# Environment variable files
+.env
+.env.local

@@ -80,7 +80,7 @@ class AbstractModel:
 
     @classmethod
     def filtered(cls, subject):
-        filters = subject.get_filters(cls.RESOURCE_NAME)
+        filters = subject.filters(cls.RESOURCE_NAME)
         return cls.query.filter_by(**filters)
 
     def response_filter(self, fields, hide):
