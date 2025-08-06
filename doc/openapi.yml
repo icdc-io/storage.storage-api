@@ -81,11 +81,13 @@ paths:
         This the internal endpoint used by Setup-API.
         By sending request to this endpoint you can create account and configures it with minimum usable state.
 
+
         It help to configure:
           - Quotas for each pool and each service
           - Assign iSCSI Config records
           - Assign iSCSI Gateway records
         
+
         At the moment, Setup-API starts initialization:
           - Knows info which CloudGateway(s) are connected to account networks;
           - Connects to CloudGateway(s) and configures them:
@@ -94,6 +96,7 @@ paths:
           - Knows default credentials to internal iSCSI Gateway API (port :5000);
           - Knows portal's IP address and API's IP address;
         
+
         As of Setup-API knows relationships between iSCSI Gateway (running on CloudGateway) and Pool (storage type),
         it can pass all required information to this endpoint to create iSCSI Config and iSCSI Gateway records.
         Setup-API knows pool names, so it has to request list of pools (see endpoint `/pools`) to find out `pool_id` used in this endpoint.
@@ -113,7 +116,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Account'
+              $ref: '#/components/schemas/AccountInfo'
         required: true
       responses:
         '200':
@@ -2008,7 +2011,7 @@ components:
           schema:
             type: array
             items:
-              $ref: '#/components/schemas/Account'
+              $ref: '#/components/schemas/AccountInfo'
           examples:
             All accounts:
               value:
@@ -2365,10 +2368,10 @@ components:
           example: fast_pool
 
 
-    # @DS: reviewed 2024-01-26
+    # @DS: reviewed 2025-08-06
     Account:
       description: >-
-        Data required to create and activate new account
+        Reference to Account object, used in other objects to reference account
       type: object
       properties:
         id:
@@ -2376,61 +2379,77 @@ components:
           type: integer
           example: 17
         name:
+          readOnly: true
           type: string
           example: acc1
-          description: >-
-            Alphanumeric account code (up to 5 symbols)
-        description:
-          type: string
-          example: Business Account 1 corp.
-          description: >-
-            Full name (business name) for account
-        services:
-          writeOnly: true
-          description: Initiate parameters for sub-services
-          type: object
+      required:
+        - id
+        - name
+    AccountInfo:
+      description: >-
+        Data required to create and activate new account
+      allOf:
+        - $ref: '#/components/schemas/Account'
+        - type: object
           properties:
-            s3:
-              description: Initiate per-pool S3 quotas
+            id:
+              readOnly: true
+              type: integer
+              example: 17
+            name:
+              type: string
+              example: acc1
+              description: >-
+                Alphanumeric account code (up to 5 symbols)
+            description:
+              type: string
+              example: Business Account 1 corp.
+              description: >-
+                Full name (business name) for account
+            services:
+              writeOnly: true
+              description: Initiate parameters for sub-services
               type: object
               properties:
-                quotas:
-                  description: List of quota for each pool, pool is referenced by name
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/S3_Quota'
-            iscsi:
-              description: Initiate per-pool iSCSI quotas
+                s3:
+                  description: Initiate per-pool S3 quotas
+                  type: object
+                  properties:
+                    quotas:
+                      description: List of quota for each pool, pool is referenced by name
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/S3_Quota'
+                iscsi:
+                  description: Initiate per-pool iSCSI quotas
+                  type: object
+                  properties:
+                    quotas:
+                      description: List of quotas for each pool, pool is referenced by name
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/iSCSI_Quota'
+                    configs:
+                      description: >-
+                        iSCSI Config referenced by config file name, e.g. mm095_deafult.conf
+                        As well list of gateways by name to be initialized
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/iSCSI_Config'
+            # @DS: Leave for backward compatibillity with current implementation (before 2024-01-26)
+            # There is separate endpoint to list account's pool quotas per services
+            quotas:
+              readOnly: true
               type: object
               properties:
-                quotas:
-                  description: List of quotas for each pool, pool is referenced by name
+                iscsi:
                   type: array
                   items:
                     $ref: '#/components/schemas/iSCSI_Quota'
-                configs:
-                  description: >-
-                    iSCSI Config referenced by config file name, e.g. mm095_deafult.conf
-                    As well list of gateways by name to be initialized
+                s3:
                   type: array
                   items:
-                    $ref: '#/components/schemas/iSCSI_Config'
-        # @DS: Leave for backward compatibillity with current implementation (before 2024-01-26)
-        # There is separate endpoint to list account's pool quotas per services
-        quotas:
-          readOnly: true
-          type: object
-          properties:
-            iscsi:
-              type: array
-              items:
-                $ref: '#/components/schemas/iSCSI_Quota'
-            s3:
-              type: array
-              items:
-                $ref: '#/components/schemas/S3_Quota'
-      required:
-        - name
+                    $ref: '#/components/schemas/S3_Quota'
 
     # @DS: reviewed 2024-01-29
     iSCSI_QuotaValue:
@@ -2668,8 +2687,7 @@ components:
         owner:
           type: string
           example: bob@example.net
-        # TODO: @DS: cuurently (on review 2024-02-02) it's not implemented in code
-        # may be delete if not used anywhere
+        # TODO: need to be implemented
         account:
           readOnly: true
           oneOf:
