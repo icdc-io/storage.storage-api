@@ -235,8 +235,6 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/Account'
       responses:
         '200':
           $ref: '#/components/responses/S3_Quota_List'
@@ -264,8 +262,6 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/Account'
       responses:
         '200':
           $ref: '#/components/responses/S3_Quota_List'
@@ -294,8 +290,6 @@ paths:
           Role: []
         - basicAuth: []
           Account: []
-      parameters:
-        - $ref: '#/components/parameters/Account'
       requestBody:
         description: S3 Quota info
         required: true
@@ -417,8 +411,6 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/Account'
       responses:
         '200':
           $ref: '#/components/responses/iSCSI_Quota_List'
@@ -446,8 +438,6 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/Account'
       responses:
         '200':
           $ref: '#/components/responses/iSCSI_Quota_List'
@@ -474,8 +464,6 @@ paths:
           Role: []
         - basicAuth: []
           Account: []
-      parameters:
-        - $ref: '#/components/parameters/Account'
       requestBody:
         description: iSCSI Quota info
         required: true
@@ -2485,9 +2473,10 @@ components:
         snapshots:
           type: integer
           example: 30
-        account_id:
-          type: integer
-          example: 17
+        account_name:
+          type: string
+          example: acc1
+          description: Global unique account name
           writeOnly: true
         account:
           readOnly: true
@@ -2780,13 +2769,10 @@ components:
         data_size_mb:
           type: integer
           example: 10240
-        # TODO: add account name to all QuotaSet objects, as we moved it from account namespace.
         account_name:
           type: string
           example: acc1
-        account_id:
-          type: integer
-          example: 17
+          description: Global unique account ID
           writeOnly: true
         account:
           readOnly: true
