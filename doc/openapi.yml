@@ -278,6 +278,7 @@ paths:
 
         Only one account quota can be configured for specific pool.
         Throws `409 Conflict` if tried to install another quota for account per pool.
+        `account_name` attribute is optional, if not specified current authorized account is used.
 
 
         Role-based access:
@@ -451,8 +452,11 @@ paths:
       description: >-
         Create account's iSCSI quotas for specific pool
         
+
         Only one account quota can be configured for specific pool.
         Throw `409 Conflict` if tried to install another quota for account per pool.
+        `account_name` attribute is optional, if not specified current authorized account is used.
+
 
         Role-based access:
           - `owner`, `admin` roles can create quotas of the authorized account
@@ -2476,7 +2480,7 @@ components:
         account_name:
           type: string
           example: acc1
-          description: Global unique account name
+          description: Global unique account name. Optional, if not specified current Subject account is used.
           writeOnly: true
         account:
           readOnly: true
@@ -2772,7 +2776,7 @@ components:
         account_name:
           type: string
           example: acc1
-          description: Global unique account ID
+          description: Global unique account name. Optional, if not specified current Subject account is used.
           writeOnly: true
         account:
           readOnly: true
