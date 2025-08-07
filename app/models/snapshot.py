@@ -4,6 +4,7 @@ Snapshots model
 from flask import abort
 from sqlalchemy import event
 from sqlalchemy.sql import func
+from marshmallow import Schema, fields, validate
 
 from app.database import db
 from app.lib.request_utils import is_failed
@@ -11,7 +12,6 @@ from app.loggers import log
 from app.models.iscsi_config import IscsiConfigs
 from app.models.iscsi_disk import IscsiDisks
 from app.models.model import AbstractModel
-
 
 
 class Snapshots(db.Model, AbstractModel):
@@ -66,9 +66,6 @@ class Snapshots(db.Model, AbstractModel):
         self.description = body.get("description", self.description)
         self.name = body.get("name", self.name)
         self.save()
-
-
-from marshmallow import Schema, ValidationError, fields, validate
 
 
 class SnapshotSchema(Schema):

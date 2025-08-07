@@ -3,12 +3,20 @@ Account Model
 """
 from typing import Optional
 from flask_rbac_icdc import RbacAccount, PermissionException
+from marshmallow import (
+    Schema,
+    fields,
+    validate,
+    INCLUDE,
+)
+
 from app.database import db
 from app.models.iscsi_quota import IscsiQuotaSchema
 from app.models.s3_quota import S3QuotaSchema
 from app.models.model import AbstractModel
 from app.lib.auth import is_operator
 from app import consts
+
 
 class Accounts(db.Model, AbstractModel, RbacAccount):
     """
@@ -200,9 +208,6 @@ class Accounts(db.Model, AbstractModel, RbacAccount):
                 "iscsi": [quota.toDict() for quota in self.iscsi_quotas],
             },
         }
-
-
-from marshmallow import Schema, fields, validate, INCLUDE
 
 
 class AccountSchema(Schema):

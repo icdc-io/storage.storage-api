@@ -9,6 +9,7 @@ from enum import StrEnum
 
 from app import consts
 
+
 log.basicConfig(
     stream=sys.stdout,
     level=getattr(log, consts.LOG_LEVEL, "INFO"),
@@ -232,3 +233,21 @@ def query(request):
     Define query params
     """
     return dict(request.args)
+
+
+status_codes = {
+    200: ok,
+    201: created,
+    204: no_content,
+    400: bad_request,
+    401: unauthorized,
+    403: forbidden,
+    404: not_found,
+    405: method_not_allowed,
+    409: conflict,
+    422: unprocessable_entity,
+    500: internal_server_error,
+    501: not_implemented,
+    502: bad_gateway,
+    504: gateway_timeout,
+}

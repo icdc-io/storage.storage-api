@@ -1,12 +1,11 @@
 """
 S3 Controller
 """
-
-import os
 from json import JSONDecodeError
+import re
 
-from flask import abort, jsonify, request
 import rgwadmin.exceptions
+from flask import abort, jsonify, request
 from marshmallow import ValidationError
 from botocore.exceptions import ClientError
 
@@ -16,15 +15,15 @@ from app.lib import paramiko
 from app.lib.request_utils import (
     abort_detailed,
     log,
-    no_content, request_json, parse_jsonapi_filters, query,
+    no_content,
+    request_json,
+    parse_jsonapi_filters,
 )
 from app.models.account import Accounts
 from app.models.pool import Pools
 from app.models.s3_user import S3Users, S3UserSchema
-from app.models.s3_quota import S3Quotas, S3QuotaSchema
+from app.models.s3_quota import S3Quotas
 from app.models.bucket import Bucket, BucketSchema
-from app import consts
-import re
 
 
 def get_s3_limits(subject):
@@ -173,7 +172,7 @@ def get_account_s3_users(subject):
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
         filters = schema.load(parsed_filters)
-    except TypeError as e:
+    except TypeError:
         abort(400, "Invalid query parameters.")
     s3_users = S3Users.filtered(subject).filter_by(**filters).all()
     return S3UserSchema(many=True).dump(s3_users)
@@ -267,9 +266,9 @@ def _modify_user_ceph(s3_user_name, body):
             max_objects=int(body["quota"]["objects"]),
             enabled=True,
         )
-    except rgwadmin.exceptions.NoSuchUser as e:
+    except rgwadmin.exceptions.NoSuchUser:
         raise rgwadmin.exceptions.NoSuchUser("User not found during quota update.")
-    except rgwadmin.exceptions as e:
+    except rgwadmin.exceptions:
         raise rgwadmin.exceptions.InternalError("Failed to retrieve user information.")
 
 
@@ -280,7 +279,7 @@ def delete_bucket(subject, path):
     log.debug(f"Delete bucket with path {path}")
     try:
         bucket = Bucket.from_bucket_path(path)
-    except Exception as e:
+    except Exception:
         abort(404, "Bucket with this name not found.")
 
     s3_user = S3Users.filtered(subject).filter_by(name=bucket.user_name).first()
@@ -392,7 +391,7 @@ def list_buckets(subject):
     if s3user_filters:
         try:
             filters = S3UserSchema(partial=True).load(s3user_filters)
-        except AttributeError as e:
+        except AttributeError:
             abort(400, "Invalid filter key for related user.")
     s3_users = S3Users.filtered(subject).filter_by(**filters).all()
 
@@ -423,7 +422,7 @@ def update_bucket(subject, path):
         abort(404, "Missed parameter 'quota'.")
     try:
         bucket = Bucket.from_bucket_path(path)
-    except Exception as e:
+    except Exception:
         abort(404, "Bucket with this name not found.")
 
     s3_user = S3Users.filtered(subject).filter_by(name=bucket.user_name).first()

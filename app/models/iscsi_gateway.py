@@ -1,6 +1,15 @@
 """
 iSCSI Gateway model
 """
+from ipaddress import ip_address
+
+from marshmallow import (
+    Schema,
+    fields,
+    validate,
+    ValidationError,
+)
+
 from app.database import db
 from app.models.model import AbstractModel
 
@@ -53,10 +62,6 @@ class IscsiGateways(db.Model, AbstractModel):
         return IscsiConfigs.get_by("id", self.config_id).serialize(["gateways"])
 
 
-from marshmallow import Schema, fields, validate, ValidationError
-from ipaddress import ip_address
-
-
 def validate_ip(value: str):
     try:
         ip_address(value)
@@ -68,6 +73,8 @@ class IscsiGatewaySchema(Schema):
     GATEWAY_NAME_PATTERN = r'^[a-z0-9._\-]+$'
 
     id = fields.Int()
+    config_id = fields.Int()
+
     name = fields.String(
         validate=validate.And(
             validate.Length(min=1, max=64),

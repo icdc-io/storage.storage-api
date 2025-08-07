@@ -1,11 +1,14 @@
-from app.lib import request_utils
-from app.lib.request_utils import log, abort_detailed, parse_jsonapi_filters, request_json
+from flask import abort, jsonify, request
+from sqlalchemy.orm import selectinload
+from marshmallow import ValidationError
+
 from app.models.account import Accounts
 from app.models.s3_quota import S3Quotas, S3QuotaSchema
-from app.models.pool import Pools
-from sqlalchemy.orm import selectinload
-from flask import abort, jsonify, request
-from marshmallow import ValidationError
+from app.lib.request_utils import (
+    abort_detailed,
+    parse_jsonapi_filters,
+    request_json
+)
 
 
 def index(subject):
@@ -13,7 +16,7 @@ def index(subject):
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
         filters = schema.load(parsed_filters)
-    except TypeError as e:
+    except TypeError:
         abort(400, "Invalid query parameters.")
     quotas = S3Quotas.filtered(subject).options(selectinload(S3Quotas.pool)) \
              .filter_by(**filters).except_(S3Quotas.get_default_limitsets()).all()

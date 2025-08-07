@@ -3,15 +3,15 @@ iSCSI Client method
 """
 from flask import abort
 from sqlalchemy import event
+from marshmallow import Schema, fields, validate
 
 from app.database import db
-from app.lib.request_utils import is_failed, ok
+from app.lib.request_utils import is_failed
 from app.loggers import log
 from app.models.iscsi_config import IscsiConfigs
 from app.models.model import AbstractModel
 from app.models.relationships import iscsi_assigned_clients
 from app.models.iscsi_disk import IscsiDiskSchema
-
 
 
 class IscsiClients(db.Model, AbstractModel):
@@ -84,9 +84,6 @@ class IscsiClients(db.Model, AbstractModel):
         self.chap_password = body.get("chap_password", self.chap_password)
         self.owner = body.get("owner", self.owner)
         self.save()
-
-
-from marshmallow import Schema, fields, validate
 
 
 class IscsiClientSchema(Schema):

@@ -39,7 +39,7 @@ class S3Users(db.Model, AbstractModel):
         if self._user_info_cache is None:
             try:
                 self._user_info_cache = rgwadmin_conn().get_user(self.name)
-            except rgwadmin.exceptions.NoSuchUser as e:
+            except rgwadmin.exceptions.NoSuchUser:
                 return {}
         return self._user_info_cache
 
@@ -324,7 +324,7 @@ def before_delete(mapper, connection, s3_user_instance):
         rgwadmin_conn().remove_user(s3_user_instance.name, purge_data=True)
         log.info(f"Delete s3 user in Ceph "
                  f"(name = {s3_user_instance.name}) was successful")
-    except rgwadmin.exceptions.NoSuchUser as e:
+    except rgwadmin.exceptions.NoSuchUser:
         log.warning(f"No such user: {s3_user_instance.name}")
     except rgwadmin.exceptions.AccessDenied as e:
         abort(403, str(e))

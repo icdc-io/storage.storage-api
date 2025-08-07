@@ -1,15 +1,21 @@
 """
 iSCSI Disk model
 """
-from engineio import json
 from flask import abort
 from sqlalchemy import event
+from marshmallow import (
+    Schema,
+    fields,
+    validates_schema,
+    ValidationError,
+    validate,
+)
 
 from app.database import db
 from app.lib.request_utils import is_failed
 from app.loggers import log
 from app.models.model import AbstractModel
-from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
+from app.models.iscsi_config import IscsiConfigs
 from app.models.iscsi_quota import IscsiQuotas
 from app.models.relationships import iscsi_assigned_clients
 
@@ -103,10 +109,6 @@ class IscsiDisks(db.Model, AbstractModel):
             "disks": 1
         }
         return usage
-
-
-from marshmallow import Schema, fields, validates_schema, ValidationError, validate
-from app import consts
 
 
 class IscsiDiskSchema(Schema):

@@ -1,10 +1,19 @@
 """
 S3 Quota model
 """
+from marshmallow import (
+    Schema,
+    fields,
+    validate,
+    pre_load,
+    ValidationError,
+    validates_schema,
+)
+
+from app import consts
 from app.database import db
 from app.models.model import AbstractModel
 from app.models.pool import Pools, PoolSchema
-from app import consts
 
 
 class S3Quotas(db.Model, AbstractModel):
@@ -121,9 +130,6 @@ class S3Quotas(db.Model, AbstractModel):
             "pool": self._pool() if self.pool_id else None,
         }
 
-
-from marshmallow import Schema, fields, validate, pre_load, ValidationError, validates_schema, pre_dump
-from app import consts
 
 class S3QuotaSchema(Schema):
     id           = fields.Int(dump_only=True)

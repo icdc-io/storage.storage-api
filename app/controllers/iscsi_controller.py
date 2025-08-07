@@ -1,41 +1,28 @@
 """
 iSCSI Controller
 """
-
-import json
 from datetime import datetime
-from sqlite3 import IntegrityError
+
 from flask import abort, jsonify, request
+from sqlite3 import IntegrityError
 from marshmallow import ValidationError
-from app.lib.controller_utils import (
-    _check_iscsi_account_quota,
-    _check_iscsi_account_quota_disk_update,
-    _get_iscsi_account_usage,
-    status_codes,
-    trytest,
-)
-from app.lib.iscsi_utils import Iscsi
-from app.lib.request_utils import (
-    conflict,
-    created,
-    is_failed,
-    log,
-    no_content,
-    not_found,
-    ok,
-    unprocessable_entity,
-    abort_detailed, request_json, parse_jsonapi_filters
-)
-from app.lib.perm import is_admin
+
 from app.models.account import Accounts
-from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
+from app.models.iscsi_quota import IscsiQuotas
 from app.models.iscsi_client import IscsiClients, IscsiClientSchema
 from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
 from app.models.iscsi_disk import IscsiDisks, IscsiDiskSchema
 from app.models.iscsi_gateway import IscsiGateways, IscsiGatewaySchema
-from app.models.pool import Pools
 from app.models.snapshot import Snapshots, SnapshotSchema
-from app import consts
+from app.lib.request_utils import (
+    is_failed,
+    log,
+    no_content,
+    abort_detailed,
+    request_json,
+    parse_jsonapi_filters,
+    status_codes,
+)
 
 
 def get_iscsi_limits(subject):
@@ -87,7 +74,7 @@ def get_configs(subject):
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
         filters = schema.load(parsed_filters)
-    except TypeError as e:
+    except TypeError:
         abort(400, "Invalid query parameters.")
     configs = IscsiConfigs.filtered(subject).filter_by(**filters).all()
     return jsonify(IscsiConfigSchema(many=True).dump(configs))
@@ -127,7 +114,7 @@ def set_config_gateway(subject, config_id):
 
     try:
         validated_body = IscsiGatewaySchema().load(body)
-    except ValidationError as e:
+    except ValidationError:
         abort(400, "Invalid input data.")
 
     validated_body["config_id"] = config_id
@@ -153,65 +140,6 @@ def get_config_gateways(subject, config_id):
         abort(404, "Config not found or you haven't permission")
 
     return jsonify(IscsiGatewaySchema(many=True).dump(config.gateways))
-
-
-@trytest
-def set_iscsi_config(**kwargs):
-    """
-    Assign iSCSI gateway to config
-    """
-    """
-    Assign iSCSI gateway to config
-    """
-    gateway_id, body = kwargs["gateway_id"], kwargs["body"]
-    config_obj = IscsiConfigs(**body).save()
-    gateway_obj = IscsiGateways.get_by("id", gateway_id)
-    gateway_obj.configs.append(config_obj)
-    gateway_obj.save()
-    return ok(gateway_obj.serialize())
-
-
-@trytest
-def get_iscsi_configs(**kwargs):
-    """
-    Get iSCSI Configs
-    """
-    """
-    Get iSCSI Configs
-    """
-    gateway_id = kwargs["gateway_id"]
-    return ok([i.serialize() for i in IscsiGateways.get_by("id", gateway_id).configs])
-
-
-@trytest
-def set_iscsi_gateway(**kwargs):
-    """
-    Create and assign iSCSI Gateway to Account
-    """
-    """
-    Create and assign iSCSI Gateway to Account
-    """
-    account_name, body = kwargs["account_name"], kwargs["body"]
-    log.debug(
-        f"Create and assign iSCSI gateway to account {account_name} with params {body}"
-    )
-    account_obj = Accounts.get_by("name", account_name)
-    body["account_id"] = account_obj.id
-    gateway = IscsiGateways(**body).save()
-    return ok(gateway.serialize())
-
-
-@trytest
-def get_iscsi_gateways(**kwargs):
-    """
-    Get iSCSI Gateways
-    """
-    """
-    Get iSCSI Gateways
-    """
-    account_name = kwargs["account_name"]
-    account_obj = Accounts.get_by("name", account_name)
-    return ok([i.serialize() for i in account_obj.iscsi_gateways])
 
 
 def get_config_disks(subject, config_id):
@@ -359,7 +287,7 @@ def get_iscsi_clients(subject):
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
         filters = schema.load(parsed_filters)
-    except TypeError as e:
+    except TypeError:
         abort(400, "Invalid query parameters.")
     clients = IscsiClients.filtered(subject).filter_by(**filters).all()
     return jsonify(IscsiClientSchema(many=True).dump(clients))
@@ -390,7 +318,7 @@ def create_iscsi_client(subject):
             abort(409, "Can not create client with such IQN")
         return IscsiClientSchema().dump(client)
     except TypeError as exception:
-        abort_detailed(400, f"Payload is not valid.", str(exception))
+        abort_detailed(400, "Payload is not valid.", str(exception))
     except ValidationError as e:
         abort(400, "Invalid input data.", e.messages)
     except IntegrityError:

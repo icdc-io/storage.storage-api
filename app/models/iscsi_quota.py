@@ -1,7 +1,16 @@
 """
 iSCSI Quota Model
 """
+from marshmallow import (
+    Schema,
+    fields,
+    validate,
+    pre_load,
+    ValidationError,
+    validates_schema,
+)
 
+from app import consts
 from app.database import db
 from app.models.model import AbstractModel
 from app.models.pool import Pools, PoolSchema
@@ -67,16 +76,6 @@ class IscsiQuotas(db.Model, AbstractModel):
 
     def get_restriction_names(self):
         return ["clients", "data_size_gb", "disks", "snapshots"]
-
-    def update(self, body):
-        """
-        UPDATE SET SQL
-        """
-        self.clients = body.get("clients", self.clients)
-        self.data_size_gb = body.get("data_size_gb", self.data_size_gb)
-        self.disks = body.get("disks", self.disks)
-        self.snapshots = body.get("snapshots", self.snapshots)
-        self.save()
 
     def _config(self):
         """
@@ -165,10 +164,6 @@ class IscsiQuotas(db.Model, AbstractModel):
             data.pop(field, None)
 
         return data
-
-
-from marshmallow import Schema, fields, validate, pre_load, ValidationError, validates_schema, pre_dump
-from app import consts
 
 
 class IscsiQuotaSchema(Schema):

@@ -1,6 +1,8 @@
 """
 Pool model
 """
+from marshmallow import Schema, fields, validate
+
 from app.database import db
 from app.models.model import AbstractModel
 
@@ -45,9 +47,6 @@ class Pools(db.Model, AbstractModel):
             "class": "self.klass",
         }
         return self.response_filter(fields, hide_params)
-
-
-from marshmallow import Schema, fields, validate
 
 
 class PoolSchema(Schema):

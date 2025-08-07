@@ -6,17 +6,11 @@ import os
 
 from flask import request, abort, jsonify
 from marshmallow import ValidationError
+
 from app.database import db
 from app.lib import paramiko
-from app.lib.controller_utils import (
-    _get_iscsi_account_usage_billing,
-    _get_s3_account_usage_billing,
-)
-from app.lib.request_utils import request_json, log, ok, abort_detailed
-
-# Import models
+from app.lib.request_utils import request_json, log, abort_detailed
 from app.models.account import Accounts, AccountSchema
-
 from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
 from app.models.iscsi_gateway import IscsiGateways, IscsiGatewaySchema
 from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
@@ -278,21 +272,6 @@ def get_accounts_all(subject):
     """
 
     return jsonify(Accounts.get_all_accounts())
-
-
-def get_account_usage(subject, account_name):
-    """
-    This function retrieves the account usage for the specified account name.
-    It takes in keyword arguments and returns a dictionary containing the usage
-    for the "s3" and "iscsi" services.
-    """
-    account_obj = Accounts.query.filter_by(name=account_name).first()
-    usage = {
-        "s3": _get_s3_account_usage_billing(account_obj),
-        "iscsi": _get_iscsi_account_usage_billing(account_obj),
-    }
-    return jsonify(usage)
-
 
 
 #############################################

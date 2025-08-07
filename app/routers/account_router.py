@@ -60,12 +60,3 @@ def delete_account(subject, account_name):
         A tuple of the response message and HTTP status code.
     """
     return controller.delete_account(subject, account_name), 204
-
-
-@account_management.route("/<account_name>/usage", methods=["GET"])
-@rbac.allow("account.usage.get")
-def get_account_usage(subject, account_name):
-    """
-    Retrieves the usage data for the specified account.
-    """
-    return controller.get_account_usage(subject, account_name), 200

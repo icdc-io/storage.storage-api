@@ -4,23 +4,21 @@ Manage iSCSI module
 
 import functools
 import json
-import re
 
 import rados
 import rbd
 import requests
 
-from app.lib.controller_utils import status_codes
 from app.lib.request_utils import (
     conflict,
-    created,
     internal_server_error,
     is_failed,
     log,
     no_content,
     not_found,
     ok,
-    HttpMethod as methods
+    HttpMethod as methods,
+    status_codes
 )
 from app.models.iscsi_client import IscsiClients
 from app.models.pool import Pools

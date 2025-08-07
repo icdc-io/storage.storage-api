@@ -1,16 +1,16 @@
 """
 iSCSI Config model
 """
-import re
-from json import loads
 from flask import abort
 from sqlalchemy import event
+from marshmallow import Schema, fields, validate
 
 from app.database import db
 from app.lib.request_utils import is_failed
 from app.loggers import log
 from app.models.model import AbstractModel
 from app.models.pool import Pools, PoolSchema
+
 
 class IscsiConfigs(db.Model, AbstractModel):
 
@@ -101,7 +101,7 @@ class IscsiConfigs(db.Model, AbstractModel):
         Retrieves and serializes the IscsiGateways associated with the current instance.
         Returns a list of serialized IscsiGateway objects.
         """
-        from app.models.iscsi_gateway import IscsiGateways, IscsiGatewaySchema  # fix circular import
+        from app.models.iscsi_gateway import IscsiGatewaySchema  # fix circular import
 
         return [
             IscsiGatewaySchema().dump(i)
@@ -121,9 +121,6 @@ class IscsiConfigs(db.Model, AbstractModel):
             raise ValueError(f"Target {self.target_iqn} was deleted.")
 
         return iscsi_service
-
-
-from marshmallow import Schema, fields, validate
 
 
 class IscsiConfigSchema(Schema):
@@ -156,12 +153,11 @@ def before_delete(mapper, connection, config_instance):
     """
     Listener function, called before deleting an IscsiConfigs object.
     """
-    from app.lib.iscsi_utils import Iscsi
     log.info(f"Deleting target in Cloud Gateway (name={config_instance.name}).")
 
     try:
         iscsi_service = config_instance.iscsi_service()
-    except ValueError as e:
+    except ValueError:
         return
 
     deleted_clients = []
