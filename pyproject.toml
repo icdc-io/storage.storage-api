@@ -76,3 +76,25 @@ docstring-code-format = false
 # This only has an effect when the `docstring-code-format` setting is
 # enabled.
 docstring-code-line-length = "dynamic"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = [
+    "-ra", "-q",
+    # "--cov=src.controllers.auth",
+    # "--cov=src.controllers.gateway",
+    "--cov=app",
+    # "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=term"
+]
+testpaths = [
+    # "tests/old_tests/test_*.py",
+    "tests/test_*.py"
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+log_cli = true
+log_cli_level = "CRITICAL"
+# disable_warnings = true

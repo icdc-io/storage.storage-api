@@ -1,6 +1,9 @@
 # FROM fedora:40
 # NOTE: Use our repo to workaround docker.hub limits
-FROM opr.lab.icdc.io/fedora:40
+
+ARG CR_SERVER
+
+FROM ${CR_SERVER:-docker.io}/fedora:40
 
 # Metadata as described above
 LABEL author1="icdc@ibagroup.eu" \

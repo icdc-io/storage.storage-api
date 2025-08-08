@@ -1,0 +1,64 @@
+stages:
+  # - check
+  - build
+  - test
+
+variables:
+  LOG_FILE_NAME: $CI_COMMIT_SHORT_SHA.txt
+  CR_SERVER: "artifactory.icz.icdc.io/icdc-docker-proxy"
+  IMAGE_NAME: "storage-v2"
+
+.default_rules: &default_rules
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev"
+    - if: $CI_COMMIT_BRANCH == "dev"
+
+# check_vulnerabilities:
+#   stage: check
+#   tags:
+#     - testing-dev
+#   script:
+#     - pip install --upgrade pip pip-audit
+#     - pip-audit -r requirements.txt > pip_audit_report.txt
+#   artifacts:
+#     when: always
+#     paths:
+#       - pip_audit_report.txt
+#   <<: *default_rules
+
+build:
+  stage: build
+  tags:
+    - testing-dev
+  before_script:
+    - cp config/config.yaml.example config/config.yaml
+  script:
+    - echo "Building the project..."
+    - podman build --build-arg CR_SERVER=$CR_SERVER -t $IMAGE_NAME .
+  <<: *default_rules
+
+tests:
+  stage: test
+  tags:
+    - testing-dev
+  before_script:
+    - chmod +x ./run_tests.sh
+    - mkdir htmlcov
+    - touch report.xml
+  script:
+    - echo $LOG_FILE_NAME
+    - ./run_tests.sh $IMAGE_NAME | tee -a $LOG_FILE_NAME
+  after_script:
+    - podman stop -a
+    - podman rm -a
+    - podman rmi $(podman images --filter "dangling=true" -q)
+    # - podman rmi $IMAGE_NAME
+  coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+)%/'
+  artifacts:
+    paths:
+      - htmlcov
+      - $LOG_FILE_NAME
+    expire_in: 1 week
+    reports:
+      junit: report.xml
+  <<: *default_rules

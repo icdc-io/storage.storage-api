@@ -20,6 +20,4 @@ flask_app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
 flask_app.config["SQLALCHEMY_DATABASE_URI"] = db_conn
 
 from app import database
-
-if "_pytest" not in sys.modules.keys():
-    from app import router
+from app import router

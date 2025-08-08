@@ -1,3 +1,7 @@
+#Storage API
+![Pipeline status](https://code.icz.icdc.io/icdc/storage/storage-api/badges/dev/pipeline.svg)
+![Coverage](https://code.icz.icdc.io/icdc/storage/storage-api/badges/dev/coverage.svg)
+
 # Storage-v2 Container
 
 This document provides instructions on how to build and run the `storage-v2` container using Podman.
