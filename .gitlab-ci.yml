@@ -16,7 +16,7 @@ variables:
 # check_vulnerabilities:
 #   stage: check
 #   tags:
-#     - testing-dev
+#     - testing
 #   script:
 #     - pip install --upgrade pip pip-audit
 #     - pip-audit -r requirements.txt > pip_audit_report.txt
@@ -29,7 +29,7 @@ variables:
 build:
   stage: build
   tags:
-    - testing-dev
+    - testing
   before_script:
     - cp config/config.yaml.example config/config.yaml
   script:
@@ -40,7 +40,7 @@ build:
 tests:
   stage: test
   tags:
-    - testing-dev
+    - testing
   before_script:
     - chmod +x ./run_tests.sh
     - mkdir htmlcov
