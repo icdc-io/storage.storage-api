@@ -144,7 +144,6 @@ class IscsiDiskSchema(Schema):
 
         if not quota:
             return
-
         usage = quota.compute_usage()
         delta = size_gb - (disk.size_gb if disk else 0)
         new_usage = usage["data_size_gb"] + delta
@@ -153,7 +152,9 @@ class IscsiDiskSchema(Schema):
             raise ValidationError({
                 "size_gb": [f"Requested disk size exceeds quota: {new_usage}/{quota.data_size_gb} GiB"]
             })
-        elif delta <= 0:
+        elif delta == 0:
+            del data["size_gb"]
+        elif delta < 0:
             raise ValidationError({
                 "size_gb": [f"Resize disk must be higher than previous size."]
             })

@@ -226,10 +226,10 @@ def update_disk(subject, disk_id):
     Update disk. Resize disk can be only heigher than before resize
     """
     body = request_json(request)
-
     disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
     if not disk:
         abort(404, "Disk not found or you haven't permission.")
+
     config = IscsiConfigs.filtered(subject).filter_by(id=disk.config_id).first()
     if not config:
         abort(404, "Config with this ID not found or you haven't permission.")
@@ -254,8 +254,8 @@ def update_disk(subject, disk_id):
         if is_failed(response):
             abort(response["code"], response["data"])
 
-    if validated_body.get("owner") != disk.owner and not subject.has_permission("set-owner"):
-        validated_body['owner'] = disk.owner  # pylint: disable=multiple-statements
+    if body.get("owner", None) and "set-owner" not in subject.policy["iscsi.disks"]["permissions"]:
+        del validated_body["owner"]  # pylint: disable=multiple-statements
     disk.update(validated_body)
 
     return IscsiDiskSchema().dump(disk)
@@ -343,8 +343,8 @@ def update_client(subject, client_id):
     except ValidationError as e:
         abort_detailed(400, "Invalid input data.", e.messages)
 
-    if validated_body.get("owner") != client.owner and not subject.has_permission("set-owner"):
-        validated_body["owner"] = client.owner  # pylint: disable=multiple-statements
+    if body.get("owner", None) and "set-owner" not in subject.policy["iscsi.clients"]["permissions"]:
+        del validated_body["owner"]  # pylint: disable=multiple-statements
 
     for disk in client.disks:
         config = IscsiConfigs.get_by("id", disk.config_id)

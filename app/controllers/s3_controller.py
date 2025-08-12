@@ -91,9 +91,6 @@ def create_s3_user(subject):
 
 def _create_s3user_ceph(account_name, data, placement):
     user_name = data["name"]
-    # NOTE: there are dangerous operations, so we filter here to ensure there is no bad symbols
-    if not re.match(r'^([\w-]+\$)?[\w-]+$', user_name):
-        raise ValueError("Bad S3 user name specified")
     try:
         log.debug(f"[1/4] Creating blank S3 user [{user_name}]")
         # NOTE: we use raw request instead `rgwadmin_conn().create_user()` because create user function
@@ -228,8 +225,8 @@ def update_s3_user(subject, user_id):
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters", e.messages)
 
-    if validated_body.get("owner") != s3_user.owner and not subject.has_permission("set-owner"):
-        validated_body["owner"] = s3_user.owner
+    if body.get("owner", None) and "set-owner" not in subject.policy["s3.users"]["permissions"]:
+        del validated_body["owner"]  # pylint: disable=multiple-statements
 
     if "quota" in validated_body:
         cur_quota = s3_user.get_quota()

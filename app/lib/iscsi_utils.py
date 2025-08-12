@@ -569,8 +569,6 @@ class Iscsi:
         image_name = self.get_image_name(disk_name)
 
         log.info(f"Disconnecting image '{image_name}' from client '{client_iqn}'")
-        print("image_name", image_name)
-        print("list", self.get_client_disks(client_iqn))
         if is_failed(self.get_disk(image_name)) or image_name not in self.get_client_disks(client_iqn):
             log.info(f"Disk '{image_name}' is already unassigned from client '{client_iqn}'")
             return ok("Disk already unassigned.")

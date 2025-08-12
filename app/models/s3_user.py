@@ -242,7 +242,8 @@ class S3UserSchema(Schema):
     )
     name = fields.String(
         validate=validate.And(
-            validate.Length(min=1, max=64),
+            # Max length = 89: 24 for account prefix + 1 for '$' delimiter + remaining part
+            validate.Length(min=1, max=89),
             validate.Regexp(regex=USER_NAME_PATTERN)
         )
     )
