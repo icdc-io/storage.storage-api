@@ -1,6 +1,6 @@
 stages:
-  # - check
   - build
+  - audit
   - test
 
 variables:
@@ -13,19 +13,6 @@ variables:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev"
     - if: $CI_COMMIT_BRANCH == "dev"
 
-# check_vulnerabilities:
-#   stage: check
-#   tags:
-#     - testing
-#   script:
-#     - pip install --upgrade pip pip-audit
-#     - pip-audit -r requirements.txt > pip_audit_report.txt
-#   artifacts:
-#     when: always
-#     paths:
-#       - pip_audit_report.txt
-#   <<: *default_rules
-
 build:
   stage: build
   tags:
@@ -35,6 +22,28 @@ build:
   script:
     - echo "Building the project..."
     - podman build --build-arg CR_SERVER=$CR_SERVER -t $IMAGE_NAME .
+  <<: *default_rules
+
+audit:
+  stage: audit
+  tags:
+    - testing
+  before_script:
+    - mkdir -p ./output
+  script:
+    - echo "Running pip-audit..."
+    - podman run --rm -it
+      --name storage-v2 
+      -v "$(pwd)/output:/output:z" 
+      $IMAGE_NAME 
+      sh -c "pip install pip-audit && pip-audit > /output/pip_audit_report.txt"
+  after_script:
+    - podman stop -a
+    - cp output/pip_audit_report.txt .
+  artifacts:
+    when: always
+    paths:
+      - pip_audit_report.txt
   <<: *default_rules
 
 tests:
@@ -52,7 +61,6 @@ tests:
     - podman stop -a
     - podman rm -a
     - podman rmi $(podman images --filter "dangling=true" -q)
-    # - podman rmi $IMAGE_NAME
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+)%/'
   artifacts:
     paths:

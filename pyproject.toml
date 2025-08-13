@@ -93,8 +93,15 @@ testpaths = [
     "tests/test_*.py"
 ]
 filterwarnings = [
-    "ignore::DeprecationWarning",
+    # "ignore::DeprecationWarning",
 ]
 log_cli = true
 log_cli_level = "CRITICAL"
 # disable_warnings = true
+
+[tool.pylint]
+[tool.pylint.typecheck]
+# List of members which are set dynamically and missed by pylint inference
+# system, and so shouldn't trigger E1101 when accessed. Python regular
+# expressions are accepted.
+generated-members = ["consts.*"]
