@@ -78,6 +78,6 @@ sso:
 database:
   host:
   port:
-  username: storage
+  username:
   password:
-  name: storage
+  name:

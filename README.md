@@ -3,9 +3,9 @@
 ![Pipeline status](https://code.icz.icdc.io/icdc/storage/storage-api/badges/dev/pipeline.svg)
 ![Coverage](https://code.icz.icdc.io/icdc/storage/storage-api/badges/dev/coverage.svg)
 
-# Storage-v2 Container
+# Storage Container
 
-This document provides instructions on how to build and run the `storage-v2` container using Podman.
+This document provides instructions on how to build and run the `storage` container using Podman.
 
 ## Prerequisites
 
@@ -13,29 +13,31 @@ This document provides instructions on how to build and run the `storage-v2` con
 
 ## Building the Container
 
-To build the `storage-v2` container, navigate to the directory containing the Dockerfile and run the following command:
+To build the `storage` container, navigate to the directory containing the Dockerfile and run the following command:
 
 ```bash
-    docker/podman build . -t storage-v2
+    docker/podman build -t storage .
+    # or if there is the container registry server
+    docker/podman build --build-arg CR_SERVER=$CR_SERVER -t storage .
 ```
 
 ## Running the Container
 
-To run the storage-v2 container with host networking enabled:
+To run the storage container with host networking enabled:
 
 ```bash
-    docker/podman run --network host --name storage-v2 -it --rm localhost/storage-v2:latest bash
+    docker/podman run --network host --name storage -it --rm localhost/storage:latest bash
 ```
 
     `--network host`: This option ensures that the container shares the network namespace with the host.
 
-    `--name storage-v2`: Specifies a name for the running container.
+    `--name storage`: Specifies a name for the running container.
 
     `-it`: Runs the container in interactive mode with a terminal attached.
 
     `--rm`: Removes the container once it stops running.
 
-    `localhost/storage-v2:latest`: This is the name of the image to run, which we previously built and tagged as storage-v2.
+    `localhost/storage:latest`: This is the name of the image to run, which we previously built and tagged as storage.
 
 After executing the above command, you will be inside the container's shell (bash).
 
@@ -44,7 +46,7 @@ After executing the above command, you will be inside the container's shell (bas
 If you need to stop the container:
 
 ```bash
-docker/podman stop storage-v2
+docker/podman stop storage
 ```
 
 ## Setup Instructions OC console
@@ -104,3 +106,23 @@ Need file ceph.conf
 ```
 
 Need file ceph.client.storage.keyring
+
+## Integration tests
+Before run integration tests, you need to have the `storage` image built and create environment variables for database connection `DATABASE_USERNAME`, `DATABASE_PASSWORD`, and `DATABASE_NAME`.
+
+To run the integration tests execute the following command:
+
+```bash
+    export DATABASE_USERNAME="storage_username"
+    export DATABASE_PASSWORD="storage_password"
+    export DATABASE_NAME="storage_database"
+
+    # for mounting into the test container
+    touch report.xml 
+    mkdir htmlcov
+
+    ./run_tests.sh storage
+
+    # cleanup test results if needed
+    rm -rf htmlcov report.xml
+```

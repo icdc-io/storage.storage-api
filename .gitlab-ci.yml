@@ -6,7 +6,7 @@ stages:
 variables:
   LOG_FILE_NAME: $CI_COMMIT_SHORT_SHA.txt
   CR_SERVER: "artifactory.icz.icdc.io/icdc-docker-proxy"
-  IMAGE_NAME: "storage-v2"
+  IMAGE_NAME: "storage"
 
 .default_rules: &default_rules
   rules:
@@ -33,7 +33,7 @@ audit:
   script:
     - echo "Running pip-audit..."
     - podman run --rm -it
-      --name storage-v2 
+      --name storage 
       -v "$(pwd)/output:/output:z" 
       $IMAGE_NAME 
       sh -c "pip install pip-audit && pip-audit > /output/pip_audit_report.txt"
