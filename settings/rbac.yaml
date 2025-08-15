@@ -35,6 +35,7 @@ roles:
         - update
         - delete
         - regenerate-keys
+        - set-owner
       filters: {}
     s3.buckets:
       permissions:
