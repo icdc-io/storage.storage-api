@@ -102,12 +102,12 @@ def _create_s3user_ceph(account_name, data, placement):
             f"&user-caps=buckets=*" +
             f"&max-buckets={data['quota']['buckets']}&display-name={data['owner']}"
         )
-        #rgwadmin_conn().create_user(
+        # rgwadmin_conn().create_user(
         #    uid=user_name,
         #    display_name=data["owner"],
         #    max_buckets=data["quota"]["buckets"],
         #    user_caps="buckets=*"
-        #)
+        # )
         log.debug(f"[1/4] Blank S3 user [{user_name}] is created")
         log.debug(f"[2/4] Setting quota for S3 user [{user_name}]: {data}")
         rgwadmin_conn().set_user_quota(
@@ -169,8 +169,8 @@ def get_account_s3_users(subject):
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
         filters = schema.load(parsed_filters)
-    except TypeError:
-        abort(400, "Invalid query parameters.")
+    except ValidationError as e:
+        abort_detailed(400, "Invalid query parameters.", e.messages)
     s3_users = S3Users.filtered(subject).filter_by(**filters).all()
     return S3UserSchema(many=True).dump(s3_users)
 
@@ -379,33 +379,32 @@ def list_buckets(subject):
     """
     api_filters = parse_jsonapi_filters(request.args)
     s3user_filters = api_filters.pop("user", {})
-    # Backward compatibility with previous filters
-    if "user_name" in api_filters:
-        s3user_filters["name"] = api_filters.pop("user_name")
-    if "user_name" in request.args:
-        s3user_filters["name"] = request.args["user_name"]
 
-    if s3user_filters:
-        try:
-            filters = S3UserSchema(partial=True).load(s3user_filters)
-        except AttributeError:
-            abort(400, "Invalid filter key for related user.")
+    try:
+        filters = S3UserSchema(partial=True).load(s3user_filters)
+    except ValidationError as e:
+        abort_detailed(400, "Invalid filter key for related user.", e.messages)
+
     s3_users = S3Users.filtered(subject).filter_by(**filters).all()
-
     if not s3_users:
         abort(404, "User not found or you haven't permission.")
-    buckets = []
-    # TODO: try to get all buckets in one request and then filter, instead loop over all users
-    for s3_user in s3_users:
-        for bucket_name in s3_user.get_buckets_name():
-            bucket = Bucket.from_user_and_bucket_name(s3_user.name, bucket_name)
-            # Buckets are not stored in database, so we have to filter them iterating by fields
-            try:
-                if bucket.filter(api_filters):
-                    buckets.append(bucket)
-            except AttributeError as e:
-                abort(400, e.args[0])
 
+    buckets = []
+    s3_user_names = [s3_user.name for s3_user in s3_users]
+
+    if len(s3_users) == 1:
+        buckets_info = s3_users[0].get_buckets_info()
+    else:
+        buckets_info = Bucket.get_all_buckets_info()
+
+    for bucket_info in buckets_info:
+        bucket = Bucket.from_bucket_info(bucket_info)
+        # Buckets are not stored in database, so we have to filter them iterating by fields
+        try:
+            if bucket.user_name in s3_user_names and bucket.filter(api_filters):
+                buckets.append(bucket)
+        except AttributeError as e:
+            abort(400, e.args[0])
     return jsonify(BucketSchema(many=True).dump(buckets))
 
 
@@ -501,4 +500,3 @@ def regenerate_keys(subject, user_id):
     s3_user_obj._user_info_cache = None
     s3_user_obj = S3Users.filtered(subject).filter_by(id=user_id).first()
     return S3UserSchema().dump(s3_user_obj)
-

@@ -17,8 +17,8 @@ def get_account_quotas(subject):
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
         filters = schema.load(parsed_filters)
-    except TypeError:
-        abort(400, "Invalid query parameters.")
+    except ValidationError as e:
+        abort_detailed(400, f"Invalid query parameters.", e.messages)
     quotas = IscsiQuotas.filtered(subject).options(selectinload(IscsiQuotas.pool)) \
              .filter_by(**filters).except_(IscsiQuotas.get_default_limitsets()).all()
     return jsonify(IscsiQuotaSchema(many=True).dump(quotas))

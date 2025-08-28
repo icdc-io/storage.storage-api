@@ -6,6 +6,13 @@ from enum import StrEnum
 import rgwadmin.exceptions
 from flask import abort
 from sqlalchemy import event
+from marshmallow import (
+    Schema,
+    ValidationError,
+    fields,
+    validate,
+    validates_schema,
+)
 
 from app.database import db
 from app.lib.ceph_utils import ceph_connection as rgwadmin_conn
@@ -158,9 +165,9 @@ class S3Users(db.Model, AbstractModel):
         )
         return S3UserQuota.from_usage_info(usage_info).to_dict()
 
-    def get_buckets_name(self):
+    def get_buckets_name(self) -> list[str]:
         """
-        Get Bucket of S3 User.
+        Get Buckets name of S3 User.
         """
 
         buckets_name = rgwadmin_conn().request(
@@ -168,6 +175,17 @@ class S3Users(db.Model, AbstractModel):
         )
 
         return buckets_name
+
+    def get_buckets_info(self) -> list[dict]:
+        """
+        Get Buckets info of S3 User
+        """
+
+        buckets_info = rgwadmin_conn().request(
+            "GET", f"/admin/bucket?format=json&uid={self.name}&stats=True"
+        )
+
+        return buckets_info
 
 
 class S3UserStatus(StrEnum):
@@ -213,16 +231,6 @@ class S3UserQuota:
         return S3UserQuotaSchema().dump(self)
 
 
-from marshmallow import (
-    EXCLUDE,
-    Schema,
-    ValidationError,
-    fields,
-    validate,
-    validates_schema,
-)
-
-
 class S3UserQuotaSchema(Schema):
     data_size_mb = fields.Int(validate=validate.Range(min=0))
     objects = fields.Int(validate=validate.Range(min=0))
@@ -259,9 +267,6 @@ class S3UserSchema(Schema):
     keys = fields.Function(lambda s3user: s3user.get_keys(), dump_only=True)
     usage = fields.Function(lambda s3user: s3user.get_usage(), dump_only=True)
     status = fields.Function(lambda s3user: s3user.status, dump_only=True)
-
-    class Meta:
-        unknown = EXCLUDE
 
     @validates_schema
     def validate_user_quota(self, data, **kwargs):

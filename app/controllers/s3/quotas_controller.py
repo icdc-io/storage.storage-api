@@ -16,8 +16,8 @@ def index(subject):
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
         filters = schema.load(parsed_filters)
-    except TypeError:
-        abort(400, "Invalid query parameters.")
+    except ValidationError as e:
+        abort_detailed(400, f"Invalid query parameters.", e.messages)
     quotas = S3Quotas.filtered(subject).options(selectinload(S3Quotas.pool)) \
              .filter_by(**filters).except_(S3Quotas.get_default_limitsets()).all()
     return jsonify(S3QuotaSchema(many=True).dump(quotas))

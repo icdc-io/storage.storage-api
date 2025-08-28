@@ -17,7 +17,7 @@ def get_pools(subject):
     try:
         filters = PoolSchema(partial=True).load(parsed_filters)
     except ValidationError as e:
-        abort_detailed(400, "Incorrect filter parameters.", e.messages)
+        abort_detailed(400, f"Incorrect filter parameters", e.messages)
 
     pools = Pools.query.filter_by(**filters).all()
     log.debug(f"Filtered pools: {pools}")

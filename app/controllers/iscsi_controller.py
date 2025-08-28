@@ -74,8 +74,8 @@ def get_configs(subject):
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
         filters = schema.load(parsed_filters)
-    except TypeError:
-        abort(400, "Invalid query parameters.")
+    except ValidationError as e:
+        abort_detailed(400, f"Invalid query parameters.", e.messages)
     configs = IscsiConfigs.filtered(subject).filter_by(**filters).all()
     return jsonify(IscsiConfigSchema(many=True).dump(configs))
 
@@ -288,8 +288,8 @@ def get_iscsi_clients(subject):
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
         filters = schema.load(parsed_filters)
-    except TypeError:
-        abort(400, "Invalid query parameters.")
+    except ValidationError as e:
+        abort_detailed(400, f"Invalid query parameters.", e.messages)
     clients = IscsiClients.filtered(subject).filter_by(**filters).all()
     return jsonify(IscsiClientSchema(many=True).dump(clients))
 
