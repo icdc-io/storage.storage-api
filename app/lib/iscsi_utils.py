@@ -147,11 +147,14 @@ class Iscsi:
 
         # step 3: assign the portal to the target
         response = self.assign_portal_to_target()
-        if is_failed(response):
-            # step 4: rollback on failure
-            if target_created:
-                self.delete_target()
-            return response
+        if (response.get('code') == 400) and ("Gateway already exists" in response.get('data', '')):
+            log.info(f"iSCSI target {self.target_iqn} already configured with portal {self.gateway.name}. Skipping")
+        else:
+            if is_failed(response):
+                # step 4: rollback on failure
+                if target_created:
+                    self.delete_target()
+                return response
 
         log.info(f"Successfully configured iSCSI target {self.target_iqn} with portal {self.gateway.name}")
 
