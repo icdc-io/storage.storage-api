@@ -3,12 +3,11 @@
 import json
 import logging as log
 import sys
-
-from flask import abort, jsonify
 from enum import StrEnum
 
-from app import consts
+from flask import abort, jsonify
 
+from app import consts
 
 log.basicConfig(
     stream=sys.stdout,

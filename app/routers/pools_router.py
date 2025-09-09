@@ -4,9 +4,9 @@ Pools Router module
 from flask import Blueprint
 from werkzeug.exceptions import HTTPException
 
-from app.rbac import rbac
 from app.controllers import pools_controller as controller
 from app.lib.request_utils import handle_exception
+from app.rbac import rbac
 
 pools = Blueprint(name="pools", import_name=__name__)
 pools.register_error_handler(HTTPException, handle_exception)

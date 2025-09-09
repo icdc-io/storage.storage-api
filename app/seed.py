@@ -11,9 +11,9 @@ from app.models import (
     snapshot,  # noqa: F401
 )
 from app.models.account import Accounts
+from app.models.iscsi_quota import IscsiQuotas
 from app.models.pool import Pools
 from app.models.s3_quota import S3Quotas
-from app.models.iscsi_quota import IscsiQuotas
 
 log.info("Imported seed module")
 

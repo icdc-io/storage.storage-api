@@ -1,7 +1,8 @@
 import requests
+from prometheus_client.parser import text_string_to_metric_families
+
 from app_socket.config import CEPH_PROMETHEUS_HOST, log
 from app_socket.utils import consolidate_metrics, get_metric_name
-from prometheus_client.parser import text_string_to_metric_families
 
 
 # Function to send disk stats to the client

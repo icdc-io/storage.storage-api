@@ -3,10 +3,10 @@ iSCSI Quota Model
 """
 from marshmallow import (
     Schema,
-    fields,
-    validate,
-    pre_load,
     ValidationError,
+    fields,
+    pre_load,
+    validate,
     validates_schema,
 )
 
@@ -89,7 +89,10 @@ class IscsiQuotas(db.Model, AbstractModel):
         """
         Retrieves all IscsiConfigs objects filtered by "account_id" and returns their data, focusing on the "gateways" field.
         """
-        from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema # fix circular import
+        from app.models.iscsi_config import (  # fix circular import
+            IscsiConfigs,
+            IscsiConfigSchema,
+        )
 
         # Assuming 'serialize' is a method that formats the query results and 'gateways' is included in the serialization
         iscsi_configs = IscsiConfigs.query.filter_by(account_id = self.account_id, pool_id = self.pool_id).all()

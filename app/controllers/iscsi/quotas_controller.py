@@ -2,14 +2,14 @@ from flask import abort, jsonify, request
 from marshmallow import ValidationError
 from sqlalchemy.orm import selectinload
 
-from app.models.account import Accounts
-from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
 from app.lib.request_utils import (
     abort_detailed,
     log,
     parse_jsonapi_filters,
-    request_json
+    request_json,
 )
+from app.models.account import Accounts
+from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
 
 
 def get_account_quotas(subject):
@@ -18,7 +18,7 @@ def get_account_quotas(subject):
     try:
         filters = schema.load(parsed_filters)
     except ValidationError as e:
-        abort_detailed(400, f"Invalid query parameters.", e.messages)
+        abort_detailed(400, "Invalid query parameters.", e.messages)
     quotas = IscsiQuotas.filtered(subject).options(selectinload(IscsiQuotas.pool)) \
              .filter_by(**filters).except_(IscsiQuotas.get_default_limitsets()).all()
     return jsonify(IscsiQuotaSchema(many=True).dump(quotas))

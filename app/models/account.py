@@ -2,20 +2,21 @@
 Account Model
 """
 from typing import Optional
-from flask_rbac_icdc import RbacAccount, PermissionException
+
+from flask_rbac_icdc import PermissionException, RbacAccount
 from marshmallow import (
+    INCLUDE,
     Schema,
     fields,
     validate,
-    INCLUDE,
 )
 
-from app.database import db
-from app.models.iscsi_quota import IscsiQuotaSchema
-from app.models.s3_quota import S3QuotaSchema
-from app.models.model import AbstractModel
-from app.lib.auth import is_operator
 from app import consts
+from app.database import db
+from app.lib.auth import is_operator
+from app.models.iscsi_quota import IscsiQuotaSchema
+from app.models.model import AbstractModel
+from app.models.s3_quota import S3QuotaSchema
 
 
 class Accounts(db.Model, AbstractModel, RbacAccount):

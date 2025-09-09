@@ -1,9 +1,10 @@
 from threading import Lock
 
-from app_socket.config import log
-from app_socket.metrics import send_disk_stats
 from flask import request
 from flask_socketio import Namespace, disconnect, emit
+
+from app_socket.config import log
+from app_socket.metrics import send_disk_stats
 
 # Thread safety and connection tracking
 thread = None

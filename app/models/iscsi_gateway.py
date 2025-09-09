@@ -5,9 +5,9 @@ from ipaddress import ip_address
 
 from marshmallow import (
     Schema,
+    ValidationError,
     fields,
     validate,
-    ValidationError,
 )
 
 from app.database import db

@@ -1,6 +1,7 @@
 import pytest
 from flask.testing import FlaskClient
 from marshmallow import ValidationError
+
 from tests.schemes.account import AccountResponseSchema
 
 

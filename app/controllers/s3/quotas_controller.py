@@ -1,14 +1,10 @@
 from flask import abort, jsonify, request
-from sqlalchemy.orm import selectinload
 from marshmallow import ValidationError
+from sqlalchemy.orm import selectinload
 
+from app.lib.request_utils import abort_detailed, parse_jsonapi_filters, request_json
 from app.models.account import Accounts
 from app.models.s3_quota import S3Quotas, S3QuotaSchema
-from app.lib.request_utils import (
-    abort_detailed,
-    parse_jsonapi_filters,
-    request_json
-)
 
 
 def index(subject):
@@ -17,7 +13,7 @@ def index(subject):
     try:
         filters = schema.load(parsed_filters)
     except ValidationError as e:
-        abort_detailed(400, f"Invalid query parameters.", e.messages)
+        abort_detailed(400, "Invalid query parameters.", e.messages)
     quotas = S3Quotas.filtered(subject).options(selectinload(S3Quotas.pool)) \
              .filter_by(**filters).except_(S3Quotas.get_default_limitsets()).all()
     return jsonify(S3QuotaSchema(many=True).dump(quotas))
@@ -40,7 +36,7 @@ def create(subject, body=None):
     quota = S3Quotas(**validated_body)
     account.s3_quotas.append(quota)
     account.save()
-    
+
     return S3QuotaSchema().dump(quota)
 
 

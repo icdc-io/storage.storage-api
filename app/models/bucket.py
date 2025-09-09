@@ -2,9 +2,11 @@
 S3 Bucket Model
 """
 
-from marshmallow import Schema, fields, ValidationError, validates_schema, validate
+from marshmallow import Schema, ValidationError, fields, validate, validates_schema
+
 from app.lib.ceph_utils import ceph_connection as rgwadmin_conn
 from app.lib.request_utils import log
+
 
 class Bucket:
     def __init__(self, name, path, user_name, quota, bucket_info=None):
@@ -24,7 +26,7 @@ class Bucket:
         """
         log.info("Get info of all buckets in ceph")
         buckets_info = rgwadmin_conn().request(
-            "GET", f"/admin/bucket?format=json&stats=True"
+            "GET", "/admin/bucket?format=json&stats=True"
         )
         return buckets_info
 

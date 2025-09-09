@@ -2,27 +2,27 @@
 iSCSI Controller
 """
 from datetime import datetime
+from sqlite3 import IntegrityError
 
 from flask import abort, jsonify, request
-from sqlite3 import IntegrityError
 from marshmallow import ValidationError
 
+from app.lib.request_utils import (
+    abort_detailed,
+    is_failed,
+    log,
+    no_content,
+    parse_jsonapi_filters,
+    request_json,
+    status_codes,
+)
 from app.models.account import Accounts
-from app.models.iscsi_quota import IscsiQuotas
 from app.models.iscsi_client import IscsiClients, IscsiClientSchema
 from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
 from app.models.iscsi_disk import IscsiDisks, IscsiDiskSchema
 from app.models.iscsi_gateway import IscsiGateways, IscsiGatewaySchema
+from app.models.iscsi_quota import IscsiQuotas
 from app.models.snapshot import Snapshots, SnapshotSchema
-from app.lib.request_utils import (
-    is_failed,
-    log,
-    no_content,
-    abort_detailed,
-    request_json,
-    parse_jsonapi_filters,
-    status_codes,
-)
 
 
 def get_iscsi_limits(subject):
@@ -75,7 +75,7 @@ def get_configs(subject):
     try:
         filters = schema.load(parsed_filters)
     except ValidationError as e:
-        abort_detailed(400, f"Invalid query parameters.", e.messages)
+        abort_detailed(400, "Invalid query parameters.", e.messages)
     configs = IscsiConfigs.filtered(subject).filter_by(**filters).all()
     return jsonify(IscsiConfigSchema(many=True).dump(configs))
 
@@ -289,7 +289,7 @@ def get_iscsi_clients(subject):
     try:
         filters = schema.load(parsed_filters)
     except ValidationError as e:
-        abort_detailed(400, f"Invalid query parameters.", e.messages)
+        abort_detailed(400, "Invalid query parameters.", e.messages)
     clients = IscsiClients.filtered(subject).filter_by(**filters).all()
     return jsonify(IscsiClientSchema(many=True).dump(clients))
 

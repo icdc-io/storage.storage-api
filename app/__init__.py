@@ -1,14 +1,15 @@
 from flask import Flask
 from flask_cors import CORS
+
 from . import consts
 from .database import db, migrate
 from .loggers import log
-from .seed import seed as seed_data
 from .routers.account_router import account_management
 from .routers.health_check import health_check_bp
 from .routers.iscsi_router import iscsi
 from .routers.pools_router import pools
 from .routers.s3_router import s3
+from .seed import seed as seed_data
 
 
 def create_app():

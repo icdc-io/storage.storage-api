@@ -1,12 +1,12 @@
 """
 Pools Controller
 """
-from flask import request, jsonify
+from flask import jsonify, request
+from marshmallow import ValidationError
 
-from app.lib.request_utils import parse_jsonapi_filters, abort_detailed
+from app.lib.request_utils import abort_detailed, parse_jsonapi_filters
 from app.loggers import log
 from app.models.pool import Pools, PoolSchema
-from marshmallow import ValidationError
 
 
 def get_pools(subject):
@@ -17,7 +17,7 @@ def get_pools(subject):
     try:
         filters = PoolSchema(partial=True).load(parsed_filters)
     except ValidationError as e:
-        abort_detailed(400, f"Incorrect filter parameters", e.messages)
+        abort_detailed(400, "Incorrect filter parameters", e.messages)
 
     pools = Pools.query.filter_by(**filters).all()
     log.debug(f"Filtered pools: {pools}")

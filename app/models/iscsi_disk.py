@@ -2,21 +2,21 @@
 iSCSI Disk model
 """
 from flask import abort
-from sqlalchemy import event
 from marshmallow import (
     Schema,
-    fields,
-    validates_schema,
     ValidationError,
+    fields,
     validate,
+    validates_schema,
 )
+from sqlalchemy import event
 
 from app.database import db
 from app.lib.request_utils import is_failed
 from app.loggers import log
-from app.models.model import AbstractModel
 from app.models.iscsi_config import IscsiConfigs
 from app.models.iscsi_quota import IscsiQuotas
+from app.models.model import AbstractModel
 from app.models.relationships import iscsi_assigned_clients
 
 
@@ -156,7 +156,7 @@ class IscsiDiskSchema(Schema):
             del data["size_gb"]
         elif delta < 0:
             raise ValidationError({
-                "size_gb": [f"Resize disk must be higher than previous size."]
+                "size_gb": ["Resize disk must be higher than previous size."]
             })
 
         if not disk and usage["disks"] + 1 > quota.disks:

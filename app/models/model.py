@@ -1,8 +1,8 @@
 """
 Abstract model
 """
-from app.loggers import log
 from app.database import db
+from app.loggers import log
 
 
 class AbstractModel:

@@ -4,12 +4,16 @@ Account controller
 
 import os
 
-from flask import request, abort, jsonify
+from flask import abort, jsonify, request
 from marshmallow import ValidationError
 
+from app.controllers.iscsi.quotas_controller import create as create_iscsi_quota
+from app.controllers.iscsi_controller import set_config_gateway as set_gateway
+from app.controllers.iscsi_controller import set_iscsi_configs as set_config
+from app.controllers.s3.quotas_controller import create as create_s3_quota
 from app.database import db
 from app.lib import paramiko
-from app.lib.request_utils import request_json, log, abort_detailed
+from app.lib.request_utils import abort_detailed, log, request_json
 from app.models.account import Accounts, AccountSchema
 from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
 from app.models.iscsi_gateway import IscsiGateways, IscsiGatewaySchema
@@ -17,10 +21,6 @@ from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
 from app.models.s3_quota import S3Quotas, S3QuotaSchema
 from app.models.s3_user import S3Users
 
-from app.controllers.s3.quotas_controller import create as create_s3_quota
-from app.controllers.iscsi.quotas_controller import create as create_iscsi_quota
-from app.controllers.iscsi_controller import set_iscsi_configs as set_config
-from app.controllers.iscsi_controller import set_config_gateway as set_gateway
 #############################################
 # Account Controller
 #############################################

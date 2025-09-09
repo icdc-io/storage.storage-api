@@ -32,18 +32,22 @@ audit:
     - mkdir -p ./output
   script:
     - echo "Running pip-audit..."
-    - podman run --rm -it
-      --name storage 
-      -v "$(pwd)/output:/output:z" 
-      $IMAGE_NAME 
-      sh -c "pip install pip-audit && pip-audit > /output/pip_audit_report.txt"
+    - >
+      podman run --rm
+      --name storage
+      --entrypoint /bin/sh
+      -v "$(pwd)/output:/output:Z"
+      "$IMAGE_NAME" -lc '
+        pip install -q pip-audit &&
+        pip-audit --progress-spinner off > /output/pip_audit_report.txt
+      '
   after_script:
     - podman stop -a
-    - cp output/pip_audit_report.txt .
   artifacts:
     when: always
     paths:
-      - pip_audit_report.txt
+      - output/pip_audit_report.txt
+    expire_in: 1 week
   <<: *default_rules
 
 tests:

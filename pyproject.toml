@@ -40,12 +40,13 @@ target-version = "py312"
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
 # McCabe complexity (`C901`) by default.
+#select = ["E4", "E7", "E9", "F", "I", "N", "ARG", "A"]
 select = ["E4", "E7", "E9", "F"]
-ignore = ["E401", "E402", "E501", "C901"]
+ignore = []
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
-unfixable = []
+unfixable = ["E401", "E402", "E501", "C901"]
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
@@ -105,3 +106,56 @@ log_cli_level = "CRITICAL"
 # system, and so shouldn't trigger E1101 when accessed. Python regular
 # expressions are accepted.
 generated-members = ["consts.*"]
+
+[tool.pylint.messages_control]
+disable = [
+  # dubling Ruff signatures
+  "line-too-long",          # C0301
+  "trailing-whitespace",    # C0303
+  "bad-indentation",        # W0311
+
+  # dubling  Ruff (E4 + I) signatures
+  "wrong-import-order",     # C0411
+  "ungrouped-imports",      # C0412
+  "wrong-import-position",  # C0413
+  "multiple-imports",       # C0410
+
+  #  Pyflakes/Ruff
+  "unused-import",          # W0611 -> Ruff F401
+  "unused-variable",        # W0612 -> Ruff F841
+  "unused-argument",        # W0613 -> Ruff ARG001
+  "redefined-outer-name",   # W0621 -> Ruff F811
+  "redefined-builtin",      # W0622 -> Ruff A001/A002
+
+  # Pyflakes
+  "import-error",           # E0401
+
+  # Pydocstyle
+  "missing-module-docstring",   # C0114
+  "missing-class-docstring",    # C0115
+  "missing-function-docstring", # C0116
+]
+
+[tool.pylint.main]
+jobs = 0
+py-version = "3.12"
+ignore-paths = [
+  "^\\.direnv/.*$",
+  "^\\.eggs/.*$",
+  "^build/.*$",
+  "^dist/.*$",
+  "^node_modules/.*$",
+  "^venv/.*$",
+  "^\\.venv/.*$",
+  "^site-packages/.*$",
+  "^\\.mypy_cache/.*$",
+  "^\\.ruff_cache/.*$",
+  "^\\.pytest_cache/.*$",
+  "^\\.git/.*$",
+  "^_build/.*$",
+  "^buck-out/.*$",
+  "^__pypackages__/.*$",
+]
+
+[tool.pylint.format]
+max-line-length = 88

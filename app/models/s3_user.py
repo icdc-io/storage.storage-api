@@ -5,7 +5,6 @@ from enum import StrEnum
 
 import rgwadmin.exceptions
 from flask import abort
-from sqlalchemy import event
 from marshmallow import (
     Schema,
     ValidationError,
@@ -13,6 +12,7 @@ from marshmallow import (
     validate,
     validates_schema,
 )
+from sqlalchemy import event
 
 from app.database import db
 from app.lib.ceph_utils import ceph_connection as rgwadmin_conn

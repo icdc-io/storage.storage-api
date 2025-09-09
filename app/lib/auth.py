@@ -3,6 +3,7 @@ This module provides authorization utilities
 """
 
 import re
+
 from app import consts
 
 

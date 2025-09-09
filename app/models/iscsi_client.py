@@ -2,16 +2,16 @@
 iSCSI Client method
 """
 from flask import abort
-from sqlalchemy import event
 from marshmallow import Schema, fields, validate
+from sqlalchemy import event
 
 from app.database import db
 from app.lib.request_utils import is_failed
 from app.loggers import log
 from app.models.iscsi_config import IscsiConfigs
+from app.models.iscsi_disk import IscsiDiskSchema
 from app.models.model import AbstractModel
 from app.models.relationships import iscsi_assigned_clients
-from app.models.iscsi_disk import IscsiDiskSchema
 
 
 class IscsiClients(db.Model, AbstractModel):

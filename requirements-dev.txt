@@ -1,0 +1,3 @@
+ruff    # linter
+pylint  # linter
+mypy    # linter

@@ -4,8 +4,8 @@ Revision ID: 950a110b9413
 Revises: fc43209701a5
 Create Date: 2024-11-05 18:01:57.407229
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = '950a110b9413'

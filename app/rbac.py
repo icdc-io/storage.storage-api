@@ -1,5 +1,7 @@
 import os
+
 from flask_rbac_icdc import RBAC
+
 from app.models.account import Accounts
 
 rbac_config_path = os.path.join(

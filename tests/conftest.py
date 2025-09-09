@@ -1,5 +1,6 @@
 import sys
 import types
+
 import pytest
 
 
@@ -12,8 +13,8 @@ def mock_missing_ceph_libraries():
 
 @pytest.fixture(scope="session")
 def client():
-    from main import flask_app
     from app.seed import get_or_create_account
+    from main import flask_app
     flask_app.testing = True
     with flask_app.app_context():
         get_or_create_account("devel","devel account")

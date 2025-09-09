@@ -1,0 +1,62 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        name: ruff-fix-f541-I001-I002
+        args:
+          - --fix
+          - --fix-only
+          - --select
+          - F541
+          - --select
+          - I
+          - --config
+          - pyproject.toml
+        pass_filenames: false
+        always_run: true
+
+      - id: ruff
+        name: ruff-lint-informative
+        args:
+          - --config
+          - pyproject.toml
+          - --exit-zero
+          - --output-format
+          - concise
+          - --statistics
+        pass_filenames: true
+        always_run: true
+
+      # - id: ruff
+      #   name: ruff-check-review-bloking
+      #   args:
+      #     - --config
+      #     - pyproject.toml
+      #   pass_filenames: true
+      #   always_run: true
+
+  # - repo: https://github.com/pylint-dev/pylint
+  #   rev: v3.3.8
+  #   hooks:
+  #     - id: pylint
+  #       name: pylint
+  #       args:
+  #         - --rcfile=pyproject.toml
+  #         - --jobs=0
+  #         - app/
+  #         - app_socket/
+  #       pass_filenames: false
+  #       always_run: true
+
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.9.0
+  #   hooks:
+  #     - id: mypy
+  #       name: mypy
+  #       args:
+  #         - --config-file=pyproject.toml
+  #         - app/
+  #         - app_socket/
+  #       pass_filenames: false
+  #       always_run: true

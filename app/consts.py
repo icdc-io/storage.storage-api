@@ -7,8 +7,11 @@ Generate global variables from config and ENV
 """
 
 import os
+
 import yaml
+
 from app.loggers import log
+
 # NOTE: can use only log.info() level or higher, as real LOG_LEVEL is not loaded yet from configs
 
 def __defaults(file_name, directory_name):

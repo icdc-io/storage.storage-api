@@ -2,9 +2,9 @@
 Snapshots model
 """
 from flask import abort
+from marshmallow import Schema, fields, validate
 from sqlalchemy import event
 from sqlalchemy.sql import func
-from marshmallow import Schema, fields, validate
 
 from app.database import db
 from app.lib.request_utils import is_failed

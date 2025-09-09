@@ -1,29 +1,29 @@
 """
 S3 Controller
 """
-from json import JSONDecodeError
 import re
+from json import JSONDecodeError
 
 import rgwadmin.exceptions
+from botocore.exceptions import ClientError
 from flask import abort, jsonify, request
 from marshmallow import ValidationError
-from botocore.exceptions import ClientError
 
+from app.lib import paramiko
 from app.lib.ceph_utils import boto3_conn
 from app.lib.ceph_utils import ceph_connection as rgwadmin_conn
-from app.lib import paramiko
 from app.lib.request_utils import (
     abort_detailed,
     log,
     no_content,
-    request_json,
     parse_jsonapi_filters,
+    request_json,
 )
 from app.models.account import Accounts
-from app.models.pool import Pools
-from app.models.s3_user import S3Users, S3UserSchema
-from app.models.s3_quota import S3Quotas
 from app.models.bucket import Bucket, BucketSchema
+from app.models.pool import Pools
+from app.models.s3_quota import S3Quotas
+from app.models.s3_user import S3Users, S3UserSchema
 
 
 def get_s3_limits(subject):
@@ -99,7 +99,7 @@ def _create_s3user_ceph(account_name, data, placement):
         rgwadmin_conn().request(
             "PUT",
             f"/admin/user?format=json&uid={user_name}&default-placement={placement}" +
-            f"&user-caps=buckets=*" +
+            "&user-caps=buckets=*" +
             f"&max-buckets={data['quota']['buckets']}&display-name={data['owner']}"
         )
         # rgwadmin_conn().create_user(

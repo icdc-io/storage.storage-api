@@ -9,6 +9,7 @@ import rados
 import rbd
 import requests
 
+from app.lib.request_utils import HttpMethod as methods
 from app.lib.request_utils import (
     conflict,
     internal_server_error,
@@ -17,12 +18,12 @@ from app.lib.request_utils import (
     no_content,
     not_found,
     ok,
-    HttpMethod as methods,
-    status_codes
+    status_codes,
 )
+from app.models.account import Accounts
 from app.models.iscsi_client import IscsiClients
 from app.models.pool import Pools
-from app.models.account import Accounts
+
 
 class Iscsi:
     """

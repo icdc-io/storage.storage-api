@@ -4,7 +4,6 @@ Main Router module
 
 from flask_cors import CORS
 
-
 # Routers import
 from app.routers.account_router import account_management
 from app.routers.health_check import health_check_bp

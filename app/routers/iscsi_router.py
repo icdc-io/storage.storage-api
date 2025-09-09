@@ -5,8 +5,8 @@ from flask import Blueprint
 from werkzeug.exceptions import HTTPException
 
 from app.controllers import iscsi_controller as controller
-from app.lib.request_utils import handle_exception
 from app.controllers.iscsi import quotas_controller
+from app.lib.request_utils import handle_exception
 from app.rbac import rbac
 
 iscsi = Blueprint(name="iscsi", import_name=__name__)
