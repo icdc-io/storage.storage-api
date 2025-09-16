@@ -464,6 +464,10 @@ class Iscsi:
         Returns:
             dict: API response indicating success or error.
         """
+        response = self.create_client(client)
+        if is_failed(response):
+            return response
+
         request_url = f"/clientauth/{self.target_iqn}/{client.iqn}"
         log.info(f"Updating client '{client.iqn}' for target '{self.target_iqn}'")
 
