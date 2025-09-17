@@ -1,10 +1,10 @@
 import pytest
 
-from tests.fixtures.pool import *
 from tests.fixtures.account import *
+from tests.fixtures.bucket import *
+from tests.fixtures.pool import *
 from tests.fixtures.s3_quota import *
 from tests.fixtures.s3_user import *
-from tests.fixtures.bucket import *
 
 
 @pytest.fixture(scope="package")

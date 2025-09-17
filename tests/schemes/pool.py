@@ -1,5 +1,6 @@
 from marshmallow import Schema, fields, validate
 
+
 class PoolSchema(Schema):
     id = fields.Integer(required=True)
     klass = fields.String(required=True)

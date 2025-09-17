@@ -1,6 +1,6 @@
-from sqlalchemy import select
-from factory.alchemy import SQLAlchemyModelFactory
 from factory import DictFactory
+from factory.alchemy import SQLAlchemyModelFactory
+from sqlalchemy import select
 
 from app.database import db
 from app.models.s3_quota import S3Quotas

@@ -1,6 +1,7 @@
 import factory
-from tests.factory.base import BaseFactory, BasePayloadFactory
+
 from app.models.s3_quota import S3Quotas
+from tests.factory.base import BaseFactory, BasePayloadFactory
 
 
 class S3QuotaFactory(BaseFactory):

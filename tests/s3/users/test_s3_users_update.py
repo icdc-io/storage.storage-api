@@ -1,5 +1,6 @@
 import pytest
 from marshmallow import ValidationError
+
 from tests.factory.s3_user import S3UserUpdatePayloadFactory
 from tests.schemes.s3_user import S3UserResponseSchema
 
@@ -11,7 +12,7 @@ def test_permission_member_cannot_change_own_s3user_owner(api, s3_user, headers_
     code, data = api.s3.users.update(s3_user["id"], payload, header)
 
     assert code == 200, f"Update failed: {code} {data}"
-    assert data["owner"] != new_owner, f"Permission failed: owner can not change the owner of s3 user."
+    assert data["owner"] != new_owner, "Permission failed: owner can not change the owner of s3 user."
 
 
 def test_permission_member_cannot_change_s3user_with_different_owner(api, s3_user, headers_factory):

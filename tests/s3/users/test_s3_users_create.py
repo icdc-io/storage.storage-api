@@ -1,5 +1,4 @@
 import pytest
-
 from marshmallow import ValidationError
 
 from tests.factory.s3_user import S3UserCreatePayloadFactory

@@ -1,13 +1,12 @@
 from types import SimpleNamespace
 
 import pytest
-
 from sqlalchemy.orm import scoped_session, sessionmaker
 
+from tests.api import Api
 from tests.factory.account import AccountFactory
 from tests.factory.headers import HeadersFactory
 from tests.factory.s3_quota import S3QuotaFactory
-from tests.api import Api
 
 
 @pytest.fixture(scope="session", autouse=True)

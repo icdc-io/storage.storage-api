@@ -4,7 +4,7 @@ from tests.factory.base import BasePayloadFactory
 
 
 class BucketCreatePayloadFactory(BasePayloadFactory):
-    name = factory.Sequence(lambda n: f"bucket")
+    name = factory.Sequence(lambda n: "bucket")
     quota = {"data_size_mb": 1, "buckets": 1, "objects": 1}
 
     class Params:

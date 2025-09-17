@@ -1,4 +1,5 @@
 from typing import Optional, Tuple
+
 from flask.testing import FlaskClient
 
 

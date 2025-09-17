@@ -2,7 +2,6 @@ import pytest
 from sqlalchemy import delete
 
 from app.lib.ceph_utils import ceph_connection as rgwadmin_conn
-
 from tests.factory.s3_user import S3UserCreatePayloadFactory
 
 
