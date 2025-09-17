@@ -167,6 +167,8 @@ class S3QuotaSchema(Schema):
 
     @validates_schema
     def validates_limit_exceeding(self, data, **kwargs):
+        if not data.get("pool_id"):
+            return data
         errors = {}
         usage = self.context.get("usage")
 

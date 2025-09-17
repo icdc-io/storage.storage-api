@@ -672,6 +672,7 @@ def rollback_snapshot(subject, disk_id, snapshot_name):
 
     update_params = {"size_gb": response["data"] / 1024**3}
     disk.update(update_params)
+    return IscsiDiskSchema().dump(disk)
 
 
 def _disk_migrate(body):

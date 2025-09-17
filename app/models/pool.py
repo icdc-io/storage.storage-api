@@ -50,8 +50,8 @@ class Pools(db.Model, AbstractModel):
 
 
 class PoolSchema(Schema):
-    POOL_NAME_PATTERN = r"^[a-z0-9\-]$"
-    POOL_KLASS_PATTERN = r"^[a-z\-]$"
+    POOL_NAME_PATTERN = r"^[a-z0-9\-]+$"
+    POOL_KLASS_PATTERN = r"^[a-z\-]+$"
     POOL_TYPE_CHOICES = ("iscsi", "s3")
 
     id = fields.Int()
