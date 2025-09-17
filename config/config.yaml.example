@@ -2,7 +2,7 @@
 log:
   level: DEBUG
 operator:
-  group: devel.admin
+  group: devel.operator
 location:
   domain: dcz.lab.icdc.io
 account:

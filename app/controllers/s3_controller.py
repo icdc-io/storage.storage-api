@@ -41,11 +41,13 @@ def create_s3_user(subject):
     Create S3 User in Ceph and in Postgres
     """
     body = request_json(request)
-    account_name = body["account_name"]
-    account = Accounts.filtered(subject).filter_by(name=body["account_name"]).first()
+    account_name = body.get("account_name", subject.account_name)
+
+    account = Accounts.filtered(subject).filter_by(name=account_name).first()
     if not account:
         abort(404, "Account with this name not found.")
     body.pop("account_name", None)
+
     pool = Pools.query.filter_by(id=body["pool_id"]).first()
     if not pool:
         abort(404, "Pool with this ID not found.")
@@ -147,9 +149,6 @@ def _create_s3user_ceph(account_name, data, placement):
     except JSONDecodeError as e:
         log.error(f"JSON decode error occurred while processing S3 User {user_name}: {str(e)}")
         raise e
-    except paramiko.ssh_exception.SSHException as e:
-        log.error(f"SSH error occurred while processing S3 User {user_name}: {str(e)}")
-        raise e
     except ValueError as e:
         log.error(f"Value error occurred while processing S3 User {user_name}: {str(e)}")
         raise e
@@ -214,19 +213,19 @@ def update_s3_user(subject, user_id):
         account_id=account.id,
         pool_id=s3_user.pool_id,
     ).first()
-
     try:
         validated_body = S3UserSchema(
             context={
                 'account_quota': account_quota,
                 'user': s3_user
             }
-        ).load(body)
+
+        ).load(body, partial=True)
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters", e.messages)
 
-    if body.get("owner", None) and "set-owner" not in subject.policy["s3.users"]["permissions"]:
-        del validated_body["owner"]  # pylint: disable=multiple-statements
+    if not body.get("owner", None) or "set-owner" not in subject.policy["s3.users"]["permissions"]:
+        validated_body["owner"] = s3_user.owner
 
     if "quota" in validated_body:
         cur_quota = s3_user.get_quota()
@@ -239,7 +238,7 @@ def update_s3_user(subject, user_id):
             _modify_user_ceph(s3_user.name, validated_body)
         except rgwadmin.exceptions.NoSuchUser as e:
             abort_detailed(400, "User not found during quota update.", str(e))
-        except rgwadmin.exceptions as e:
+        except rgwadmin.exceptions.InternalError as e:
             abort_detailed(500, "Failed to retrieve user information.", str(e))
 
     s3_user.update(validated_body)
@@ -263,10 +262,10 @@ def _modify_user_ceph(s3_user_name, body):
             max_objects=int(body["quota"]["objects"]),
             enabled=True,
         )
-    except rgwadmin.exceptions.NoSuchUser:
-        raise rgwadmin.exceptions.NoSuchUser("User not found during quota update.")
-    except rgwadmin.exceptions:
-        raise rgwadmin.exceptions.InternalError("Failed to retrieve user information.")
+    except rgwadmin.exceptions.NoSuchUser as e:
+        raise e
+    except rgwadmin.exceptions.InternalError as e:
+        raise e
 
 
 def delete_bucket(subject, path):
@@ -299,11 +298,11 @@ def create_bucket(subject):
 
     if s3_user.is_deleted():
         abort(409, "User was deleted in storage.")
-    try:
-        validated_body = BucketSchema(context={"user": s3_user}).load(body)
-    except ValidationError as e:
-        abort_detailed(400, "Invalid parameters", e.messages)
-
+    # try:
+    #     validated_body = BucketSchema(context={"user": s3_user}).load(body)
+    # except ValidationError as e:
+    #     abort_detailed(400, "Invalid parameters", e.messages)
+    validated_body = body
     pool = Pools.get_by("id", s3_user.pool_id)
     keys = s3_user.get_keys()
 

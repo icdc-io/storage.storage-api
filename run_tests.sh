@@ -79,10 +79,15 @@ if ! podman run --rm --name "$APP_CONTAINER" \
   --env DATABASE_NAME="${DATABASE_NAME}" \
   --env DATABASE_HOST="${DATABASE_HOST}" \
   --env DATABASE_PORT="${DATABASE_PORT}" \
+  --env CEPH_HOST="${CEPH_HOST}" \
+  --env CEPH_ACCESS_KEY="${CEPH_ACCESS_KEY}" \
+  --env CEPH_SECRET_KEY="${CEPH_SECRET_KEY}" \
+  --env CEPH_SSH_KEY="${CEPH_SSH_KEY}" \
+  -v "${CEPH_SSH_KEYFILE}:/.ssh/id_ed25519:ro,z" \
   -v ./htmlcov:/usr/src/app/htmlcov:z \
   -v ./report.xml:/usr/src/app/report.xml:z \
   --network="$NETWORK_NAME" \
-  "$IMAGE_NAME" sh -c "pytest --junitxml=/usr/src/app/report.xml"; then
+  "$IMAGE_NAME" sh -c "pytest -s -v --setup-show --junitxml=/usr/src/app/report.xml"; then
   error "Tests failed" 4
 fi
 

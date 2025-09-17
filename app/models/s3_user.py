@@ -98,8 +98,8 @@ class S3Users(db.Model, AbstractModel):
         """
         self.description = body.get("description", self.description)
         self.owner = body.get("owner", self.owner)
-        if 'is_locked' in body:
-            self._lock(body['is_locked'])
+        if 'status' in body:
+            self._lock(body['status'])
         self._user_info_cache = None
         self.save()
 
@@ -111,7 +111,7 @@ class S3Users(db.Model, AbstractModel):
         Suspend or unsuspend the S3 user
         """
         cases = {"lock": True, "unlock": False}
-        if cases.get(action) != self.user_info['suspended']:
+        if cases.get(action) != self.status:
             rgwadmin_conn().modify_user(uid=self.name, suspended=cases.get(action))
 
     def is_deleted(self):
@@ -258,6 +258,7 @@ class S3UserSchema(Schema):
     owner = fields.String(validate=validate.Email())
     account_id = fields.Int(load_only=True)
     pool_id = fields.Int(load_only=True)
+    status = fields.Function(serialize=lambda s3user: s3user.status, deserialize=lambda value: value)
 
     account = fields.Nested(AccountSchema(), dump_only=True)
     pool = fields.Nested(PoolSchema(), dump_only=True)
@@ -266,7 +267,6 @@ class S3UserSchema(Schema):
     user_quota = fields.Function(lambda s3user: s3user.get_quota(), dump_only=True)
     keys = fields.Function(lambda s3user: s3user.get_keys(), dump_only=True)
     usage = fields.Function(lambda s3user: s3user.get_usage(), dump_only=True)
-    status = fields.Function(lambda s3user: s3user.status, dump_only=True)
 
     @validates_schema
     def validate_user_quota(self, data, **kwargs):
@@ -315,6 +315,9 @@ class S3UserSchema(Schema):
                     f"Overflow of account quota on {key}: {account_usage[key] + delta[key]}"
                     f"/{getattr(account_quota, key)}"
                 )
+
+        if not usage and account_usage["users"] + 1 > getattr(account_quota, "users"):
+            errors["users"] = "Overflow of account quota on users"
 
         if errors:
             raise ValidationError(errors)

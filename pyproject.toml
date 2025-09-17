@@ -80,22 +80,21 @@ docstring-code-line-length = "dynamic"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
+
 addopts = [
-    "-ra", "-q",
-    # "--cov=src.controllers.auth",
-    # "--cov=src.controllers.gateway",
+    "-ra",
     "--cov=app",
-    # "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-report=term"
 ]
-testpaths = [
-    # "tests/old_tests/test_*.py",
-    "tests/test_*.py"
-]
-filterwarnings = [
-    # "ignore::DeprecationWarning",
-]
+
+testpaths = ["tests"]
+
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+filterwarnings = []
 log_cli = true
 log_cli_level = "CRITICAL"
 # disable_warnings = true
