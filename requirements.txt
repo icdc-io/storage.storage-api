@@ -4,17 +4,12 @@ Flask-SQLAlchemy
 Flask-Migrate
 Flask-Cors
 flask-socketio
-marshmallow==3.21.2
+marshmallow==3.26.1
 
 # Database and ORM
 SQLAlchemy
 SQLAlchemy-Utils
 psycopg2-binary
-
-# Authentication and Web Security
-PyJWT
-pyjwt-rsa
-
 
 # Configuration and Utilities
 PyYAML
