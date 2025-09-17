@@ -106,13 +106,13 @@ class S3Users(db.Model, AbstractModel):
     def full_name(self):
         return self.name
 
-    def _lock(self, action):
+    def _lock(self, new_status):
         """
         Suspend or unsuspend the S3 user
         """
-        cases = {"lock": True, "unlock": False}
-        if cases.get(action) != self.status:
-            rgwadmin_conn().modify_user(uid=self.name, suspended=cases.get(action))
+        cases = {"locked": True, "active": False}
+        if new_status != self.status:
+            rgwadmin_conn().modify_user(uid=self.name, suspended=cases.get(new_status))
 
     def is_deleted(self):
         """

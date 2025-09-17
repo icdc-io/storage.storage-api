@@ -2094,7 +2094,7 @@ components:
               - id: 102
                 name: acc1$app1
                 description: S3User for application 1 in account 1
-                status: true
+                status: locked
                 owner: user1@example.net
                 pool:
                   id: 13
@@ -2120,7 +2120,7 @@ components:
               - id: 103
                 name: global-s3user
                 description: S3User in global scope
-                status: false
+                status: active
                 owner: user2@example.net
                 pool:
                   id: 14

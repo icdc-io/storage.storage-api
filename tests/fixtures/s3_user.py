@@ -78,7 +78,7 @@ def s3_user(api, headers_factory, aqa_acc, s3_ssd, clean_up_s3_user):
 @pytest.fixture(scope="function")
 def locked_s3_user(client, s3_user, headers_factory):
     headers = headers_factory()
-    r = client.put(f"/api/v2/s3/users/{s3_user['id']}", json={"status": "lock"}, headers=headers)
+    r = client.put(f"/api/v2/s3/users/{s3_user['id']}", json={"status": "locked"}, headers=headers)
     state = r.get_json()
     assert state["status"] == "locked"
     return s3_user

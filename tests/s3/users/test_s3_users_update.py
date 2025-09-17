@@ -122,7 +122,7 @@ def test_update_quota_fail_for_operator(api, s3_user, headers_factory):
 
 def test_unlock_s3user(api, locked_s3_user, headers_factory):
     header = headers_factory.build()
-    payload = {"status": "unlock"}
+    payload = {"status": "active"}
     code, data = api.s3.users.update(locked_s3_user["id"], payload, header)
     assert code == 200, f"Unlock failed: {code} {data}"
     assert data["status"] == "active"
@@ -145,9 +145,9 @@ def test_update_quota_success_for_roles_in_locked_user(api, locked_s3_user, head
     [
         {"id": "update-description",                 "description": "updated by pytest"},
         {"id": "update-owner+description",           "owner": "combo_owner@example.com",  "description": "combo description"},
-        {"id": "update-owner+status",                "owner": "combo_owner2@example.com", "status": "lock"},
-        {"id": "update-description+status",          "description": "combo case",         "status": "unlock"},
-        {"id": "update-owner+description+status",    "owner": "complex_owner@example.com","description": "complex description","status": "unlock"},
+        {"id": "update-owner+status",                "owner": "combo_owner2@example.com", "status": "locked"},
+        {"id": "update-description+status",          "description": "combo case",         "status": "active"},
+        {"id": "update-owner+description+status",    "owner": "complex_owner@example.com","description": "complex description","status": "active"},
     ],
     ids=lambda c: c["id"],
 )
