@@ -55,7 +55,5 @@ def send(command):
         return ok(response)
 
     # Handle the exception when the Ceph host is unreachable
-    except paramiko.ssh_exception.NoValidConnectionsError:
-        return abort("Ceph host is unreachable")
     except paramiko.ssh_exception.NoValidConnectionsError: # pylint: disable=no-member
         return abort("Ceph host is unreachable")

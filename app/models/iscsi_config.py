@@ -52,11 +52,6 @@ class IscsiConfigs(db.Model, AbstractModel):
         """
 
         self._delete(db)
-        """
-        Method to remove the object from the database.
-        """
-
-        self._delete(db)
 
     def serialize(self, hide_params=None):
         """

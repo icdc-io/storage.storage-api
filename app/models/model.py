@@ -87,9 +87,6 @@ class AbstractModel:
         """
         Hide attributes. Needed for resolve recursion issue
         """
-        """
-        Hide attributes. Needed for resolve recursion issue
-        """
         response = {}
         if not hide:
             for key in fields:
