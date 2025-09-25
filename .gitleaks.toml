@@ -1,0 +1,20 @@
+title = "Storage API gitleaks config"
+
+[allowlist]
+description = "Allowlist for Storage API gitleaks config"
+# Regexes to match against commit messages to skip scanning for secrets and other issues with gitleaks
+regexes = [
+  '''consts\.CEPH_ACCESS_KEY.*REDACTED''',
+  '''consts\.CEPH_SECRET_KEY.*REDACTED''',
+  '''access_key:\s*REDACTED''',
+  '''secret_key:\s*REDACTED'''
+]
+paths = [
+  '''^app/lib/ceph_utils\.py$''',
+  '''^doc/openapi\.yml$'''
+]
+
+[allowlist.files]
+paths = [
+  '''^config/config\.yaml$'''
+]
