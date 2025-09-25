@@ -122,7 +122,7 @@ To run the integration tests, execute the following command:
     export DATABASE_NAME="storage_database"
 
     # for mounting into the test container
-    touch report.xml 
+    touch report.xml
     mkdir htmlcov
 
     ./run_tests.sh storage

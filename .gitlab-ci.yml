@@ -7,6 +7,7 @@ variables:
   LOG_FILE_NAME: $CI_COMMIT_SHORT_SHA.txt
   CR_SERVER: "artifactory.icz.icdc.io/icdc-docker-proxy"
   IMAGE_NAME: "storage"
+  GITLEAKS_IMAGE: "ghcr.io/gitleaks/gitleaks:v8.28.0"
 
 .default_rules: &default_rules
   rules:
@@ -22,6 +23,30 @@ build:
   script:
     - echo "Building the project..."
     - podman build --build-arg CR_SERVER=$CR_SERVER -t $IMAGE_NAME .
+  <<: *default_rules
+
+gitleaks:
+  stage: audit
+  tags: [testing]
+  script:
+    - mkdir -p output
+    - >
+      podman run --rm
+      -v "$(pwd):/repo:Z" -w /repo
+      "$GITLEAKS_IMAGE" detect
+      --redact
+      --no-banner
+      --source=/repo
+      --config /repo/.gitleaks.toml
+      --report-format json
+      --report-path /repo/output/gitleaks.json
+  artifacts:
+    when: always
+    paths: [output/gitleaks.json]
+    reports:
+      secret_detection: output/gitleaks.json
+  after_script:
+    - podman stop -a || true
   <<: *default_rules
 
 audit:
@@ -42,7 +67,7 @@ audit:
         pip-audit --progress-spinner off > /output/pip_audit_report.txt
       '
   after_script:
-    - podman stop -a
+    - podman stop -a || true
   artifacts:
     when: always
     paths:
@@ -62,9 +87,9 @@ tests:
     - echo $LOG_FILE_NAME
     - ./run_tests.sh $IMAGE_NAME | tee -a $LOG_FILE_NAME
   after_script:
-    - podman stop -a
-    - podman rm -a
-    - podman rmi $(podman images --filter "dangling=true" -q)
+    - podman stop -a || true
+    - podman rm -a || true
+    - podman rmi $(podman images --filter "dangling=true" -q) || true
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+)%/'
   artifacts:
     paths:

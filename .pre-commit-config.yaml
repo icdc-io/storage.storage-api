@@ -28,6 +28,20 @@ repos:
         pass_filenames: true
         always_run: true
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0  # та же версия, что в CI
+    hooks:
+      - id: gitleaks
+        name: gitleaks-detect
+        entry: gitleaks detect
+        args:
+          - --no-banner
+          - --redact
+          - --config=.gitleaks.toml
+          - --source=.
+        pass_filenames: false
+        always_run: true
+
       # - id: ruff
       #   name: ruff-check-review-bloking
       #   args:
