@@ -79,6 +79,7 @@ tests:
   stage: test
   tags:
     - testing
+    - dcz-sys
   before_script:
     - chmod +x ./run_tests.sh
     - mkdir htmlcov
