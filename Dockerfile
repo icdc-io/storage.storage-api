@@ -40,8 +40,7 @@ COPY . .
 ########################
 # Security adjustments and permissions
 ########################
-RUN rm -rf .git && \
-    chgrp -R 0 /usr/src/app && \
+RUN chgrp -R 0 /usr/src/app && \
     chmod -R g+rwX /usr/src/app && \
     chmod -R 777 /etc && \
     chmod g=u /etc/passwd && \
