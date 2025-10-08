@@ -4,24 +4,22 @@ info:
   description: >
     # Introduction
     
-    The `Storage` service provides easy HTTP API to manage **Object Storage** (aka S3 buckets) and **iSCSI Block Storage** functionality of ICDC Cloud Platform.
-    
-    Using this API you can script the complex actions that are required for your business case.
-    
+    The `Storage` service provides easy HTTP API to manage **Object Storage** (aka S3 buckets) and **iSCSI Block Storage** functionality of ICDC Cloud Platform.  
+    Using this API you can script the complex actions that are required for your business case.  
     The API documentation starting from general overview and followed by reference information on specific endpoints.
     
     ## Object Storage
     
-    **Object Storage** is a technology based on OpenSource `Ceph` project.
-    
-    This functionality allows to create special `s3 user` accounts with the purpose of accessing buckets and store objects into the buckets.
+    **Object Storage** is a technology based on OpenSource `Ceph` project.  
+
+    This functionality allows to create special `s3 user` accounts with the purpose of accessing buckets and store objects into the buckets.  
     Access can be provided with two protocols:
     - Amazon S3-compatible Protocol
     - Openstack Swift protocol
 
     ## iSCSI Block Storage
 
-    This functionality allows to create iSCSI Disks (backed by RBD disk protocol) and iSCSI Clients (consumer devices).
+    This functionality allows to create iSCSI Disks (backed by RBD disk protocol) and iSCSI Clients (consumer devices).  
     iSCSI Clients (identified by IQN) can connect through iSCSI Portals (aka iSCSI Gateways, hosted on CloudGateway VM)
     and get access to assigned iSCSI Disks (which are RBD disk on shared `Ceph` cluster).
 
@@ -44,17 +42,14 @@ servers:
     url: http://localhost:8080/api/v2
 tags:
   - name: Account
-    description: Account management
+    description: Management for Resource Namespaces (aka Accounts)
   - name: S3
     description: S3 service management
   - name: iSCSI
     description: iSCSI service management
   - name: Pool
     description: Pool management
-  - name: Gateway
-    description: Gateway management
-  - name: Config
-    description: Config management
+
 security:
   - JWT:
     # There is list of roles, not scopes:
@@ -78,15 +73,13 @@ paths:
         - Private
       summary: Creates account
       description: >
-        This the internal endpoint used by Setup-API.
-        By sending request to this endpoint you can create account and configures it with minimum usable state.
-
+        This the internal endpoint used by Setup-API.    
+        By sending request to this endpoint you can create account and configures it with minimum usable state.  
 
         It help to configure:
           - Quotas for each pool and each service
           - Assign iSCSI Config records
-          - Assign iSCSI Gateway records
-        
+          - Assign iSCSI Gateway records  
 
         At the moment, Setup-API starts initialization:
           - Knows info which CloudGateway(s) are connected to account networks;
@@ -94,15 +87,14 @@ paths:
             - Configured config file name (e.g. *<acc>_default.conf*) in CloudGateway(s);
             - Assigns pool name (e.g. *iscsi-ssd*);
           - Knows default credentials to internal iSCSI Gateway API (port :5000);
-          - Knows portal's IP address and API's IP address;
-        
+          - Knows portal's IP address and API's IP address;  
 
         As of Setup-API knows relationships between iSCSI Gateway (running on CloudGateway) and Pool (storage type),
-        it can pass all required information to this endpoint to create iSCSI Config and iSCSI Gateway records.
-        Setup-API knows pool names, so it has to request list of pools (see endpoint `/pools`) to find out `pool_id` used in this endpoint.
-         
+        it can pass all required information to this endpoint to create iSCSI Config and iSCSI Gateway records.    
 
-        Role-based access:
+        Setup-API knows pool names, so it has to request list of pools (see endpoint `/pools`) to find out `pool_id` used in this endpoint.  
+
+        #### Role-based access
           - `operator` role can send requests to the endpoint
           - other roles does have to access the endpoint
       security:
@@ -136,10 +128,9 @@ paths:
         - Private
       summary: List all accounts
       description: >
-        List all accounts configured in Storage service
+        List all accounts configured in Storage service  
 
-
-        Role-based access:
+        #### Role-based access
           - `operator` role has full access
           - other roles does have to the endpoint
       responses:
@@ -159,13 +150,14 @@ paths:
         - Private
       summary: Update account (or re-setup)
       description: >
-        This the internal endpoint used by Setup-API.
-        By sending request to this endpoint you can update account and re-setup account services.
-        Re-setup used when account was badly configured or new feature introduced which requires reconfiguration of account objects (e.g. iSCSI Config or iSCSI Gateways).
-        Check POST /accounts endpoint for more information.
+        This the internal endpoint used by Setup-API.  
+
+        By sending request to this endpoint you can update account and re-setup account services.  
+
+        Re-setup used when account was badly configured or new feature introduced which requires reconfiguration of account objects (e.g. iSCSI Cluster or iSCSI Gateways).
+        Check POST /accounts endpoint for more information.  
         
-        
-        Role-based access:
+        #### Role-based access
           - `operator` role can send requests to the endpoint
           - other roles does have access to the endpoint
       security:
@@ -206,9 +198,9 @@ paths:
          - Remove quotas
          - Remove account entry (last step)
         
-        As it can take long time it should put deleting task in queue and process such long tasks by separate thread (or process).
+        As it can take long time it should put deleting task in queue and process such long tasks by separate thread (or process).  
 
-        Role-based access:
+        #### Role-based access
           - `operator` role can delete any account
           - other roles does have access to the endpoint
       responses:
@@ -225,10 +217,11 @@ paths:
       tags: [Account]
       summary: List account S3 per-pool limit-sets
       description: >-
-        List account's S3 per-pool limit-sets (which limits quotas)
-        LimitSet object shares the same structure as QuotaSet.
+        List account's S3 per-pool limit-sets (which limits quotas)  
 
-        Role-based access:
+        LimitSet object shares the same structure as QuotaSet.  
+
+        #### Role-based access
           - all roles have read access to limit-sets of the authorized account
           - `operator` gets limits for all accounts
       security:
@@ -252,10 +245,10 @@ paths:
       tags: [Account]
       summary: List account S3 per-pool quota-sets
       description: >-
-        List account's S3 per-pool quota-sets.
-        Account may not have quota-sets for some pools.
+        List account's S3 per-pool quota-sets.  
+        Account may not have quota-sets for some pools.  
 
-        Role-based access:
+        #### Role-based access
           - all roles have read access to quota sets of the authorized account
           - `operator` can get quotas for all accounts
       security:
@@ -276,15 +269,13 @@ paths:
       tags: [Account]
       summary: Set up S3 per-pool quota set
       description: >-
-        The endpoint allows to create S3 QuotaSet for specific pool for specific account.
+        The endpoint allows to create S3 QuotaSet for specific pool for specific account.  
 
+        Only one account quota can be configured for specific pool.  
+        Throws `409 Conflict` if tried to install another quota for account per pool.  
+        `account_name` attribute is optional, if not specified current authorized account is used.  
 
-        Only one account quota can be configured for specific pool.
-        Throws `409 Conflict` if tried to install another quota for account per pool.
-        `account_name` attribute is optional, if not specified current authorized account is used.
-
-
-        Role-based access:
+        #### Role-based access
           - `owner`, `admin` roles can create quotas of the authorized account
           - authorized `operator` can create quota for any account
       # @DS: quota is going to be a billable metric, so may be restrict to be changed only by owner?
@@ -322,11 +313,10 @@ paths:
       tags: [Account]
       summary: Modify account S3 quota
       description: >-
-        Modify account's S3 quota set for specific pool.
-        Modifing quota can not change pool it's connected, so `pool_id` attribute should be ignored.
+        Modify account's S3 quota set for specific pool.  
+        Modifing quota can not change pool it's connected, so `pool_id` attribute should be ignored.  
 
-
-        Role-based access:
+        #### Role-based access
           - `owner`, `admin` roles can create quotas of the authorized account
           - authorized `operator` can create quota for any account
       # @DS: quota is going to be a billable metric, so may be restrict to be changed only by owner?
@@ -366,11 +356,12 @@ paths:
       tags: [Account]
       summary: Delete account S3 quota
       description: >-
-        Delete account's S3 quota for specific pool.
+        Delete account's S3 quota for the specific pool.  
+        Deleting quota means refusing to use resources of the specific pool.  
+        All buckets and objects should be deleted before deleting quota.  
 
-
-        Role-based access:
-          - `owner`, `admin` roles can delete quotas of the authorized account
+        #### Role-based access
+          - `owner` role can delete quotas of the authorized account
           - authorized `operator` can delete quota for any account
       # @DS: quota is going to be a billable metric, so may be restrict to be changed only by owner?
       security:
@@ -402,10 +393,10 @@ paths:
       tags: [Account]
       summary: List account S3 per-pool limit-sets
       description: >-
-        List account's S3 per-pool limit-sets (which limits quotas)
-        LimitSet object shares the same structure as QuotaSet.
+        List account's S3 per-pool limit-sets (which limits quotas)  
+        LimitSet object shares the same structure as QuotaSet.  
 
-        Role-based access:
+        #### Role-based access
           - all roles have read access to limit-sets of the authorized account
           - `operator` gets limits for all accounts
       security:
@@ -429,10 +420,10 @@ paths:
       tags: [Account]
       summary: List account iSCSI per-pool quota-sets
       description: >-
-        List account's iSCSI quota sets for configured pools.
-        Account may not have quotas for some pools.
+        List account's iSCSI quota sets for configured pools.  
+        Account may not have quotas for some pools.  
 
-        Role-based access:
+        #### Role-based access
           - all roles have read access to quotas of the authorized account
           - `operator` gets quotas for all account
       security:
@@ -453,15 +444,13 @@ paths:
       tags: [Account]
       summary: Sets up account's iSCSI quotas
       description: >-
-        Create account's iSCSI quotas for specific pool
-        
+        Create account's iSCSI quotas for specific pool  
 
-        Only one account quota can be configured for specific pool.
-        Throw `409 Conflict` if tried to install another quota for account per pool.
-        `account_name` attribute is optional, if not specified current authorized account is used.
+        Only one account quota can be configured for specific pool.  
+        Throw `409 Conflict` if tried to install another quota for account per pool.  
+        `account_name` attribute is optional, if not specified current authorized account is used.  
 
-
-        Role-based access:
+        #### Role-based access
           - `owner`, `admin` roles can create quotas of the authorized account
           - authorized `operator` can create quota for any account
       # TODO: @DS: quota is going to be a billable metric, so may be restrict to be changed only by owner?
@@ -496,16 +485,13 @@ paths:
     # @DS: reviewed 2024-07-18, renamed from: /accounts/{account}/iscsi/quotas/{id}
     put:
       operationId: iscsi.quotas.update
-      tags:
-        - Account
-        - iSCSI
+      tags: [iSCSI]
       summary: Modify account iSCSI quota
       description: >-
-        Modify specific account's iSCSI quota for configured pools.
-        Modifing quota can not change pool it's connected, so `pool_id` attribute should be ignored.
+        Modify specific account's iSCSI quota for configured pools.  
+        Modifing quota can not change pool it's connected, so `pool_id` attribute should be ignored.  
 
-
-        Role-based access:
+        #### Role-based access
           - `owner` can modify quotas in authorized account
           - `operator` can modify quota in any account
           - other roles can not modify quota
@@ -547,9 +533,11 @@ paths:
         - iSCSI
       summary: Delete account iSCSI quota
       description: >-
-        Delete specific account's iSCSI quota for configured pools.
+        Delete specific account's iSCSI quota for configured pools.  
+        Deleting quota means refusing to use resources of the specific pool.  
+        All disks should be deleted before deleting quota.  
 
-        Role-based access:
+        #### Role-based access
           - `owner` can delete quotas in authorized account
           - `operator` can delete quota in any account
           - other roles can not delete quota
@@ -579,21 +567,30 @@ paths:
   ##   iSCSI Endpoints     ##
   ###########################
 
-  # @DS: reviewed 2024-02-02
-  /iscsi/configs:
-    # @DS: reviewed 2024-01-29
+  # @DS: reviewed 2025-10-08
+  /iscsi/clusters:
+    # @DS: reviewed 2025-10-08
     get:
-      operationId: iscsi.configs.list
-      tags: 
-        - Account
-        - iSCSI
-      summary: List account iSCSI Configs
+      operationId: iscsi.clusters.list
+      tags: [iSCSI]
+      summary: List account iSCSI Clusters
       description: >-
-        List account's config for iSCSI gateways.
+        List of accessible iSCSI Clusters with iSCSI Gateways and iSCSI Target connected.  
 
-        Role-based access:
-          - all roles can read access to configs of the authorized account
-          - `operator` can get configs for any account
+        iSCSI Cluster is an account-owned entity that groups:
+          - iSCSI Gateways
+          - iSCSI Targets (and corresponding storage pool)
+          - Disks (LUNs)
+          - Clients (client machine id)  
+
+        Constraints & scope:
+          - A cluster may contain any number of gateways and any number of targets.
+          - Each iSCSI Target is bound to exactly one storage pool (one target → one pool).
+          - There is no owner user for an iSCSI Cluster; it’s an account-owned access level object.  
+
+        #### Role-based access
+          - all roles can read access to cluster of the authorized account
+          - `operator` can get clusters for any account
       security:
         - JWT: []
           Account: []
@@ -601,31 +598,31 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/Account'
       responses:
         '200':
-          $ref: '#/components/responses/iSCSI_Config_List'
+          $ref: '#/components/responses/iSCSI_Cluster_List'
         '401':
           $ref: '#/components/responses/Unauthorized'
     # @DS: reviewed 2024-02-02
     post:
-      operationId: iscsi.configs.create
-      tags:
-        - Account
-        - iSCSI
-      summary: Create new iSCSI Config
+      operationId: iscsi.clusters.create
+      tags: [iSCSI]
+      summary: Create new iSCSI Clusters.
       description: >-
-        Create new account's config of iSCSI gateways.
-        iSCSI Config describes configuration of iSCSI Target, which describes:
-          - iSCSI Portals (IP to connect), which are hosted on 1 or more iSCSI Gateways.
-          - iSCSI Target (IQN name)
-          - Disks (LUNs)
-          - Clients (client machine id)
-        Currently there is no owner user for iSCSI config, so it's account-owned access level object.
+        Create new iSCSI Clusters in database.  
 
-        Role-based access:
-          - `operator` can create configs for any account
+        iSCSI Cluster is an account-owned configuration boundary that groups:
+          - iSCSI Gateways
+          - iSCSI Targets
+          - Disks (LUNs)
+          - Clients (client machine id)  
+
+        Constraints & scope:
+          - A cluster may contain any number of gateways and any number of targets.
+          - Each iSCSI Target is bound to exactly one storage pool (one target → one pool).
+          - There is no owner user for an iSCSI Cluster; it’s an account-owned access level object.  
+
+        #### Role-based access
           - `operator` can create configs for any account
           - other roles can not create new iscsi configs
       security:
@@ -635,43 +632,47 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/Account'
       requestBody:
-        description: iSCSI Config
+        description: iSCSI Cluster
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/iSCSI_Config'
+              $ref: '#/components/schemas/iSCSI_Cluster'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/iSCSI_Config'
+                $ref: '#/components/schemas/iSCSI_Cluster'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  # @DS: reviewed 2024-02-02
-  /iscsi/configs/{config_id}:
-    # @DS: reviewed 2024-02-02
+  # @DS: reviewed 2025-10-08
+  /iscsi/clusters/{cluster_id}:
+    # @DS: reviewed 2025-10-08
     get:
-      operationId: iscsi.configs.get
+      operationId: iscsi.clusters.get
       tags: [iSCSI]
-      summary: Get single iSCSI Config by ID
+      summary: Get single iSCSI Cluster
       description: >-
-        Get iSCSI config by ID
-        iSCSI Config describes configuration of iSCSI Target, which describes:
-          - iSCSI Portals (IP to connect), which are hosted on 1 or more iSCSI Gateways.
-          - iSCSI Target (IQN name)
-          - Disks (LUNs)
-          - Clients (client machine id)
+        Get iSCSI Cluster with iSCSI Gateways and iSCSI Targets.  
 
-        Role-based access:
-          - all roles have read access to configs of the authorized account
-          - `operator` can get configs for any account
+        iSCSI Cluster is an account-owned entity that groups:
+          - iSCSI Gateways
+          - iSCSI Targets
+          - Disks (LUNs)
+          - Clients (client machine id)  
+
+        Constraints & scope:
+          - A cluster may contain any number of gateways and any number of targets.
+          - Each iSCSI Target is bound to exactly one storage pool (one target → one pool).
+          - There is no owner user for an iSCSI Cluster; it’s an account-owned access level object.  
+
+        #### Role-based access
+          - all roles can read access to cluster of the authorized account
+          - `operator` can get clusters for any account
       security:
         - JWT: []
           Account: []
@@ -680,30 +681,32 @@ paths:
           Account: []
           Role: []
       parameters:
-        - $ref: '#/components/parameters/ConfigId'
+        - $ref: '#/components/parameters/ClusterId'
       responses:
         '200':
-          description: iSCSI Gateway's Config
+          description: iSCSI Cluster
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/iSCSI_Config'
+                $ref: '#/components/schemas/iSCSI_Cluster'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/Notfound'
-    # @DS: reviewed 2024-02-02
+    # @DS: reviewed 2025-10-08
     delete:
-      operationId: iscsi.configs.delete
+      operationId: iscsi.clusters.delete
       tags: [iSCSI]
-      summary: Delete single iSCSI Config by ID
+      summary: Delete single iSCSI Cluster by ID
       description: >
-        Only "empty" iSCSI config can be deleted
-        "Empty" means that iSCSI config is a pure record in database and is not deployed to any active CloudGateway instance.        
-        Currently there is no owner of iSCSI config, so it's account-owned access level object.
+        Deletes iSCSI Cluster and all child records.  
 
-        Role-based access:
-          - `owner`\`admin` can delete config for authorized account
+        Constraints & scope:
+          - Performs cascade deletion of all resources under the cluster.
+          - DB-only removal: the Cluster, its iSCSI Gateways, and iSCSI Targets are deleted from the database.        
+          - DB and Ceph teardown: iSCSI Disks(LUNs), iSCSI Client and Snapshots.  
+
+        #### Role-based access
           - `operator` can delete configs for any account
           - other roles can not delete configs
       security:
@@ -714,7 +717,7 @@ paths:
           Account: []
           Role: []
       parameters:
-        - $ref: '#/components/parameters/ConfigId'
+        - $ref: '#/components/parameters/ClusterId'
       responses:
         '204':
           description: No content
@@ -722,20 +725,167 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/Notfound'
-  
+
+  # @DS: reviewed 2025-10-08
+  /iscsi/gateways:
+    # @DS: reviewed 2025-10-08
+    post:
+      operationId: iscsi.gateways.create
+      tags: [iSCSI]
+      summary: Create iSCSI gateway to iSCSI Cluster
+      description: >-
+        Register iSCSI Gateway (hosted on CloudGateway) to specific iSCSI cluster.  
+
+        iSCSI Gateways are create by provisioning automation (Gateway API / Setup API) or manually operator users,
+        and assigned to be part of the iSCSI Cluster during provisioning.  
+        Gateways have no specific owner user, they are account-owner access level objects.  
+
+        #### Role-based access
+          - `operator` can assign gateway in any account
+          - other roles can not assign gateways.
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      requestBody:
+        description: iSCSI Gateway
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Gateway'
+      responses:
+        '204':
+          description: >
+            No content.  
+            We do not return created object as it's a child object of iSCSI cluster.
+            Use iSCSI Cluster GET endpoint to get full cluster configuration with gateways.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': #
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2025-10-08
+  /iscsi/gateways/{gateway_id}:
+    # @DS: reviewed 2025-10-08
+    delete:
+      operationId: iscsi.gateways.delete
+      tags: [ iSCSI ]
+      summary: delete iSCSI gateway to iSCSI Cluster
+      description: >-
+        Delete single iSCSI gateway.  
+
+        #### Role-based access
+          - `operator` can delete gateway in any account
+          - other roles can not delete gateways.
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      parameters:
+        - $ref: '#/components/parameters/GatewayId'
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404': #
+          $ref: '#/components/responses/Notfound'
+
+  # @DS: reviewed 2025-10-08
+  /iscsi/targets:
+    # @DS: reviewed 2025-10-08
+    post:
+      operationId: iscsi.targets.create
+      tags:
+        - iSCSI
+      summary: Create new iSCSI target
+      description: >-
+        Create new iSCSI Targets in database.  
+
+        Constraints & scope:
+          - Each iSCSI Target is bound to exactly one storage pool (one target → one pool).
+          - There is no owner user for an iSCSI Target; it’s an account-owned access level object.  
+
+        #### Role-based access
+          - `operator` can create iSCSI Target for any account
+          - other roles can not create new iSCSI Targets
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      requestBody:
+        description: iSCSI Target
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/iSCSI_Target'
+      responses:
+        '204':
+          description: >
+            No content.
+            iSCSI Target is child object for iSCSI Cluster.  
+            Use iscsi.clusters.get endpoint to list active targets in the cluster.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  # @DS: reviewed 2025-10-08
+  /iscsi/targets/{target_id}:
+    # @DS: reviewed 2025-10-08
+    delete:
+      operationId: iscsi.targets.delete
+      tags:
+        - iSCSI
+      summary: Delete single iSCSI Target by ID
+      description: >-
+        Deletes iSCSI Target and all child records.  
+
+        Constraints & scope:
+          - Performs cascade deletion of all resources under the cluster.
+          - DB-only removal: iSCSI Targets is deleted from the database.        
+          - DB and Ceph teardown: iSCSI Disks(LUNs), iSCSI Client and Snapshots.  
+
+        #### Role-based access
+          - `operator` can delete configs for any account
+          - other roles can not delete configs
+      security:
+        - JWT: []
+          Account: []
+          Role: []
+        - basicAuth: []
+          Account: []
+          Role: []
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Notfound'
+
   # @DS: reviewed 2024-02-02
-  /iscsi/configs/{config_id}/disks:
+  /iscsi/disks:
     # @DS: reviewed 2024-02-02
     get:
-      operationId: iscsi.configs.disks.list
+      operationId: iscsi.disks.list
       tags: [iSCSI]
-      summary: Get iSCSI Disks which created in the config/target
+      summary: Get iSCSI Disks which created in the target
       description: >-
-        Disks are created and then managed by end-users in specific config.
-        Practically currently we prodive only one configuration per storage type (aka Pool).
-        Disk has one owner user.
+        Disks are created and then managed by end-users in specific target.  
+        Practically currently we provide only one configuration per storage type (aka Pool).  
+        Disk has one owner user.  
 
-        Role-based access:
+        #### Role-based access
           - `member` have full access only to own disks
           - `owner`\`admin` can see all disks for authorized account
           - `operator` can see all disks for any account
@@ -746,8 +896,6 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/ConfigId'
       responses:
         '200':
           $ref: '#/components/responses/iSCSI_Disk_List'
@@ -759,13 +907,13 @@ paths:
     post:
       operationId: iscsi.disks.create
       tags: [iSCSI]
-      summary: Create new iSCSI Disk on specific config/target
+      summary: Create new iSCSI Disk on specific target
       description: >-
-        Disks are created by end-users in the specific iSCSI config.
-        Currently we have only one iSCSI config per storage type (aka Pool).
-        Disk has one owner user.
+        Disks are created by end-users in the specific iSCSI target.  
+        Currently we have only one iSCSI config per storage type (aka Pool).  
+        Disk has one owner user.  
 
-        Role-based access:
+        #### Role-based access
           - `member` have full access only to own disks
           - `owner`\`admin` can create disks on behalf of other users in authorized account
           - `operator` can create disks on behalf of other users in any account
@@ -776,8 +924,6 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/ConfigId'
       requestBody:
         description: iSCSI Disk
         required: true
@@ -798,18 +944,18 @@ paths:
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
-  /iscsi/disks/{id}:
+  /iscsi/disks/{disk_id}:
     # @DS: reviewed 2024-02-02
     put:
       operationId: iscsi.disks.update
       tags: [iSCSI]
-      summary: Update disk which provided by config/target
+      summary: Update disk which provided by target
       description: >-
-        Disks are created/updated by end-users in the specific iSCSI config.
-        Currently we have only one iSCSI config per storage type (aka Pool).
-        Disk has one owner user.
+        Disks are created/updated by end-users in the specific iSCSI target.  
+        Currently we have only one iSCSI config per storage type (aka Pool).  
+        Disk has one owner user.  
 
-        Role-based access:
+        #### Role-based access
           - `member` have full access only to own disks
           - `owner`\`admin` can update any disks in authorized account
           - `operator` can update disks in any account
@@ -821,17 +967,7 @@ paths:
           Account: []
           Role: []
       parameters:
-        - in: path
-          name: config_id
-          required: true
-          schema:
-            type: integer
-        - in: path
-          name: id
-          description: Disk ID
-          required: true
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/DiskId'
       requestBody:
         description: Update iSCSI Disk
         required: true
@@ -854,14 +990,14 @@ paths:
     delete:
       operationId: iscsi.disks.delete
       tags: [iSCSI]
-      summary: Delete disk from config/target
+      summary: Delete disk from target
       description: >-
-        Disks are created and removed by end-users in the specific iSCSI config.
-        This operation effectevely destroy data on selected disk and removes it from iSCSI config.
-        Currently we have only one iSCSI config per storage type (aka Pool).
-        Disk has one owner user.
+        Disks are created and removed by end-users in the specific iSCSI target.  
+        This operation effectevely destroy data on selected disk and removes it from iSCSI target.  
+        Currently we have only one iSCSI config per storage type (aka Pool).  
+        Disk has one owner user.  
 
-        Role-based access:
+        #### Role-based access
           - `member` have full access (including deleting) only to own disks
           - `owner`\`admin` can delete disks on behalf of other users in authorized account
           - `operator` can delete disks in any account
@@ -873,12 +1009,7 @@ paths:
           Account: []
           Role: []
       parameters:
-        - $ref: '#/components/parameters/ConfigId'
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/DiskId'
       responses:
         '204':
           description: No Content
@@ -888,99 +1019,19 @@ paths:
           $ref: '#/components/responses/Notfound'
 
   # @DS: reviewed 2024-02-02
-  /iscsi/configs/{config_id}/gateways:
-    # @DS: reviewed 2024-02-02
-    get:
-      operationId: iscsi.configs.gateways.list
-      tags: [iSCSI]
-      summary: Get iSCSI Gateways defined in iSCSI Target/Config
-      description: >-
-        Get list of iSCSI Portals (aka iSCSI Gateways) for specific iSCSI Target/Config.
-        iSCSI Gateways are assigned by provisioning automation (or manually operator users).
-        Gateway may belong only to one iSCSI Target/Config and as well to one pool.
-        For a moment we provide only one iSCSI configuration per storage type (aka Pool).
-
-        Role-based access:
-          - all roles can get list of gateways in any config for authorized account
-          - `operator` can get list of gateways in any config for any account
-      security:
-        - JWT: []
-          Account: []
-          Role: []
-        - basicAuth: []
-          Account: []
-          Role: []
-      parameters:
-        - $ref: '#/components/parameters/ConfigId'
-      responses:
-        '200':
-          $ref: '#/components/responses/iSCSI_Gateway_List'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404': #
-          $ref: '#/components/responses/Notfound'
-    # @DS: reviewed 2024-02-02
-    post:
-      operationId: iscsi.gateways.create
-      tags: [iSCSI]
-      summary: Create iSCSI gateway to iSCSI Target/Config
-      description: >-
-        Create iSCSI Gateway (hosted on CloudGateway) to specific iSCSI Target/Config.
-        iSCSI Gateways are create by provisioning automation (Setup API) or manually operator users.
-        Gateway may belong only to one iSCSI Target/Config and as well to one pool.
-        For a moment we provide only one iSCSI configuration per storage type (aka Pool).
-        Gateways have no specific owner user, they are account-owner access level objects.
-
-        Note:
-          - assigning of gateway should trigger configuration changes at CloudGateway instance.
-          - it's a good idea to trigger Setup API (or even better some Gateway API) which will produce changes into CloudGateway instances.
-          - for a moment operator must take all changes manually before reassign the iSCSI Gateways to another iSCSI Target/Config.
-
-        Role-based access:
-          - `operator` can assign gateway in any account
-          - other roles can not assign gateways.
-      security:
-        - JWT: []
-          Account: []
-          Role: []
-        - basicAuth: []
-          Account: []
-          Role: []
-      parameters:
-        - $ref: '#/components/parameters/ConfigId'
-      requestBody:
-        description: iSCSI Gateway
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Gateway'
-      responses:
-        '200':
-          description: Assigned iSCSI Gateway
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Gateway'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404': #
-          $ref: '#/components/responses/Notfound'
-
-  # @DS: reviewed 2024-02-02
   /iscsi/clients:
     # @DS: reviewed 2024-02-02
     get:
       operationId: iscsi.clients.list
-      tags: [Account]
+      tags: [iSCSI]
       summary: Get account's iSCSI clients
       description: >-
-        Get account's ISCSI clients (aka consumer devices) which mounts iSCSI disks.
-        Client records are created by end-users.
-        One client device can connect to multple pools so it can be involved in multiple iSCSI configs.
-        Client has one owner user.
+        Get account's ISCSI clients (aka consumer devices) which mounts iSCSI disks.  
+        Client records are created by end-users.  
+        One client device can connect to multple pools so it can be involved in multiple iSCSI targets.  
+        Client has one owner user.  
 
-        Role-based access:
+        #### Role-based access
           - `member` have full access only to own clients
           - `owner`\`admin` can get list of clients in authorized account
           - `operator` can get list of clients in any account
@@ -1007,15 +1058,15 @@ paths:
     # @DS: reviewed 2024-02-02
     post:
       operationId: iscsi.clients.create
-      tags: [Account]
+      tags: [iSCSI]
       summary: Create new iSCSI Client (consumer) devices
       description: >-
-        Create new ISCSI clients (aka consumer devices) which mounts iSCSI disks.
-        Client records are created by end-users.
-        One client device can connect to multple pools so it can be involved in multiple iSCSI configs.
-        Client has one owner user.
+        Create new ISCSI clients (aka consumer devices) which mounts iSCSI disks.  
+        Client records are created by end-users.  
+        One client device can connect to multple pools so it can be involved in multiple iSCSI targets.  
+        Client has one owner user.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can create new clients and become the owner of the client record
           - `owner`\`admin` can create clients on behalf of other users in authorized account
           - `operator` can create clients in any account
@@ -1052,12 +1103,12 @@ paths:
       tags: [iSCSI]
       summary: Update iSCSI Client (consumer) devices
       description: >-
-        Updating ISCSI clients (aka consumer devices) which mounts iSCSI disks.
-        Client records are created and managed by end-users.
-        One client device can connect to multple pools so it can be involved in multiple iSCSI configs.
-        Client has one owner user.
+        Updating ISCSI clients (aka consumer devices) which mounts iSCSI disks.  
+        Client records are created and managed by end-users.  
+        One client device can connect to multple pools so it can be involved in multiple iSCSI targets.  
+        Client has one owner user.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can modify only own clients
           - `owner`\`admin` can modify clients in authorized account
           - `operator` can modify clients in any account
@@ -1093,12 +1144,12 @@ paths:
       tags: [ iSCSI ]
       summary: Delete iSCSI Client (consumer) devices
       description: >-
-        Deleting ISCSI clients (aka consumer devices) which mounts iSCSI disks.
-        Client records are created and managed by end-users.
-        One client device can connect to multple pools so it can be involved in multiple iSCSI configs.
-        Client has one owner user.
+        Deleting ISCSI clients (aka consumer devices) which mounts iSCSI disks.  
+        Client records are created and managed by end-users.  
+        One client device can connect to multple pools so it can be involved in multiple iSCSI targets.  
+        Client has one owner user.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can delete only own clients
           - `owner`\`admin` can delete clients in authorized account
           - `operator` can delete clients in any account
@@ -1127,12 +1178,12 @@ paths:
       tags: [iSCSI]
       summary: Get list of iSCSI Disks which assigned to the iSCSI Client
       description: >-
-        Get list disks assigned of the specific ISCSI client (aka consumer devices).
-        Client and disks records are created and managed by end-users.
-        One client device can assigned on different disks, but one disk can be only in one Pool (iSCSI Config)
-        Client has one owner user. Disk has one owner user.
+        Get list disks assigned of the specific ISCSI client (aka consumer devices).  
+        Client and disks records are created and managed by end-users.  
+        One client device can assigned on different disks, but one disk can be only in one Pool (iSCSI target)  
+        Client has one owner user. Disk has one owner user.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can get list of all disks assigned to the own client.
           - `owner`\`admin` can get list of all disks for all clients in authorized account
           - `operator` can get get list of disks for all clients in any account
@@ -1159,15 +1210,15 @@ paths:
       tags: [iSCSI]
       summary: Assign existing iSCSI Disks to the specific iSCSI client
       description: >-
-        With this endpoint multiple iSCSI disks multiple can be assigned to the ISCSI client (aka consumer device).
-        Basically multiple disks can be assigned to multiple clients.
-        Client and disks records are created and managed by end-users.
-        Client has one owner user. Disk has one owner user.
+        With this endpoint multiple iSCSI disks multiple can be assigned to the ISCSI client (aka consumer device).  
+        Basically multiple disks can be assigned to multiple clients.  
+        Client and disks records are created and managed by end-users.  
+        Client has one owner user. Disk has one owner user.  
 
-        Effectively owner\admin can assign disk of one user to another user's client.
-        User which owns the client can later resign its own client from specific disk.
+        Effectively owner\admin can assign disk of one user to another user's client.  
+        User which owns the client can later resign its own client from specific disk.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can assign own disks to own client.
           - `owner`\`admin` can assign any disks to any client in authorized account
           - `operator` can assign any disk in to any client (both must be in the same account) in any account
@@ -1205,15 +1256,15 @@ paths:
       tags: [iSCSI]
       summary: Unassign disk from specific iSCSI client
       description: >-
-        With this endpoint specific iSCSI disk can be unassigned (resigned) from the ISCSI client (aka consumer device).
-        Basically, multiple disks can be assigned to multiple clients.
-        Client and disk records are created, assigned, unassigned and deleted by end-users.
-        Client has one owner user. Disk has one owner user.
+        With this endpoint specific iSCSI disk can be unassigned (resigned) from the ISCSI client (aka consumer device).  
+        Basically, multiple disks can be assigned to multiple clients.  
+        Client and disk records are created, assigned, unassigned and deleted by end-users.  
+        Client has one owner user. Disk has one owner user.  
 
-        Effectively owner\admin can assign disk of one user to another user's client.
-        User which owns the client can unassign any disk from own client.
+        Effectively owner\admin can assign disk of one user to another user's client.  
+        User which owns the client can unassign any disk from own client.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can unassign any disks from own client.
           - `owner`\`admin` can unassign any disk from any client in authorized account
           - `operator` can unassign any disk from any client in any account
@@ -1244,13 +1295,13 @@ paths:
     # @DS: reviewed 2024-02-02
     get:
       operationId: iscsi.snapshots.list
-      tags: [Account]
+      tags: [iSCSI]
       summary: Get account's snapshots
       description: >-
-        Snapshots are created for specific iSCSI disk (backed by RBD disk).
-        Snapshots are owned by one owner user of related disk.
+        Snapshots are created for specific iSCSI disk (backed by RBD disk).  
+        Snapshots are owned by one owner user of related disk.  
 
-        Role-based access:
+        #### Role-based access
           - `member` have access to list of snapshots for own disks
           - `owner`\`admin` can see list of all snapshots in authorized account
           - `operator` can see list of all snapshots in any account
@@ -1268,50 +1319,15 @@ paths:
           $ref: "#/components/responses/iSCSI_Snapshot_List"
         '401':
           $ref: '#/components/responses/Unauthorized'
-
-  # @DS: reviewed 2024-02-02
-  /iscsi/disks/{disk_id}/snapshots:
-    # @DS: reviewed 2024-02-02
-    get:
-      operationId: iscsi.disks.snapshots.list
-      tags: [iSCSI]
-      summary: Get list of snapshots for iSCSI disk
-      description: >-
-        Get list of snapshots related to specific iSCSI disk.
-        Snapshots are owned by the owner of disk.
-        Snapshots are created and managed by end-user.
-
-        Role-based access:
-          - `member` can get list of snapshots of own disk.
-          - `owner`\`admin` can get list of snapshots for any disk in authorized account
-          - `operator` can get list of snapshots for any disk in any account
-      security:
-        - JWT: []
-          Account: []
-          Role: []
-        - basicAuth: []
-          Account: []
-          Role: []
-      parameters:
-        - $ref: '#/components/parameters/DiskId'
-      responses:
-        '200':
-          description: Disk snapshots
-          $ref: '#/components/responses/iSCSI_Snapshot_List'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/Notfound'
-    # @DS: reviewed 2024-02-02
     post:
-      operationId: iscsi.disks.snapshots.create
+      operationId: iscsi.snapshots.create
       tags: [iSCSI]
       summary: Create snapshot for iSCSI disk
       description: >-
-        Create snapshot for specific iSCSI disk.
-        Snapshots are created by end-users.
+        Create snapshot for specific iSCSI disk.  
+        Snapshots are created by end-users.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can create snapshot only for own disk.
           - `owner`\`admin` can create snapshot on behalf of other users for any disk in authorized account
           - `operator` can create snapshot for any disk in any account
@@ -1342,18 +1358,18 @@ paths:
 
   # @DS: reviewed 2024-02-02
   # TODO: @DS: May be we should remove this endpoint as we can get all info from list of snapshot for specific disk
-  /iscsi/disks/{disk_id}/snapshots/{snapshot_id}:
+  /iscsi/snapshots/{snapshot_id}:
     # @DS: reviewed 2024-02-02
     get:
       operationId: iscsi.snapshots.get
       tags: [iSCSI]
       summary: Get iSCSI Snapshot info
       description: >-
-        Get specific snapshot by snapshot name
-        Snapshort are created by end-users.        
-        Snapshot is owned by the owner of disk.
+        Get specific snapshot by snapshot name.  
+        Snapshort are created by end-users.  
+        Snapshot is owned by the owner of disk.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can get list of snapshots for own disks.
           - `owner`\`admin` can get list of snapshots for any disk in authorized account
           - `operator` can get list of snapshots for any disk in any account
@@ -1389,11 +1405,11 @@ paths:
       tags: [iSCSI]
       summary: Update parameters of Snapshot for iSCSI disk
       description: >-
-        Update specific snapshot by snapshot name
-        Snapshort are created by end-users.        
-        Snapshot is owned by the owner of disk.
+        Update specific snapshot by snapshot name  
+        Snapshort are created by end-users.  
+        Snapshot is owned by the owner of disk.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can update snapshots for own disks.
           - `owner`\`admin` can update snapshots for any disk in authorized account
           - `operator` can update of snapshots for any disk in any account
@@ -1404,13 +1420,6 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/DiskId'
-        - in: path
-          name: snapshot_name
-          required: true
-          schema:
-            type: string
       requestBody:
         description: iSCSI Snapshot parameters
         required: true
@@ -1436,11 +1445,11 @@ paths:
       summary: Delete snapshot of iSCSI disk
       description: >-
         Delete specific snapshot by snapshot name.
-        This operation effectively and permanently destroy data RBD snapshot for specific disk.
-        Snapshort are created and deleted by end-users.
-        Snapshot is owned by the owner of disk.
+        This operation effectively and permanently destroy data RBD snapshot for specific disk.  
+        Snapshort are created and deleted by end-users.  
+        Snapshot is owned by the owner of disk.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can delete snapshots for own disks.
           - `owner`\`admin` can delete snapshots for any disk in authorized account
           - `operator` can delete of snapshots for any disk in any account
@@ -1451,13 +1460,6 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/DiskId'
-        - in: path
-          name: snapshot_name
-          required: true
-          schema:
-            type: string
       responses:
         '204':
           description: No content
@@ -1473,11 +1475,11 @@ paths:
       tags: [iSCSI]
       summary: Restore iSCSI disk from snapshot
       description: >-
-        Restore state of iSCSI disk from snapshot.
-        Disks and snapshots are created by end-users.
-        Restore a disk may be a time consuming operation, so we don't guarantee return in before default 30 sec UI timeout.
+        Restore state of iSCSI disk from snapshot.  
+        Disks and snapshots are created by end-users.  
+        Restore a disk may be a time consuming operation, so we don't guarantee return in before default 30 sec UI timeout.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can restore disk only from snapshots of own disk.
           - `owner`\`admin` can restore disk from any snapshot in authorized account
           - `operator` can restore disk from any snapshot in any account
@@ -1513,12 +1515,12 @@ paths:
       tags: [iSCSI]
       summary: Restore original disk for selected snapshot
       description: >-
-        Restore state of original iSCSI disk from the selected snapshot.
-        Disks and snapshots are created by end-users.
-        Restore is time-consuming operation, so we can not guarantee that it finishes in default (30 sec) UI timeout.
-        Need to change state of disk, so nobody will restore in the same time.
+        Restore state of original iSCSI disk from the selected snapshot.  
+        Disks and snapshots are created by end-users.  
+        Restore is time-consuming operation, so we can not guarantee that it finishes in default (30 sec) UI timeout.  
+        Need to change state of disk, so nobody will restore in the same time.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can restore from snapshot only for own disk.
           - `owner`\`admin` can restore from snapshot any disk in authorized account
           - `operator` can restore from snapshot any disk in any account
@@ -1555,10 +1557,10 @@ paths:
       tags: [Pool]
       summary: Get list of storage pools
       description: >-
-        List pools of specific type.
-        Pools are configured during Storage installation (via seeding) and managed by operator users.
+        List pools of specific type.  
+        Pools are configured during Storage installation (via seeding) and managed by operator users.  
 
-        Role-based access:
+        #### Role-based access
           - all roles can list pools (storage types)
       security:
         - JWT: []
@@ -1598,12 +1600,12 @@ paths:
       tags: [S3]
       summary: Get account's S3/Swift users
       description: >-
-        Get list of technical S3/Swift user records which stores Access/Secret keys.
-        This keys are used to access buckets and objects via S3/Swift protocols.
-        S3/Swift protocol is out of scope of the current API.
-        Each S3 user object has owner user (identified by email).
+        Get list of technical S3/Swift user records which stores Access/Secret keys.  
+        This keys are used to access buckets and objects via S3/Swift protocols.  
+        S3/Swift protocol is out of scope of the current API.  
+        Each S3 user object has owner user (identified by email).  
 
-        Role-based access:
+        #### Role-based access
           - `member` can get list of own s3users.
           - `owner`\`admin` can get list of all s3users in authorized account
           - `operator` can get list of all s3users in any account
@@ -1625,14 +1627,14 @@ paths:
       tags: [S3]
       summary: Create new s3 user in account
       description: >-
-        Creates technical S3/Swift user record which stores Access/Secret keys.
-        This keys are used to access buckets and objects via S3/Swift protocols.
-        S3/Swift protocol is out of scope of the current API.
-        Each S3 user object has owner user (identified by email).
+        Creates technical S3/Swift user record which stores Access/Secret keys.  
+        This keys are used to access buckets and objects via S3/Swift protocols.  
+        S3/Swift protocol is out of scope of the current API.  
+        Each S3 user object has owner user (identified by email).  
 
-        NOTE: All newly created S3User objects will be prefixed with account name.
+        NOTE: All newly created S3User objects will be prefixed with account name.  
 
-        Role-based access:
+        #### Role-based access
           - `member` can create `s3user` and become an owner of it.
           - `owner`\`admin` can create `s3user` on behalf of other users in authorized account
           - `operator` can create `s3user` on behalf of other users in any account
@@ -1669,10 +1671,10 @@ paths:
       tags: [S3]
       summary: Get details on specific S3/Swift user
       description: >-
-        Get details on technical S3/Swift user record which stores Access/Secret keys.
-        Each S3 user object has owner user (identified by email).
+        Get details on technical S3/Swift user record which stores Access/Secret keys.  
+        Each S3 user object has owner user (identified by email).  
 
-        Role-based access:
+        #### Role-based access
           - `member` can get list of own s3users.
           - `owner`\`admin` can get list of all s3users in authorized account
           - `operator` can get list of all s3users in any account
@@ -1706,10 +1708,10 @@ paths:
       tags: [S3]
       summary: Modify S3 user object
       description: >-
-        Modify technical S3/Swift user record (`s3user`) which stores Access/Secret keys.
-        Each `s3user` object has owner user (identified by email).
+        Modify technical S3/Swift user record (`s3user`) which stores Access/Secret keys.  
+        Each `s3user` object has owner user (identified by email).  
 
-        Role-based access:
+        #### Role-based access
           - `member` can modify only own `s3users`. Can not change `s3user` ownership.
           - `owner`\`admin` can modify any `s3users` in authorized account
           - `operator` can modify any `s3users` in any account
@@ -1750,10 +1752,10 @@ paths:
       tags: [S3]
       summary: Delete S3 user record
       description: >-
-        Delete technical S3/Swift user record (`s3user`) which stores Access/Secret keys.
-        Each `s3user` object has owner user (identified by email).
+        Delete technical S3/Swift user record (`s3user`) which stores Access/Secret keys.  
+        Each `s3user` object has owner user (identified by email).  
 
-        Role-based access:
+        #### Role-based access
           - `member` can delete only own `s3users`.
           - `owner`\`admin` can delete any `s3users` in authorized account
           - `operator` can delete any `s3users` in any account
@@ -1789,12 +1791,10 @@ paths:
         Each bucket is owned by single `s3user` entity (which holds access and secret keys).  
         `s3user` entity has owner user (responsible person identified by email).  
 
-
-        Role-based access:
+        #### Role-based access
           - `member` can get list of buckets of own s3user.
           - `owner`\`admin` can get list of buckets for all s3users in authorized account
-          - `operator` can get list of buckets for all s3users in any account
-        
+          - `operator` can get list of buckets for all s3users in any account  
 
         Filtering:
           - `filter[user.name]` - filter by the name of related S3 user
@@ -1827,12 +1827,11 @@ paths:
       tags: [S3]
       summary: Create S3 bucket for S3 user
       description: >
-        Create S3 Bucket owned by specific S3 user.
-        Buckets are unique in account and can be created up to `s3user` quota.
-        S3 user object has owner user (identified by email).
+        Create S3 Bucket owned by specific S3 user.  
+        Buckets are unique in account and can be created up to `s3user` quota.  
+        S3 user object has owner user (identified by email).  
 
-
-        Role-based access:
+        #### Role-based access
           - `member` can create bucket and becomes owner of the bucket.
           - `owner`\`admin` can create buckets on behalf of other users in authorized account
           - `operator` can create buckets on behalf of other users in any account
@@ -1869,12 +1868,11 @@ paths:
       tags: [S3]
       summary: Modify existing bucket
       description: >
-        Modify existing S3 Bucket.
-        Buckets are unique in account (by prefixing account name) and can be created up to `s3user` quota.
-        S3 user object has owner user (identified by email).
+        Modify existing S3 Bucket.  
+        Buckets are unique in account (by prefixing account name) and can be created up to `s3user` quota.  
+        S3 user object has owner user (identified by email).  
 
-
-        Role-based access:
+        #### Role-based access
           - `member` can modify bucket for own s3users.
           - `owner`\`admin` can modify buckets on behalf of other users in authorized account
           - `operator` can create buckets on behalf of other users in any account
@@ -1938,15 +1936,17 @@ paths:
       tags: [S3]
       summary: Regenerate keys for S3 Protocol
       description: >
-        Regenerate S3 user access and secret keys used in S3 protocol.
-        This endpoint can be useful if lost access to keys or they have been compromised.
-        Currently, S3 user may have only one credential per protocol:
+        Regenerate S3 user access and secret keys used in S3 protocol.  
+        This endpoint can be useful if lost access to keys or they have been compromised.  
+
+        Currently, S3 user may have only one credential per protocol:  
          - one pair of S3 keys
          - one key for Swift protocol
-        Keys are stored inside S3 user object.
-        S3 user object has owner user (identified by email).
+        
+        Keys are stored inside S3 user object.  
+        S3 user object has owner user (identified by email).  
 
-        Role-based access:
+        #### Role-based access
           - `member` can regenerate keys for own s3users.
           - `owner`\`admin` can regenerate keys of other s3users in authorized account
           - `operator` can regenerate keys on behalf of other s3users in any account
@@ -1972,7 +1972,7 @@ paths:
                 $ref: '#/components/schemas/S3_User'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404': #
+        '404':
           $ref: '#/components/responses/Notfound'
 
 components:
@@ -2026,7 +2026,7 @@ components:
                       data_size_mb: 10240
                       pool:
                         id: 13
-                        type: s3 
+                        type: s3
                         name: nvme-object
                         class: nvme
                   iscsi:
@@ -2063,7 +2063,7 @@ components:
                   name: acc1
                 pool:
                   id: 13
-                  type: s3 
+                  type: s3
                   name: nvme-object
                   class: nvme
               - id: 34
@@ -2098,7 +2098,7 @@ components:
                 owner: user1@example.net
                 pool:
                   id: 13
-                  type: s3 
+                  type: s3
                   name: nvme-data
                   class: nvme
                 keys:
@@ -2190,15 +2190,12 @@ components:
                   type: iscsi
                   name: nvme-data
                   class: nvme
-                configs:
+                target:
                   - id: 42
-                    name: acc1_default.conf
-                    target_iqn: iqn.2020-01.vendor.loc:iscsi-nvme
-                    gateways:
-                    - id: 52
-                      name: cloudgw-bf401950
-                      portal_ip_address: 198.18.0.2
-                      ip_address: 198.18.240.16
+                  - cluster_id: 22
+                  - cluster:
+                      id: 22
+                      name: cluster-sav21gtr
               - id: 36
                 clients: 35
                 data_size_gb: 300
@@ -2212,36 +2209,69 @@ components:
                   type: iscsi
                   name: hdd-data
                   class: hdd
-                configs: [] # no configs for the pool
-    iSCSI_Config_List:
-      description: A JSON array of Account's iSCSI Config objects
+                target: [] # no target for the pool
+    iSCSI_Cluster_List:
+      description: A JSON array of Account's iSCSI Cluster objects
       content:
         application/json:
           schema:
             type: array
             items:
-              $ref: '#/components/schemas/iSCSI_Config'
+              $ref: '#/components/schemas/iSCSI_Cluster'
           examples:
-            All account iSCSI Configs:
+            All account iSCSI Clusters:
               value:
               - id: 42
-                name: acc1_default.conf
-                target_iqn: iqn.2020-01.vendor.loc:iscsi-nvme
-                pool:
-                  id: 15
-                  type: iscsi
-                  name: nvme-data
-                  class: nvme
+                name: cluster-abcd1234
+                account:
+                  id: 17
+                  name: acc1
+                targets:
+                - id: 23
+                  name: iqn.2020-01.io.icdc.loc:iscsi-hdd
+                  pool:
+                    id: 9
+                    type: iscsi
+                    name: hdd-data
+                    class: hdd
+                - id: 24
+                  name: iqn.2020-01.io.icdc.loc:iscsi-ssd
+                  pool:
+                    id: 8
+                    type: iscsi
+                    name: ssd-data
+                    class: ssd
+                gateways:
+                - id: 52
+                  name: cloudgw-bf401950
+                - id: 53
+                  name: cloudgw-c0512a61
               - id: 43
-                name: acc1_production.conf
-                target_iqn: iqn.2020-01.vendor.loc:iscsi-hdd
-                pool:
-                  id: 16
-                  type: iscsi
-                  name: hdd-data
-                  class: hdd
+                name: cluster-567890ef
+                account:
+                  id: 17
+                  name: acc1
+                targets:
+                - id: 25
+                  name: iqn.2020-01.io.icdc.loc:iscsi-nvme
+                  pool:
+                    id: 6
+                    type: iscsi
+                    name: nvme-data
+                    class: nvme
+                gateways:
+                - id: 54
+                  name: cloudgw-ff401950
+    iSCSI_Target_List:
+      description: A JSON array of iSCSI Target objects.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/iSCSI_Target"
     iSCSI_Gateway_List:
-      description: A JSON array of iSCSI Gateway objects defined in iSCSI Config
+      description: A JSON array of iSCSI Gateway objects defined in iSCSI Cluster
       content:
         application/json:
           schema:
@@ -2249,18 +2279,16 @@ components:
             items:
               $ref: '#/components/schemas/Gateway'
           examples:
-            All gateways in iSCSI Config:
+            All gateways in iSCSI Cluster:
               value:
               - id: 52
                 name: cloudgw-bf401950
                 portal_ip_address: 198.18.0.2
-                ip_address: 198.18.240.16
               - id: 53
                 name: cloudgw-c0512a61
                 portal_ip_address: 198.18.0.3
-                ip_address: 198.18.240.17
     iSCSI_Disk_List:
-      description: A JSON array of Disks defined in iSCSI Target/Config
+      description: A JSON array of Disks defined in iSCSI Target
       content:
         application/json:
           schema:
@@ -2268,7 +2296,7 @@ components:
             items:
               $ref: '#/components/schemas/iSCSI_Disk'
           examples:
-            All iSCSI Config disks:
+            All iSCSI Target disks:
               value:
               - id: 66
                 name: my_server_disk1
@@ -2337,7 +2365,7 @@ components:
                   name: acc1
                   description: Business account 1
                 disks: []
-                
+
   schemas:
     # Schema for error response body
     Error:
@@ -2356,7 +2384,7 @@ components:
       properties:
         id:
           type: integer
-          example: 11
+          example: 9
         type:
           type: string
           example: s3
@@ -2429,27 +2457,13 @@ components:
                       type: array
                       items:
                         $ref: '#/components/schemas/iSCSI_Quota'
-                    configs:
+                    clusters:
                       description: >-
-                        iSCSI Config referenced by config file name, e.g. mm095_deafult.conf
+                        iSCSI cluster referenced by cluster name, e.g. cluster_f7e34dd
                         As well list of gateways by name to be initialized
                       type: array
                       items:
-                        $ref: '#/components/schemas/iSCSI_Config'
-            # @DS: Leave for backward compatibillity with current implementation (before 2024-01-26)
-            # There is separate endpoint to list account's pool quotas per services
-            quotas:
-              readOnly: true
-              type: object
-              properties:
-                iscsi:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/iSCSI_Quota'
-                s3:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/S3_Quota'
+                        $ref: '#/components/schemas/iSCSI_Cluster'
 
     # @DS: reviewed 2024-01-29
     iSCSI_QuotaValue:
@@ -2477,7 +2491,7 @@ components:
           - pool
           - limits
           - usage stats
-          - configs (are really iscsi portals)
+          - target
       type: object
       properties:
         id:
@@ -2515,14 +2529,14 @@ components:
           readOnly: true
           oneOf:
           - $ref: '#/components/schemas/Pool'
-        configs:
+        target:
           description: >-
-            List of configs available for this quoted pools.
-            Configs are describes endpoints which are needed to connect to.
+            Target available for this quoted pools.
+            Target are describes endpoints which are needed to connect to.
           readOnly: true
           type: array
           items:
-            $ref: '#/components/schemas/iSCSI_Config'
+            $ref: '#/components/schemas/iSCSI_Target'
         usage:
           description: >-
             Actual allocated disks and snapshots.
@@ -2537,9 +2551,11 @@ components:
           oneOf:
           - $ref: '#/components/schemas/iSCSI_QuotaValue'
 
-    # @DS: reviewed 2024-01-29
-    iSCSI_Config:
+    # @DS: reviewed 2025-10-08
+    iSCSI_Cluster:
       type: object
+      required:
+        - name
       properties:
         id:
           readOnly: true
@@ -2547,37 +2563,80 @@ components:
           example: 41
         name:
           description: >-
-            Config filename used on iSCSI gateways
+            Cluster name used on iSCSI gateways
           type: string
-          example: acc1_default.conf
-        target_iqn:
-          type: string
-          description: >-
-            Usually consists of prefix with reversed location domain.
-            Suffix with iSCSI pool name: iscsi-nvme
-          example: 'iqn.2020-01.io.icdc.loc:iscsi-nvme'
-        pool_id:
+          example: cluster-1cdc0123
+        account_id:
           writeOnly: true
           type: integer
-          example: 15
-        pool:
-          readOnly: true
-          oneOf:
-          - $ref: '#/components/schemas/Pool'
-        gateways:
+          example: 99
+        account_name:
+          writeOnly: true
           description: >-
-            Allow to create or select gateways on creation of iSCSI config
-          type: array
-          items:
-            $ref: '#/components/schemas/Gateway'
+            Global unique account name. Alternative to account ID for referencing account.
+            Optional, if not specified current Subject account is used.
+          type: string
+          example: acc1
         account:
           readOnly: true
           oneOf:
           - $ref: '#/components/schemas/Account'
-    
+        targets:
+          readOnly: true
+          type: array
+          items:
+            $ref: '#/components/schemas/iSCSI_Target'
+        gateways:
+          readOnly: true
+          type: array
+          items:
+            $ref: "#/components/schemas/Gateway"
+
+    # @DS: reviewed 2025-10-08
+    iSCSI_Target:
+      type: object
+      required:
+        - cluster_id
+        - pool_id
+      properties:
+        id:
+          readOnly: true
+          type: integer
+          example: 23
+        name:
+          readOnly: true
+          description: >-
+            Target name is generated by backend system from IQN prefix and pool name
+          type: string
+          example: iqn.2020-01.io.icdc.loc:iscsi-hdd
+        cluster_id:
+          writeOnly: true
+          type: integer
+          example: 41
+        cluster:
+          readOnly: true
+          oneOf:
+            - $ref: '#/components/schemas/iSCSI_Cluster'
+        pool_id:
+          writeOnly: true
+          type: integer
+          example: 7
+        pool:
+          readOnly: true
+          oneOf:
+            - $ref: '#/components/schemas/Pool'
+
     # @DS: reviewed 2024-02-06
     Gateway:
       type: object
+      required:
+        - name
+        - portal_ip_address
+        - ip_address
+        - cloudgw_id
+        - api_user
+        - api_password
+        - cluster_id
       properties:
         id:
           readOnly: true
@@ -2593,7 +2652,9 @@ components:
           example: 198.18.0.2
         ip_address:
           description: >-
-            IP address used to access iSCSI Gateway internal API
+            IP address used to access iSCSI Gateway internal API.
+            We do not show this IP address to end-users for security reasons.
+          writeOnly: true
           type: string
           example: 198.18.240.16
         cloudgw_id:
@@ -2614,21 +2675,25 @@ components:
           writeOnly: true
           type: string
           example: StrongPassword
-        config_id:
+        cluster_id:
           writeOnly: true
           type: integer
           example: 41
-        config:
+        cluster:
           readOnly: true
-          # TODO: @DS: kind of circular dependency here, maybe rid of config in gateways
           oneOf:
-            - $ref: '#/components/schemas/iSCSI_Config'
-    
+            - $ref: '#/components/schemas/iSCSI_Cluster'
+
     # @DS: reviewed 2024-01-29
     iSCSI_Disk:
       description: >-
-        Disk create in iSCSI target/config
+        Disk create in specific target
       type: object
+      required:
+        - name
+        - size_gb
+        - owner
+        - pool_id
       properties:
         id:
           readOnly: true
@@ -2647,6 +2712,23 @@ components:
         owner:
           type: string
           example: user@example.net
+        pool_id:
+          writeOnly: true
+          type: string
+          example: 4
+        pool:
+          readOnly: true
+          oneOf:
+            - $ref: '#/components/schemas/Pool'
+        account_name:
+          writeOnly: true
+          type: string
+          example: acc2
+        account:
+          readOnly: true
+          oneOf:
+            - $ref: '#/components/schemas/Account'
+
 
     # @DS: reviewed 2024-01-29
     iSCSI_Disk_Assign:
@@ -2655,16 +2737,12 @@ components:
         id:
           type: integer
           example: 66
-        # TODO: practically not needed
-        name:
-          type: string
-          example: My Disk 1
 
      # @DS: reviewed 2024-02-02
     iSCSI_Client:
       type: object
       description: >-
-        Client device which connects to portals defined in iSCSI target/config
+        Client device which connects to portals defined in iSCSI target
         and mounts iSCSI disks.
       properties:
         id:
@@ -2687,7 +2765,6 @@ components:
         owner:
           type: string
           example: bob@example.net
-        # TODO: need to be implemented
         account:
           readOnly: true
           oneOf:
@@ -2695,7 +2772,7 @@ components:
         disks:
           readOnly: true
           type: array
-          items: 
+          items:
             $ref: '#/components/schemas/iSCSI_Disk'
 
     # @DS: reviewed 2024-02-02
@@ -2736,7 +2813,7 @@ components:
           type: string
           example: user1@example.net
 
-    
+
     # @DS: reviewed 2024-01-29
     S3_QuotaValue:
       description: >-
@@ -2843,12 +2920,12 @@ components:
           description: >-
             S3 user name as stored in Ceph storage (full name with account prefix)
             For S3 users create in Storage V1 there can not be account prefix.
-          type: string
-          example: acc1$user1
-          examples:
+            Examples:
             - acc1$user1
             - acc2$user1
             - user3
+          type: string
+          example: acc1$user1
         description:
           type: string
           example: Application 1 User
@@ -3015,15 +3092,33 @@ components:
       schema:
         type: string
       example: acc1
-    ConfigId:
+    ClusterId:
       in: path
-      name: config_id
+      name: cluster_id
       description: >-
-        ID of iSCSI config, as stored in Storage database
+        ID of iSCSI cluster, as stored in Storage database
       required: true
       schema:
         type: integer
       example: 61
+    GatewayId:
+      in: path
+      name: gateway_id
+      description: >-
+        ID of iSCSI Gateway, as stored in Storage database
+      required: true
+      schema:
+        type: integer
+      example: 88
+    PoolId:
+      in: path
+      name: Pool_id
+      required: true
+      description: >-
+        ID of iSCSI target, as stored in Storage database
+      schema:
+        type: integer
+      example: 23
     DiskId:
       in: path
       name: disk_id
