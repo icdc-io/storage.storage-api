@@ -63,8 +63,10 @@ audit:
       --entrypoint /bin/sh
       -v "$(pwd)/output:/output:Z"
       "$IMAGE_NAME" -lc '
-        pip install -q pip-audit &&
-        pip-audit --progress-spinner off > /output/pip_audit_report.txt
+        set -e
+        pip install -q pip-audit
+        IGNORE_ARGS="$(sed "s/^/--ignore-vuln /" .pip-audit.ignore 2>/dev/null || true)"
+        pip-audit --progress-spinner off $IGNORE_ARGS -o /output/pip_audit_report.txt
       '
   after_script:
     - podman stop -a || true
