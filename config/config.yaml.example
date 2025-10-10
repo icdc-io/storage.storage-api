@@ -71,10 +71,6 @@ ceph:
           disks: 80
           data_size_gb: 1500
           snapshots: 100
-sso:
-  url: "https://login.lab.icdc.io"
-  realm: devel
-  client_id:
 database:
   host:
   port:
