@@ -22,7 +22,7 @@ from app.models.model import AbstractModel
 from app.models.pool import Pools, PoolSchema
 
 
-class S3Users(db.Model, AbstractModel):
+class S3Users(AbstractModel):
     """
     Define columns in database and methods of model
     """
@@ -41,6 +41,13 @@ class S3Users(db.Model, AbstractModel):
         return f"S3Users({self.id}, {self.description}, {self.owner}, \
             {self.name}, {self.account_id}, {self.pool_id})"
 
+    @classmethod
+    def related_objects(cls) -> list:
+        from app.models.account import Accounts
+        return [
+            (Accounts, cls.account_id),
+        ]
+
     @property
     def user_info(self):
         if self._user_info_cache is None:
@@ -58,18 +65,6 @@ class S3Users(db.Model, AbstractModel):
             return S3UserStatus.LOCKED
 
         return S3UserStatus.ACTIVE
-
-    def save(self):
-        """
-        INSERT SQL
-        """
-        self._commit(db)
-
-    def remove(self):
-        """
-        DELETE SQL
-        """
-        self._delete(db)
 
     def serialize(self, hide_params=None):
         """
@@ -186,6 +181,10 @@ class S3Users(db.Model, AbstractModel):
         )
 
         return buckets_info
+
+    @classmethod
+    def schema(cls):
+        return S3UserSchema()
 
 
 class S3UserStatus(StrEnum):

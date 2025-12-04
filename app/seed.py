@@ -4,7 +4,7 @@ from app.loggers import log
 # Import models for correct queries during seeding
 from app.models import (
     iscsi_client,  # noqa: F401
-    iscsi_config,  # noqa: F401
+    iscsi_cluster,  # noqa: F401
     iscsi_disk,  # noqa: F401
     iscsi_gateway,  # noqa: F401
     s3_user,  # noqa: F401

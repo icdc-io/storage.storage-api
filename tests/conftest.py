@@ -1,16 +1,25 @@
+import os
+from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Callable, Tuple
 
 import pytest
+import yaml
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from tests.api import Api
-from tests.factory.account import AccountFactory
-from tests.factory.headers import HeadersFactory
-from tests.factory.s3_quota import S3QuotaFactory
+from tests.factories.account import AccountFactory
+from tests.factories.iscsi_cluster import IscsiClusterFactory
+from tests.factories.iscsi_disk import IscsiDiskFactory
+from tests.factories.iscsi_gateway import IscsiGatewayFactory
+from tests.factories.iscsi_quota import IscsiQuotaFactory
+from tests.factories.iscsi_targets import IscsiTargetFactory
+from tests.factories.s3_quota import S3QuotaFactory
 
 
 @pytest.fixture(scope="session", autouse=True)
 def app():
+    """Create Flask app once per session and seed database."""
     from main import create_app
     app = create_app()
     with app.app_context():
@@ -21,34 +30,74 @@ def app():
 
 @pytest.fixture(scope="session")
 def client(app):
+    """Return Flask test client."""
     return app.test_client()
 
 
 @pytest.fixture(scope="package")
 def make_connection(app):
-    def start_connection():
+    """Create DB connection with rollback + bind to factories."""
+
+    def start_connection() -> Tuple[Any, Callable[[], None]]:
         from app.database import db
         conn = db.engine.connect()
         outer = conn.begin()
-        Session = sessionmaker(bind=conn, future=True, expire_on_commit=True, autoflush=True, join_transaction_mode="create_savepoint")
+        Session = sessionmaker(
+            bind=conn,
+            future=True,
+            expire_on_commit=True,
+            autoflush=True,
+            join_transaction_mode="create_savepoint",
+        )
+
+        # Replace global session
         db.session.remove()
         db.session = scoped_session(Session)
 
-        AccountFactory._meta.sqlalchemy_session = db.session
-        S3QuotaFactory._meta.sqlalchemy_session = db.session
+        # Bind all factories
+        for factory in [
+            AccountFactory,
+            S3QuotaFactory,
+            IscsiClusterFactory,
+            IscsiQuotaFactory,
+            IscsiTargetFactory,
+            IscsiGatewayFactory,
+            IscsiDiskFactory,
+        ]:
+            factory._meta.sqlalchemy_session = db.session
 
-        def cleanup():
+        def cleanup() -> None:
             db.session.remove()
             outer.rollback()
             conn.close()
 
         return conn, cleanup
+
     return SimpleNamespace(start_connection=start_connection)
+
+
+def get_environment_data(filename: str = None) -> dict:
+    """Load YAML config for test environment."""
+    env_file = os.getenv("FIXTURES_FILE")
+    path_str = env_file or filename
+
+    path = Path(path_str)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+@pytest.fixture(scope="session")
+def env_data() -> dict:
+    """Return parsed environment config."""
+    return get_environment_data()
 
 
 @pytest.fixture
 def ceph_cleanup_registry():
-    undos = []
+    """Register cleanup callbacks and run them in reverse after test."""
+    undos: list[Callable[[], None]] = []
     try:
         yield undos
     finally:
@@ -61,7 +110,8 @@ def ceph_cleanup_registry():
 
 @pytest.fixture(scope="package")
 def ceph_cleanup_registry_scope_package():
-    undos = []
+    """Same as above but package-scoped."""
+    undos: list[Callable[[], None]] = []
     try:
         yield undos
     finally:
@@ -72,16 +122,7 @@ def ceph_cleanup_registry_scope_package():
                 pass
 
 
-@pytest.fixture
-def headers_factory():
-    return HeadersFactory
-
-
-@pytest.fixture(scope="package")
-def headers_factory_scope_package():
-    return HeadersFactory
-
-
 @pytest.fixture(scope="session")
-def api(client):
+def api(client) -> Api:
+    """Return API wrapper for making HTTP requests."""
     return Api(client)
