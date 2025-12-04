@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from app.lib.request_utils import abort_detailed, parse_jsonapi_filters, request_json
 from app.models.account import Accounts
 from app.models.s3_quota import S3Quotas, S3QuotaSchema
+from app.models.s3_user import S3Users
 
 
 def index(subject):
@@ -61,6 +62,9 @@ def destroy(subject, quota_id):
     quota = S3Quotas.filtered(subject).filter_by(id=quota_id).first()
     if not quota:
         abort(404, "Quota with this ID not found or you haven't access for it.")
-    quota.destroy()
 
+    if S3Users.query.filter_by(account_id=quota.account_id, pool_id=quota.pool_id).first():
+        abort(409, "S3 users must be deleted first.")
+
+    quota.destroy()
     return jsonify("No content.")

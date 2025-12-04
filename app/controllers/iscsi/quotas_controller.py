@@ -10,6 +10,7 @@ from app.lib.request_utils import (
 )
 from app.models.account import Accounts
 from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
+from app.models.iscsi_target import IscsiTargets
 
 
 def get_account_quotas(subject):
@@ -64,5 +65,7 @@ def destroy(subject, quota_id):
     quota = IscsiQuotas.filtered(subject).filter_by(id=quota_id).first()
     if not quota:
         abort(404, "Quota with this ID not found or you haven't access for it.")
+    if IscsiTargets.get_target(account_id=quota.account_id, pool_id=quota.pool_id):
+        abort(409, "Target for this pool must be deleted first.")
     quota.destroy()
     return jsonify("No content.")
