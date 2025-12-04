@@ -9,12 +9,11 @@ from sqlalchemy.sql import func
 from app.database import db
 from app.lib.request_utils import is_failed
 from app.loggers import log
-from app.models.iscsi_config import IscsiConfigs
 from app.models.iscsi_disk import IscsiDisks
 from app.models.model import AbstractModel
 
 
-class Snapshots(db.Model, AbstractModel):
+class Snapshots(AbstractModel):
     """
     Define columns in database and methods of model
     """
@@ -32,33 +31,6 @@ class Snapshots(db.Model, AbstractModel):
         return f"Snapshots({self.id}, {self.name}, {self.size_gb}, \
             {self.description}, {self.creation_time}, {self.disk_id})"
 
-    def save(self):
-        """
-        INSERT SQL
-        """
-        self._commit(db)
-
-    def remove(self):
-        """
-        DELETE SQL
-        """
-        self._delete(db)
-
-    def serialize(self, hide_params=None):
-        """
-        Serialize model method
-        """
-        super()._serialize()
-        fields = {
-            "id": "self.id",
-            "name": "self.name",
-            "size_gb": "self.size_gb",
-            "description": "self.description",
-            "creation_time": "self.creation_time",
-            "disk_id": "self.disk_id",
-        }
-        return self.response_filter(fields, hide_params)
-
     def update(self, body):
         """
         UPDATE SET SQL
@@ -66,6 +38,29 @@ class Snapshots(db.Model, AbstractModel):
         self.description = body.get("description", self.description)
         self.name = body.get("name", self.name)
         self.save()
+
+    @classmethod
+    def related_objects(cls) -> list:
+        from app.models.iscsi_disk import IscsiDisks
+        return [(IscsiDisks, cls.disk_id)]
+
+    @property
+    def target(self):
+        return self.disk.target
+
+    @classmethod
+    def schema(cls):
+        return SnapshotSchema()
+
+    @classmethod
+    def to_dict_many(cls, snapshots):
+        return SnapshotResponseSchema(many=True).dump(snapshots)
+
+    def to_dict(self):
+        """
+        Serialize model method
+        """
+        return SnapshotResponseSchema().dump(self)
 
 
 class SnapshotSchema(Schema):
@@ -88,7 +83,11 @@ class SnapshotSchema(Schema):
     provisioned = fields.Int()
     size_gb = fields.Int(dump_only=True)
     creation_time = fields.DateTime(dump_only=True)
-    disk_id = fields.Int(dump_only=True)
+    disk_id = fields.Int()
+
+
+class SnapshotResponseSchema(SnapshotSchema):
+    disk = fields.Nested("IscsiDiskSchema", dump_only=True)
 
 
 def before_delete(mapper, connection, snapshot_instance):
@@ -96,11 +95,11 @@ def before_delete(mapper, connection, snapshot_instance):
     Listener function, called before deleting a Snapshots object.
     """
     log.info(f"Deleting snapshot in RBD with name: {snapshot_instance.name}")
-
-    config = IscsiConfigs.get_by("id", snapshot_instance.disk.config_id)
+    from app.models.iscsi_target import IscsiTargets
+    target = IscsiTargets.get_by("id", snapshot_instance.target.id)
 
     try:
-        iscsi_service = config.iscsi_service()
+        iscsi_service = target.iscsi_service()
     except ValueError as e:
         abort(400, str(e))
 

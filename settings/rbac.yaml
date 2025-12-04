@@ -51,10 +51,15 @@ roles:
         - update
         - delete
       filters: {}
-    iscsi.configs:
+    iscsi.clusters:
       permissions:
         - list
         - get
+        - create
+        - delete
+      filters: {}
+    iscsi.targets:
+      permissions:
         - create
         - delete
       filters: {}
@@ -88,8 +93,8 @@ roles:
       filters: {}
     iscsi.gateways:
       permissions:
-        - list
         - create
+        - delete
       filters: {}
     pools:
       permissions:
@@ -144,13 +149,15 @@ roles:
         - delete
       filters:
         account_id: account_id
-    iscsi.configs:
+    iscsi.clusters:
       permissions:
         - list
         - get
-        - delete
       filters:
         account_id: account_id
+    iscsi.targets:
+      permissions: []
+      filters: {}
     iscsi.disks:
       permissions:
         - list
@@ -181,8 +188,7 @@ roles:
         - rollback
       filters: {}
     iscsi.gateways:
-      permissions:
-        - list
+      permissions: []
       filters: {}
     pools:
       permissions:
@@ -237,13 +243,15 @@ roles:
         - delete
       filters:
         account_id: account_id
-    iscsi.configs:
+    iscsi.clusters:
       permissions:
         - list
         - get
-        - delete
       filters:
         account_id: account_id
+    iscsi.targets:
+      permissions: []
+      filters: {}
     iscsi.disks:
       permissions:
         - list
@@ -274,8 +282,7 @@ roles:
         - rollback
       filters: {}
     iscsi.gateways:
-      permissions:
-        - list
+      permissions: []
       filters: {}
     pools:
       permissions:
@@ -325,12 +332,15 @@ roles:
         - list
       filters:
         account_id: account_id
-    iscsi.configs:
+    iscsi.clusters:
       permissions:
         - list
         - get
       filters:
         account_id: account_id
+    iscsi.targets:
+      permissions: []
+      filters: {}
     iscsi.disks:
       permissions:
         - list
@@ -361,8 +371,7 @@ roles:
         - rollback
       filters: {}
     iscsi.gateways:
-      permissions:
-        - list
+      permissions: []
       filters: {}
     pools:
       permissions:

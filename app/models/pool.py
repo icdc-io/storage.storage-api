@@ -3,22 +3,20 @@ Pool model
 """
 from marshmallow import Schema, fields, validate
 
+from app import consts
 from app.database import db
 from app.models.model import AbstractModel
 
 
-class Pools(db.Model, AbstractModel):
+class Pools(AbstractModel):
     """
     Define columns in database and methods of model
     """
-
+    RESOURCE_NAME = "pools"
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(128))
     name = db.Column(db.String(128))
     klass = db.Column(db.String(128))
-    config = db.relationship(
-        "IscsiConfigs", backref="pool-config", cascade="all, delete-orphan"
-    )
     s3_quotas = db.relationship("S3Quotas", back_populates="pool", cascade="all, delete-orphan")
     s3_users = db.relationship("S3Users", back_populates="pool", cascade="all, delete-orphan")
     iscsi_quotas = db.relationship("IscsiQuotas", back_populates="pool", cascade="all, delete-orphan")
@@ -26,27 +24,18 @@ class Pools(db.Model, AbstractModel):
     def __repr__(self):
         return f"Pool('{self.id}', '{self.name}', '{self.type}', {self.klass})"
 
-    def save(self):
-        """
-        INSERT SQL
-        """
-        self._commit(db)
+    @classmethod
+    def schema(cls, partial=False, many=False):
+        return PoolSchema(partial=partial, many=many)
 
     def location_constraint(self):
         return f"default:{self.klass}"
 
-    def serialize(self, hide_params=None):
-        """
-        Serialize model method
-        """
-        super()._serialize()
-        fields = {
-            "id": "self.id",
-            "name": "self.name",
-            "type": "self.type",
-            "class": "self.klass",
-        }
-        return self.response_filter(fields, hide_params)
+    def get_target_iqn(self):
+        return f"iqn.2020-01.{'.'.join(consts.LOCATION_DOMAIN.split('.')[::-1])}:iscsi-{self.name}"
+
+    def to_dict(self):
+        return PoolSchema().dump(self)
 
 
 class PoolSchema(Schema):

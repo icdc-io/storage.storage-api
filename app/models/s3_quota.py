@@ -13,10 +13,10 @@ from marshmallow import (
 from app import consts
 from app.database import db
 from app.models.model import AbstractModel
-from app.models.pool import Pools, PoolSchema
+from app.models.pool import Pools
 
 
-class S3Quotas(db.Model, AbstractModel):
+class S3Quotas(AbstractModel):
     RESOURCE_NAME = "s3.quotas"
     id = db.Column(db.Integer, primary_key=True)
     objects = db.Column(db.Integer)
@@ -33,33 +33,25 @@ class S3Quotas(db.Model, AbstractModel):
         ),
     )
 
-    def save(self):
-        """
-        INSERT SQL
-        """
-        self._commit(db)
-
     def __repr__(self):
         return f"S3Quotas({self.id}, {self.objects}, {self.data_size_mb}, \
             {self.buckets}, {self.users}, {self.pool_id}, {self.account_id})"
 
-    def serialize(self, hide_params=None):
-        """
-        Serialize model method
-        """
-        super()._serialize()
-        fields = {
-            "id": "self.id",
-            "objects": "self.objects",
-            "data_size_mb": "self.data_size_mb",
-            "buckets": "self.buckets",
-            "users": "self.users",
-            "pool": "self._pool()",
-        }
-        return self.response_filter(fields, hide_params)
-
     def _pool(self):
         return Pools.get_by("id", self.pool_id).serialize()
+
+    @classmethod
+    def schema(cls):
+        return S3QuotaSchema()
+
+    @classmethod
+    def related_objects(cls) -> list:
+        from app.models.account import Accounts
+        from app.models.pool import Pools
+        return [
+            (Accounts, cls.account_id),
+            (Pools,  cls.pool_id)
+        ]
 
     def update(self, body):
         """
@@ -115,36 +107,22 @@ class S3Quotas(db.Model, AbstractModel):
         limitset = self.get_limitset()
         return {restriction: getattr(limitset, restriction) for restriction in self.get_restriction_names()}
 
-    def toDict(self):
+    def to_dict(self):
         """
         Convert the S3Quotas object into a JSON-compatible dictionary.
         """
-        return {
-            "id": self.id,
-            "objects": self.objects,
-            "data_size_mb": self.data_size_mb,
-            "buckets": self.buckets,
-            "users": self.users,
-            "pool_id": self.pool_id,
-            "account_id": self.account_id,
-            "pool": self._pool() if self.pool_id else None,
-        }
+        return S3QuotaResponseSchema().dump(self)
+
 
 
 class S3QuotaSchema(Schema):
     id           = fields.Int(dump_only=True)
-    users        = fields.Int(validate=validate.Range(min=0))
-    buckets      = fields.Int(validate=validate.Range(min=0))
-    objects      = fields.Int(validate=validate.Range(min=0))
-    data_size_mb = fields.Int(validate=validate.Range(min=0))
-    account_id   = fields.Int(load_only=True)
-    pool_id      = fields.Int(load_only=True)
-
-    account = fields.Nested(
-        lambda: __import__('app.models.account', fromlist=['']).AccountSchema(),
-        dump_only=True
-    )
-    pool         = fields.Nested(PoolSchema(), dump_only=True)
+    users        = fields.Int(validate=validate.Range(min=0), required=True)
+    buckets      = fields.Int(validate=validate.Range(min=0), required=True)
+    objects      = fields.Int(validate=validate.Range(min=0), required=True)
+    data_size_mb = fields.Int(validate=validate.Range(min=0), required=True)
+    account_id   = fields.Int(load_only=True, required=True)
+    pool_id      = fields.Int(load_only=True, required=True)
 
     endpoints    = fields.Method("generate_endpoints", dump_only=True)
     usage        = fields.Function(lambda quota: quota.compute_usage(), dump_only=True)
@@ -187,3 +165,8 @@ class S3QuotaSchema(Schema):
             raise ValidationError("Must exist.", "pool")
 
         return pool
+
+
+class S3QuotaResponseSchema(Schema):
+    account      = fields.Nested("AccountSchema", dump_only=True)
+    pool         = fields.Nested("PoolSchema", dump_only=True)

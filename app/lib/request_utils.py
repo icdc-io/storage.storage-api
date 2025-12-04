@@ -77,7 +77,9 @@ def parse_jsonapi_filters(args: dict):
                     filters[related_object] = {}
                 filters[related_object][related_field] = value
             else:
-                filters[field_name] = value
+                if "base" not in filters:
+                    filters["base"] = {}
+                filters["base"][field_name] = value
     return filters
 
 

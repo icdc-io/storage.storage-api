@@ -131,7 +131,6 @@
 #     response = client.get("/api/v2/accounts/devel", headers=headers_factory.build(operator=True))
 #     assert response.status_code == 200
 #     account_info = response.get_json()
-#     print(account_info)
 #     try:
 #         AccountResponseSchema().load(account_info)
 #     except ValidationError as e:

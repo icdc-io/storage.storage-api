@@ -71,7 +71,6 @@ done
 
 log "Database is available!"
 
-# Run the application container and execute tests
 log "Starting application container: $APP_CONTAINER and running tests"
 if ! podman run --rm --name "$APP_CONTAINER" \
   --env DATABASE_USERNAME="${DATABASE_USERNAME}" \
@@ -83,6 +82,8 @@ if ! podman run --rm --name "$APP_CONTAINER" \
   --env CEPH_ACCESS_KEY="${CEPH_ACCESS_KEY}" \
   --env CEPH_SECRET_KEY="${CEPH_SECRET_KEY}" \
   --env CEPH_SSH_KEY="${CEPH_SSH_KEY}" \
+  --env FIXTURES_FILE="/tmp/fixtures.yaml" \
+  -v "${FIXTURES_FILE}:/tmp/fixtures.yaml:z" \
   -v "${CEPH_SSH_KEYFILE}:/.ssh/id_ed25519:ro,z" \
   -v ./htmlcov:/usr/src/app/htmlcov:z \
   -v ./report.xml:/usr/src/app/report.xml:z \

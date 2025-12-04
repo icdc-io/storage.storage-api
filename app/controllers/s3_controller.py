@@ -164,13 +164,11 @@ def get_account_s3_users(subject):
     """
     Get list of S3 User which are assigned to account
     """
-    schema = S3UserSchema(partial=True)
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
-        filters = schema.load(parsed_filters)
+        s3_users = S3Users.filtered(subject, request_filters=parsed_filters).all()
     except ValidationError as e:
         abort_detailed(400, "Invalid query parameters.", e.messages)
-    s3_users = S3Users.filtered(subject).filter_by(**filters).all()
     return S3UserSchema(many=True).dump(s3_users)
 
 
@@ -194,7 +192,7 @@ def delete_s3_user(subject, user_id):
     s3_user_obj = S3Users.filtered(subject).filter_by(id=user_id).first()
     if s3_user_obj is None:
         abort(404, "This account hasn't got the user with this ID or you haven't access for it.")
-    s3_user_obj.remove()
+    s3_user_obj.destroy()
     return jsonify("No content.")
 
 
@@ -400,7 +398,7 @@ def list_buckets(subject):
         bucket = Bucket.from_bucket_info(bucket_info)
         # Buckets are not stored in database, so we have to filter them iterating by fields
         try:
-            if bucket.user_name in s3_user_names and bucket.filter(api_filters):
+            if bucket.user_name in s3_user_names and bucket.filter(api_filters.pop("base", {})):
                 buckets.append(bucket)
         except AttributeError as e:
             abort(400, e.args[0])

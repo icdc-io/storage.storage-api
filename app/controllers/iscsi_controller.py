@@ -18,10 +18,12 @@ from app.lib.request_utils import (
 )
 from app.models.account import Accounts
 from app.models.iscsi_client import IscsiClients, IscsiClientSchema
-from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
+from app.models.iscsi_cluster import IscsiClusters, IscsiClusterSchema
 from app.models.iscsi_disk import IscsiDisks, IscsiDiskSchema
 from app.models.iscsi_gateway import IscsiGateways, IscsiGatewaySchema
 from app.models.iscsi_quota import IscsiQuotas
+from app.models.iscsi_target import IscsiTargets
+from app.models.pool import Pools
 from app.models.snapshot import Snapshots, SnapshotSchema
 
 
@@ -31,142 +33,173 @@ def get_iscsi_limits(subject):
     """
     limitsets = IscsiQuotas.get_default_limitsets().all()
     # NOTE: currently we do not support non-default limitsets
-    limitsets = [limitset.toDict() for limitset in limitsets]
+    limitsets = [limitset.to_dict() for limitset in limitsets]
     return jsonify(limitsets)
 
 
-def set_iscsi_configs(subject, body=None):
+def create_cluster(subject, body=None):
     """
-    Store iSCSI config in Postgres
+    Create iSCSI cluster in Postgres
     """
     if not body:
         body = request_json(request)
-    account_name = body.pop("account_name")
-    log.debug(
-        f"Set iSCSI config to account {account_name} with params {body}"
-    )
+    account_name = body.pop("account_name", subject.account_name)
     account = Accounts.filtered(subject).filter_by(name=account_name).first()
     if not account:
-        abort(404, "Account with this name not found.")
-    if IscsiConfigs.query.filter_by(account_id=account.id, pool_id=body["pool_id"]).first():
-        abort(409, "Config for this pool already exist.")
+        abort(404, "Account with this name not found or you haven't permission.")
+    log.debug(
+        f"Set iSCSI cluster to account {account_name} with params {body}"
+    )
 
     body["account_id"] = account.id
     try:
-        validated_body = IscsiConfigSchema().load(body)
+        validated_body = IscsiClusterSchema().load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid input data.", e.messages)
+    cluster = IscsiClusters(**validated_body)
+    cluster.save()
 
-    config = IscsiConfigs(**validated_body)
-    config.save()
-
-    if not config.id:
+    if not cluster.id:
         abort(409, "Config already exist")
 
-    return IscsiConfigSchema().dump(config)
+    return cluster.to_dict()
 
 
-def get_configs(subject):
+def get_clusters(subject):
     """
-    Get iSCSI configs from Postgres
+    List iSCSI clusters from Postgres
     """
-    schema = IscsiConfigSchema(partial=True)
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
-        filters = schema.load(parsed_filters)
+        clusters = IscsiClusters.filtered(subject, request_filters=parsed_filters).all()
     except ValidationError as e:
-        abort_detailed(400, "Invalid query parameters.", e.messages)
-    configs = IscsiConfigs.filtered(subject).filter_by(**filters).all()
-    return jsonify(IscsiConfigSchema(many=True).dump(configs))
+        abort(400, e.messages)
+    return jsonify(IscsiClusters.to_dict_many(clusters))
 
 
-def delete_config(subject, config_id):
+def delete_cluster(subject, cluster_id):
     """
     Delete iSCSI config
     """
-    log.debug(f"Delete config with id {config_id}")
-    config_obj = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
-    if not config_obj:
+    log.debug(f"Delete config with id {cluster_id}")
+    cluster = IscsiClusters.filtered(subject).filter_by(id=cluster_id).first()
+    if not cluster:
         abort(404, "Config with this ID not found or you have not permission.")
-    config_obj.remove()
+    cluster.destroy()
     return jsonify("No content.")
 
 
-def get_config(subject, config_id):
+def get_cluster(subject, cluster_id):
     """
-    Get iSCSI Config
+    Get iSCSI Cluster
     """
-    config_obj = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
-    if not config_obj:
+    cluster = IscsiClusters.filtered(subject).filter_by(id=cluster_id).first()
+    if not cluster:
         abort(404, "Config with this ID not found or you have not permission.")
-    return IscsiConfigSchema().dump(config_obj)
+    return cluster.to_dict()
 
 
-def set_config_gateway(subject, config_id, body=None):
+def create_target(subject, body=None):
     """
-    Set iSCSI gateway to iSCSI target
+    Create Target instance in Database.
     """
     if not body:
         body = request_json(request)
 
-    config = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
-    if not config:
-        abort(404, "Config with such id not found or you haven't permission.")
+    cluster = IscsiClusters.filtered(subject).filter_by(id=body.get("cluster_id", None)).first()
+    if not cluster:
+        abort(404, "Cluster with this ID not found or you have not permission.")
+
+    pool = Pools.get_by("id", body.get("pool_id", None))
+    if not pool:
+        abort(404, "Pool with this ID not found.")
+
+    if IscsiTargets.get_target(cluster.account_id, pool.id):
+        abort(409, "Target for this pool already exist in this account.")
+
+    target = IscsiTargets(**body)
+    target.save()
+    if not target.id:
+        abort(500, "Unexpected error.")
+    return no_content()
+
+
+def delete_target(subject, target_id):
+    target = IscsiTargets.filtered(subject).filter_by(id=target_id).first()
+    if not target:
+        abort(404, "Target with this ID not found or you have not permission.")
+    target.destroy()
+    return no_content()
+
+
+def create_gateway(subject, body=None):
+    """
+    Set iSCSI gateway to iSCSI Cluster
+    """
+    if not body:
+        body = request_json(request)
+    log.info("Start process of create iSCSI Gateway")
+    cluster_id = body["cluster_id"]
+    cluster = IscsiClusters.filtered(subject).filter_by(id=cluster_id).first()
+    if not cluster:
+        abort(404, "Cluster with such id not found or you haven't permission.")
 
     try:
         validated_body = IscsiGatewaySchema().load(body)
-    except ValidationError:
-        abort(400, "Invalid input data.")
+    except ValidationError as e:
+        abort_detailed(400, "Invalid input data.", e.messages)
 
-    validated_body["config_id"] = config_id
     gateway = IscsiGateways(**validated_body)
-    config.gateways.append(gateway)
-
-    iscsi_service = config.iscsi_service(ensure_exist=False)
-    response = iscsi_service.assign_gateway()
-
-    if is_failed(response):
-        abort(response["code"], response["data"])
-
     gateway.save()
-    return IscsiGatewaySchema().dump(gateway)
+    if not gateway.id:
+        abort(409, "Can not create gateway in database.")
+    return no_content()
 
 
-def get_config_gateways(subject, config_id):
+def delete_gateway(subject, gateway_id):
     """
-    Get iSCSI Config Gateways
+    Delete iSCSI gateway from iSCSI Cluster
     """
-    config = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
-    if not config:
-        abort(404, "Config not found or you haven't permission")
+    gateway = IscsiGateways.filtered(subject).filter_by(id=gateway_id).first()
+    if not gateway:
+        abort(404, "Gateway with such id not found or you haven't permission.")
+    gateway.destroy()
+    return gateway.to_dict()
 
-    return jsonify(IscsiGatewaySchema(many=True).dump(config.gateways))
 
-
-def get_config_disks(subject, config_id):
+def get_disks(subject):
     """
     Get all iSCSI disks which are assigned to config
     """
-    disks = IscsiDisks.filtered(subject).filter_by(config_id=config_id).all()
-    return jsonify(IscsiDiskSchema(many=True).dump(disks))
+    parsed_filters = parse_jsonapi_filters(request.args)
+    try:
+        disks = IscsiDisks.filtered(subject, request_filters=parsed_filters).all()
+    except ValidationError as e:
+        abort(400, e.messages)
+    return jsonify(IscsiDisks.to_dict_many(disks))
 
 
-def create_disk(subject, config_id):
+def create_disk(subject):
     """
     Create iSCSI disk and assign it to iSCSI Config
     """
     body = request_json(request)
     log.debug(
-        f"Create disk with params {body} and assign disk to config with id {config_id}"
+        f"Create disk with params {body} for pool {body['pool_id']}"
     )
 
     snapshot_id = body.pop("from_snapshot_id", None)
+    account_name = body.pop("account_name", subject.account_name)
 
-    config = IscsiConfigs.filtered(subject).filter_by(id=config_id).first()
-    if config is None:
-        abort(400, "There is no config with such id or you haven't permission or you haven't permission.")
+    account = Accounts.filtered(subject).filter_by(name=account_name).first()
+    if not account:
+        abort(404, f"Account {account_name} not found or you haven't permission.")
 
-    quota = IscsiQuotas.query.filter_by(account_id=config.account_id, pool_id=config.pool_id).first()
+    target = IscsiTargets.get_target(account.id, body.pop("pool_id"))
+    if target is None:
+        abort(400, "There is no target with such id or you haven't permission.")
+
+    quota = IscsiQuotas.query.filter_by(account_id=target.account.id, pool_id=target.pool_id).first()
     if not quota:
         abort(400, "Account doesn't have quota for this pool")
 
@@ -178,11 +211,7 @@ def create_disk(subject, config_id):
         snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
         if not snapshot:
             abort(404, "Snapshot with this id not found.")
-
-        base_disk = IscsiDisks.filtered(subject).filter_by(id=snapshot.disk_id).first()
-        if not base_disk:
-            abort(403, "You have not permission for this disk.")
-
+        base_disk = snapshot.disk
         args.update(
             disk_name=base_disk.name,
             snapshot_name=snapshot.name
@@ -190,8 +219,7 @@ def create_disk(subject, config_id):
 
         # Set disk size to snapshot size
         body["size_gb"] = snapshot.size_gb
-
-    body["config_id"] = config_id
+    body["target_id"] = target.id
     try:
         validated_body = IscsiDiskSchema(context={
             "quota": quota
@@ -201,7 +229,7 @@ def create_disk(subject, config_id):
     args.update(body=validated_body)
 
     try:
-        iscsi_service = config.iscsi_service()
+        iscsi_service = target.iscsi_service()
     except ValueError as e:
         abort(400, str(e))
 
@@ -230,22 +258,18 @@ def update_disk(subject, disk_id):
     if not disk:
         abort(404, "Disk not found or you haven't permission.")
 
-    config = IscsiConfigs.filtered(subject).filter_by(id=disk.config_id).first()
-    if not config:
-        abort(404, "Config with this ID not found or you haven't permission.")
-
     try:
         validated_body = IscsiDiskSchema(
             context={
                 'disk': disk,
-                'config': config
-            }
+            },
+            partial=True
         ).load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters.", e.messages)
 
     try:
-        iscsi_service = config.iscsi_service()
+        iscsi_service = disk.target.iscsi_service()
     except ValueError as e:
         abort(400, str(e))
 
@@ -258,7 +282,7 @@ def update_disk(subject, disk_id):
         del validated_body["owner"]  # pylint: disable=multiple-statements
     disk.update(validated_body)
 
-    return IscsiDiskSchema().dump(disk)
+    return disk.to_dict()
 
 
 def delete_disk(subject, disk_id):
@@ -276,43 +300,42 @@ def delete_disk(subject, disk_id):
         abort(409, f"This disk is used by {len(disk.clients)} clients")
     if len(disk.snapshots):
         abort(409, "This disk cannot be deleted. Disk has snapshots.")
-    disk.remove()
+    disk.destroy()
     return IscsiDiskSchema().dump(disk)
 
 
-def get_iscsi_clients(subject):
+def get_clients(subject):
     """
     Get list of iSCSI clients
     """
-    schema = IscsiClientSchema(partial=True)
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
-        filters = schema.load(parsed_filters)
+        clients = IscsiClients.filtered(subject, parsed_filters).all()
     except ValidationError as e:
         abort_detailed(400, "Invalid query parameters.", e.messages)
-    clients = IscsiClients.filtered(subject).filter_by(**filters).all()
-    return jsonify(IscsiClientSchema(many=True).dump(clients))
+    return jsonify(IscsiClients.to_dict_many(clients))
 
 
-def create_iscsi_client(subject):
+def create_client(subject):
     """
     Create iSCSI Client in Ceph and Postgres
     """
     body = request_json(request)
-    account_name = body.pop("account_name")
+    account_name = body.pop("account_name", subject.account_name)
     log.debug(
         f"Create iSCSI client to account {account_name} with params {body}"
     )
     try:
-        account_obj = Accounts.filtered(subject).filter_by(name=account_name).first()
-        if not account_obj:
+        account = Accounts.filtered(subject).filter_by(name=account_name).first()
+        if not account:
             abort(404, "Account with this name not found or you haven't permission.")
+
         try:
             validated_body = IscsiClientSchema().load(body)
         except ValidationError as e:
             abort_detailed(400, "Invalid parameters", e.messages)
 
-        validated_body["account_id"] = account_obj.id
+        validated_body["account_id"] = account.id
         client = IscsiClients(**validated_body)
         client.save()
         if client.id is None:
@@ -347,9 +370,8 @@ def update_client(subject, client_id):
         del validated_body["owner"]  # pylint: disable=multiple-statements
 
     for disk in client.disks:
-        config = IscsiConfigs.get_by("id", disk.config_id)
         try:
-            iscsi_service = config.iscsi_service()
+            iscsi_service = disk.target.iscsi_service()
         except ValueError as e:
             abort(400, str(e))
 
@@ -366,10 +388,10 @@ def delete_client(subject, client_id):
     Delete Client. Depends on Disks od this client
     """
     log.debug(f"Delete client with id {client_id}")
-    client_obj = IscsiClients.filtered(subject).filter_by(id=client_id).first()
-    if not client_obj:
+    client = IscsiClients.filtered(subject).filter_by(id=client_id).first()
+    if not client:
         abort(404, "Client with this ID not found or you haven't permission.")
-    assigned_disks = len(client_obj.disks)
+    assigned_disks = len(client.disks)
     if assigned_disks:
         abort(
             409,
@@ -378,10 +400,11 @@ def delete_client(subject, client_id):
                 "Unassign disks before deleting client."
             )
         )
-    client_obj.remove()
+    client.destroy()
     return jsonify("No content.")
 
 
+# TODO EK: may be replace by just get client
 def get_client_disks(subject, client_id):
     """
     Get clients of disk. Depends on role of requester
@@ -409,14 +432,12 @@ def disks_to_client(subject, client_id):
         if disk in client.disks:
             continue
 
-        config = IscsiConfigs.get_by("id", disk.config_id)
-
         try:
-            iscsi_service = config.iscsi_service()
+            iscsi_service = disk.target.iscsi_service()
         except ValueError as e:
             abort(400, str(e))
 
-        _check_clients_quota_exceeds(config)
+        _check_clients_quota_exceeds(disk.target)
 
         response = iscsi_service.assign_disk(client, disk.name)
         if is_failed(response):
@@ -429,8 +450,8 @@ def disks_to_client(subject, client_id):
 
 
 # will be removed after add common quota.
-def _check_clients_quota_exceeds(config):
-    quota = IscsiQuotas.query.filter_by(account_id=config.account_id, pool_id=config.pool_id).first()
+def _check_clients_quota_exceeds(target):
+    quota = IscsiQuotas.query.filter_by(account_id=target.account.id, pool_id=target.pool_id).first()
     usage = quota.compute_usage()
     if usage["clients"] + 1 > quota.clients:
         abort(409, "Quota overflow for clients.")
@@ -448,9 +469,8 @@ def unassign_client_disk(subject, client_id, disk_id):
     if not disk:
         abort(404, "Disk with this ID not found or you don't have permission.")
 
-    config = IscsiConfigs.get_by("id", disk.config_id)
     try:
-        iscsi_service = config.iscsi_service()
+        iscsi_service = disk.target.iscsi_service()
     except ValueError as e:
         abort(400, str(e))
 
@@ -463,33 +483,32 @@ def unassign_client_disk(subject, client_id, disk_id):
     return jsonify("No content.")
 
 
-def get_disk_snapshots(subject, disk_id):
+def get_snapshots(subject):
     """
     Get list of snapshots which are assigned to disk
     """
-    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
-    if not disk:
-        abort(404, "Disk not found or you haven't permission.")
-    return jsonify(SnapshotSchema(many=True).dump(disk.snapshots))
+    parsed_filters = parse_jsonapi_filters(request.args)
+    try:
+        snapshots = Snapshots.filtered(subject, parsed_filters).all()
+    except ValidationError as e:
+        abort_detailed(400, "Invalid query parameters.", e.messages)
+
+    return jsonify(Snapshots.to_dict_many(snapshots))
 
 
-def create_disk_snapshot(subject, disk_id):
+def create_snapshot(subject):
     """
     Create new snapshot on Ceph side and on Postgres side.
     Assign Snapshot to Disk.
     """
     body = request_json(request)
     log.debug(
-        f"Create Snapshot based on disk {disk_id} with params {body}"
+        f"Create Snapshot based on disk {body['disk_id']} with params {body}"
     )
 
-    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
+    disk = IscsiDisks.filtered(subject).filter_by(id=body.get("disk_id")).first()
     if not disk:
         abort(404, "Disk not found or you haven't permission.")
-
-    config = IscsiConfigs.filtered(subject).filter_by(
-        id=disk.config_id
-    ).first()
 
     try:
         validated_body = SnapshotSchema().load(body)
@@ -497,11 +516,11 @@ def create_disk_snapshot(subject, disk_id):
         abort_detailed(400, "Invalid input data.", e.messages)
 
     try:
-        iscsi_service = config.iscsi_service()
+        iscsi_service = disk.target.iscsi_service()
     except ValueError as e:
         abort(400, str(e))
 
-    _check_snapshot_quota_exceed(config)
+    _check_snapshot_quota_exceed(disk.target)
 
     response = iscsi_service.create_snapshot(disk_name=disk.name, body=validated_body)
     if is_failed(response):
@@ -511,7 +530,6 @@ def create_disk_snapshot(subject, disk_id):
         validated_body.pop(key, None)
     validated_body["size_gb"] = response["data"]["size"] / 1024**3
     validated_body["creation_time"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
-    validated_body["disk_id"] = disk_id
 
     snapshot = Snapshots(**validated_body)
     snapshot.save()
@@ -519,20 +537,17 @@ def create_disk_snapshot(subject, disk_id):
     return SnapshotSchema().dump(snapshot)
 
 
-def _check_snapshot_quota_exceed(config):
-    quota = IscsiQuotas.query.filter_by(pool_id=config.pool_id, account_id=config.account_id).first()
+def _check_snapshot_quota_exceed(target):
+    quota = IscsiQuotas.query.filter_by(pool_id=target.pool_id, account_id=target.account.id).first()
     usage = quota.compute_usage()
     if usage["snapshots"] + 1 > quota.snapshots:
         abort(409, "Quota overflow for snapshots!")
 
 
-def get_snapshot(subject, disk_id, snapshot_id):
+def get_snapshot(subject, snapshot_id):
     """
     Get snapshot by id
     """
-    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
-    if not disk:
-        abort(404, "Disk not found or you haven't permission.")
     snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
     if not snapshot:
         return abort(404, "Disk hasn't got snapshots")
@@ -540,24 +555,11 @@ def get_snapshot(subject, disk_id, snapshot_id):
     return SnapshotSchema().dump(snapshot)
 
 
-def update_snapshot(subject, disk_id, snapshot_id):
+def update_snapshot(subject, snapshot_id):
     """
     Update snapshot description
     """
     body = request_json(request)
-
-    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
-    if not disk:
-        abort(404, "Disk not found or you haven't permission.")
-
-    config = IscsiConfigs.filtered(subject).filter_by(
-        id=disk.config_id
-    ).first()
-
-    try:
-        iscsi_service = config.iscsi_service()
-    except ValueError as e:
-        abort(400, str(e))
 
     snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
     if not snapshot:
@@ -568,10 +570,15 @@ def update_snapshot(subject, disk_id, snapshot_id):
     except ValidationError as e:
         abort_detailed(400, "Invalid input data.", e.messages)
 
+    try:
+        iscsi_service = snapshot.target.iscsi_service()
+    except ValueError as e:
+        abort(400, str(e))
+
     log.debug(f"Update Snapshot {snapshot.name} with params {validated_body}")
 
-    if validated_body["name"] != snapshot.name:
-        response = iscsi_service.update_snapshot(disk_name=disk.name, snapshot_name=snapshot.name, body=validated_body)
+    if validated_body.get("name", None) and validated_body["name"] != snapshot.name:
+        response = iscsi_service.update_snapshot(disk_name=snapshot.disk.name, snapshot_name=snapshot.name, body=validated_body)
         if is_failed(response):
             abort(response["code"], response["data"])
 
@@ -579,100 +586,41 @@ def update_snapshot(subject, disk_id, snapshot_id):
     return SnapshotSchema().dump(snapshot)
 
 
-def delete_snapshot(subject, disk_id, snapshot_id):
+def delete_snapshot(subject, snapshot_id):
     """
     Delete snapshot by name
     """
     snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
     if not snapshot:
         abort(404, "Snapshot with this ID not found.")
-    log.debug(f"Delete snapshot {snapshot.name} from disk with id {disk_id}")
 
-    if not IscsiDisks.filtered(subject).filter_by(id=disk_id).first():
-        abort(403, "You have not permission for this disk.")
-    snapshot.remove()
+    log.debug(f"Delete snapshot {snapshot.name} from disk with id {snapshot.disk_id}")
+    snapshot.destroy()
     return no_content()
 
 
-def new_disk_from_snapshot(subject, disk_id, snapshot_name):
-    """
-    Create disk from snapshot
-    """
-    body = request_json(request)
-
-    snapshot = Snapshots.filtered(subject).filter_by(name=snapshot_name).first()
-    if not snapshot:
-        abort(404, "Snapshot with this id not found.")
-
-    disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
-    if not disk:
-        abort(403, "You have not permission for this disk.")
-
-    log.debug(f"Create new Disk based on disk {disk_id}, snapshot {snapshot.name}")
-
-    config = IscsiConfigs.get_by("id", disk.config_id)
-
-    try:
-        iscsi_service = config.iscsi_service()
-    except ValueError as e:
-        abort(400, str(e))
-
-    body["size_gb"] = snapshot.size_gb
-
-    try:
-        IscsiDiskSchema(context={"config": config}).load(body)
-    except ValidationError as e:
-        abort(400, e.messages)
-
-    body["create_image"] = False
-    response = iscsi_service.new_disk_from_snapshot(
-        disk_name=disk.name,
-        snapshot_name=snapshot.name,
-        body=body
-    )
-
-    if is_failed(response):
-        return status_codes.get(response["code"])(response["data"])
-
-    body["config_id"] = config.id
-    body["owner"] = disk.owner
-    body.pop("create_image")
-
-    disk = IscsiDisks(**body)
-    disk.save()
-
-    return IscsiDiskSchema().dump(disk)
-
-
-def rollback_snapshot(subject, disk_id, snapshot_name):
+def rollback_snapshot(subject, snapshot_id):
     """
     Rollback disk to snapshot
     """
-
-    snapshot = Snapshots.filtered(subject).filter_by(name=snapshot_name).first()
+    snapshot = Snapshots.filtered(subject).filter_by(id=snapshot_id).first()
     if not snapshot:
         abort(404, "Snapshot not found.")
 
-    disk = IscsiDisks.filtered(subject).filter_by(id=snapshot.disk_id).first()
-    if not disk:
-        abort(403, "You have not permission for this disk.")
-
-    log.debug(f"Rollback disk {disk.name} to snapshot {snapshot.name}")
-
-    config = IscsiConfigs.get_by("id", disk.config_id)
+    log.debug(f"Rollback disk {snapshot.disk.name} to snapshot {snapshot.name}")
 
     try:
-        iscsi_service = config.iscsi_service()
+        iscsi_service = snapshot.target.iscsi_service()
     except ValueError as e:
         abort(400, str(e))
 
-    response = iscsi_service.rollback_snapshot(disk_name=disk.name, snapshot_name=snapshot.name)
+    response = iscsi_service.rollback_snapshot(disk_name=snapshot.disk.name, snapshot_name=snapshot.name)
     if is_failed(response):
         return status_codes.get(response["code"])(response["data"])
 
     update_params = {"size_gb": response["data"] / 1024**3}
-    disk.update(update_params)
-    return IscsiDiskSchema().dump(disk)
+    snapshot.disk.update(update_params)
+    return IscsiDiskSchema().dump(snapshot.disk)
 
 
 def _disk_migrate(body):

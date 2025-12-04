@@ -3,22 +3,25 @@ Account controller
 """
 
 import os
+from copy import deepcopy
 
 from flask import abort, jsonify, request
 from marshmallow import ValidationError
 
 from app.controllers.iscsi.quotas_controller import create as create_iscsi_quota
-from app.controllers.iscsi_controller import set_config_gateway as set_gateway
-from app.controllers.iscsi_controller import set_iscsi_configs as set_config
+from app.controllers.iscsi.quotas_controller import update as update_iscsi_quota
+from app.controllers.iscsi_controller import (
+    create_cluster,
+    create_gateway,
+    create_target,
+)
 from app.controllers.s3.quotas_controller import create as create_s3_quota
-from app.database import db
+from app.controllers.s3.quotas_controller import update as update_s3_quota
 from app.lib import paramiko
 from app.lib.request_utils import abort_detailed, log, request_json
 from app.models.account import Accounts, AccountSchema
-from app.models.iscsi_config import IscsiConfigs, IscsiConfigSchema
-from app.models.iscsi_gateway import IscsiGateways, IscsiGatewaySchema
-from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
-from app.models.s3_quota import S3Quotas, S3QuotaSchema
+from app.models.iscsi_quota import IscsiQuotas
+from app.models.s3_quota import S3Quotas
 from app.models.s3_user import S3Users
 
 #############################################
@@ -28,31 +31,30 @@ from app.models.s3_user import S3Users
 
 def create_account(subject):
     """
-    Create account instance along with its S3 and iSCSI quotas and iSCSI configs.
+    Create account instance along with its S3 and iSCSI quotas and iSCSI clusters.
     """
-    data = request_json(request)
-    # Validate input data
-    valid, message = Accounts.validate_account_data(data)
-    if not valid:
-        log.error(message)
-        abort(400, message)
-    # Create account
-    log.debug(
-        f"Creating account and associated records for: {data['name']}"
-    )
-    log.debug(f"Data: {data}")
-
+    body = request_json(request)
+    data = body.pop("services", {})
     try:
-        data = AccountSchema().load(data)
+        validated_body = AccountSchema().load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid account parameters.", e.messages)
 
-    # Attempt to create Account (assuming unique constraint or similar check exists)
-    account = Accounts(
-        **{k: v for k, v in data.items() if k not in ["services"]}
-    )
-    account.save()
+    # Validate input data
+    try:
+        Accounts.validate_account_data(deepcopy(data))
+    except ValidationError as e:
+        abort_detailed(400, "Invalid data provided.", e.messages)
 
+    # Create account
+    log.debug(
+        f"Creating account and associated records for: {body['name']}"
+    )
+    log.debug(f"Data: {data}")
+
+    # Attempt to create Account (assuming unique constraint or similar check exists)
+    account = Accounts(**validated_body)
+    account.save()
     # Check if account creation was successful
     if account.id is None:
         log.error("Failed to create account")
@@ -60,32 +62,44 @@ def create_account(subject):
     log.debug("Account created successfully")
 
     # Process S3 Quotas
-    for s3_quota in data.get("services", {}).get("s3", {}).get("quotas", []):
+    log.debug("Start creating S3 Quotas")
+    for s3_quota in data.get("s3", {}).get("quotas", []):
         s3_quota["account_name"] = account.name
         create_s3_quota(subject, s3_quota)
     log.debug("S3 Quotas processed successfully")
 
     # Process iSCSI Quotas
-    for iscsi_quota in (data.get("services", {}).get("iscsi", {}).get("quotas", [])):
+    log.debug("Start creating iSCSI Quotas")
+    for iscsi_quota in (data.get("iscsi", {}).get("quotas", [])):
         iscsi_quota["account_name"] = account.name
         create_iscsi_quota(subject, iscsi_quota)
     log.debug("iSCSI Quotas processed successfully")
 
-    # Process iSCSI Configs and Gateways
-    for iscsi_config in (
-            data.get("services", {}).get("iscsi", {}).get("configs", [])
+    # Process iSCSI Clusters and Gateways
+    for iscsi_cluster in (
+            data.get("iscsi", {}).get("clusters", [])
     ):
-        iscsi_config["account_name"] = account.name
-        gateways = iscsi_config.pop("gateways", [])
+        log.debug(f"Start creating iSCSI Cluster with name: {iscsi_cluster['name']}")
 
-        iscsi_config = set_config(subject, iscsi_config)
-        for gateway in gateways:
-            set_gateway(subject, iscsi_config["id"], gateway)
+        iscsi_cluster["account_name"] = account.name
+        iscsi_gateways = iscsi_cluster.pop("gateways", [])
+        iscsi_targets = iscsi_cluster.pop("targets", [])
 
-    log.debug("iSCSI Configs and Gateways processed successfully")
+        iscsi_cluster = create_cluster(subject, iscsi_cluster)
+        for gateway in iscsi_gateways:
+            log.debug(f"Start creating iSCSI Gateway with name: {gateway['name']}")
+            gateway["cluster_id"] = iscsi_cluster["id"]
+            create_gateway(subject, gateway)
+
+        for target in iscsi_targets:
+            log.debug(f"Start creating iSCSI Target for pool: {target['pool_id']}")
+            target["cluster_id"] = iscsi_cluster["id"]
+            create_target(subject, target)
+
+    log.debug("Clusters, gateways and targets processed successfully")
     log.debug("Account and associated records created successfully")
 
-    return AccountSchema().dump(account)
+    return account.to_dict()
 
 
 def get_account_info(subject, account_name):
@@ -93,149 +107,93 @@ def get_account_info(subject, account_name):
     account = Accounts.query.filter_by(name=account_name).first()
 
     if account is None:
-        abort(404, "Account does not exist.")
+        abort(404, "Account does not exist or you haven't permission.")
 
-    return account.toDict()
+    return account.to_dict()
 
 
 def update_account(subject, account_name):
-    data = request_json(request)
-    data["name"] = account_name
-    # Validate input data
-    valid, message = Accounts.validate_account_data(data)
-    if not valid:
-        log.error(message)
-        abort(400, message)
-
-    log.debug(f"Update account with data: {data}")
-
+    """
+    Update account attributes and add new S3 and iSCSI quotas and iSCSI clusters.
+    Can update S3 and iSCSI quotas but need provide all info of created quotas.
+    """
+    body = request_json(request)
+    data = body.pop("services", {})
     # Search for the existing account by name or another unique identifier
-    account_obj = Accounts.query.filter_by(name=account_name).first()
+    account = Accounts.query.filter_by(name=account_name).first()
 
-    if not account_obj:
+    if not account:
         error_message = f"Account with name {data.get('name')} does not exist."
         log.error(error_message)
         abort(404, error_message)
 
     try:
-        # Process S3 Quotas
-        for s3_quota in data.get("services", {}).get("s3", {}).get("quotas", []):
-            s3_quota["account_id"] = account_obj.id
-            s3_quota = S3QuotaSchema(partial=True).load(s3_quota)
-            s3_quota_obj = S3Quotas(**s3_quota)
+        validated_body = AccountSchema(partial=True).load(body)
+    except ValidationError as e:
+        abort_detailed(400, "Invalid account parameters.", e.messages)
 
-            existing_s3_quota = S3Quotas.query.filter_by(
-                pool_id=s3_quota_obj.pool_id, account_id=s3_quota_obj.account_id
-            ).first()
+    # Validate input data
+    try:
+        Accounts.validate_account_data(deepcopy(data))
+    except ValidationError as e:
+        abort_detailed(400, "Invalid data provided.", e.messages)
+    account.update(validated_body)
+    # Process S3 Quotas
+    for s3_quota in data.get("s3", {}).get("quotas", []):
+        s3_quota_obj = S3Quotas.query.filter_by(
+            pool_id=s3_quota.get("pool_id", None), account_id=account.id
+        ).first()
 
-            log.debug(existing_s3_quota)
-            if existing_s3_quota:
-                # Update existing record's attributes as needed
-                for key, value in s3_quota.items():
-                    setattr(existing_s3_quota, key, value)
-                db.session.commit()  # Assuming `db` is your SQLAlchemy database instance
-            else:
-                # If not found, perhaps you want to add a new record instead
-                db.session.add(s3_quota_obj)
+        log.debug(s3_quota_obj)
+        if s3_quota_obj is not None:
+            # Update existing record's attributes as needed
+            update_s3_quota(subject, s3_quota_obj.id, s3_quota)
+        else:
+            # If not found, perhaps you want to add a new record instead
+            s3_quota["account_name"] = account.name
+            create_s3_quota(subject, s3_quota)
+        log.debug(s3_quota_obj)
 
-            log.debug(s3_quota_obj)
-            db.session.commit()
+    log.debug("S3 Quotas processed successfully")
 
-        log.debug("S3 Quotas processed successfully")
+    # Process iSCSI Quotas
+    for iscsi_quota in data.get("iscsi", {}).get("quotas", []):
+        iscsi_quota_obj = IscsiQuotas.query.filter_by(
+            pool_id=iscsi_quota.get("pool_id", None), account_id=account.id
+        ).first()
 
-        # Process iSCSI Quotas
-        for iscsi_quota in data.get("services", {}).get("iscsi", {}).get("quotas", []):
-            iscsi_quota["account_id"] = account_obj.id
-            iscsi_quota = IscsiQuotaSchema(partial=True).load(iscsi_quota)
-            iscsi_quota_obj = IscsiQuotas(**iscsi_quota)
+        log.debug(iscsi_quota_obj)
+        if iscsi_quota_obj is not None:
+            update_iscsi_quota(subject, iscsi_quota_obj.id, iscsi_quota)
+        else:
+            iscsi_quota["account_name"] = account.name
+            create_iscsi_quota(subject, iscsi_quota)
 
-            existing_iscsi_quota = IscsiQuotas.query.filter_by(
-                pool_id=iscsi_quota_obj.pool_id, account_id=iscsi_quota_obj.account_id
-            ).first()
+        log.debug(iscsi_quota_obj)
 
-            log.debug(existing_iscsi_quota)
-            if existing_iscsi_quota:
-                for key, value in iscsi_quota.items():
-                    setattr(existing_iscsi_quota, key, value)
-            else:
-                db.session.add(iscsi_quota_obj)
+    log.debug("iSCSI Quotas processed successfully")
 
-            log.debug(iscsi_quota_obj)
-            db.session.commit()  # Commit once after all updates/additions
+    # Process iSCSI Clusters and Gateways
+    for iscsi_cluster in (
+            data.get("iscsi", {}).get("clusters", [])
+    ):
+        log.debug(f"Start creating iSCSI Cluster with name: {iscsi_cluster['name']}")
+        iscsi_cluster["account_name"] = account.name
+        iscsi_gateways = iscsi_cluster.pop("gateways", [])
+        iscsi_targets = iscsi_cluster.pop("targets", [])
+        iscsi_cluster = create_cluster(subject, iscsi_cluster)
+        for gateway in iscsi_gateways:
+            log.debug(f"Start creating iSCSI Gateway with name: {gateway['name']}")
+            gateway["cluster_id"] = iscsi_cluster["id"]
+            create_gateway(subject, gateway)
 
-        log.debug("iSCSI Quotas processed successfully")
+        for target in iscsi_targets:
+            log.debug(f"Start creating iSCSI Target for pool: {target['pool_id']}")
+            target["cluster_id"] = iscsi_cluster["id"]
+            create_target(subject, target)
 
-        # Process iSCSI Configs and Gateways
-        for iscsi_config in (
-            data.get("services", {}).get("iscsi", {}).get("configs", [])
-        ):
-            iscsi_config["account_id"] = account_obj.id
-            gateways = iscsi_config.pop("gateways", [])
-            iscsi_config = IscsiConfigSchema(partial=True).load(iscsi_config)
-            iscsi_config_obj = IscsiConfigs(**iscsi_config)
-
-            existing_iscsi_config = IscsiConfigs.query.filter_by(
-                pool_id=iscsi_config_obj.pool_id, account_id=iscsi_config_obj.account_id
-            ).first()
-
-            if existing_iscsi_config:
-                for key, value in iscsi_config.items():
-                    setattr(existing_iscsi_config, key, value)
-            else:
-                db.session.add(iscsi_config_obj)
-                log.debug(iscsi_config_obj)
-                db.session.commit()
-
-            # Process Gateways
-            iscsi_config_obj_id = (
-                db.session.query(IscsiConfigs.id)
-                .filter_by(
-                    pool_id=iscsi_config_obj.pool_id,
-                    account_id=iscsi_config_obj.account_id,
-                )
-                .first()[0]
-            )
-
-            log.debug(iscsi_config_obj_id)
-
-            for gateway in gateways:
-                gateway["config_id"] = (
-                    iscsi_config_obj_id  # Link each gateway to the correct config
-                )
-                iscsi_gateway_obj = IscsiGateways(**gateway)
-
-                # Attempt to find an existing gateway with the specified criteria
-                existing_gateway = IscsiGateways.query.filter_by(
-                    config_id=iscsi_config_obj_id
-                ).first()
-
-                log.debug(f"Existing gateway: {existing_gateway}")
-
-                if existing_gateway:
-                    # If found, update existing gateway's attributes
-                    for key, value in gateway.items():
-                        setattr(existing_gateway, key, value)
-                else:
-                    # If not found, add a new gateway record
-                    db.session.add(iscsi_gateway_obj)
-
-                log.debug(iscsi_gateway_obj)
-
-            # Commit once after all updates/additions
-            db.session.commit()
-
-        # Prepare final response
-        response_data = Accounts.query.filter_by(name=data["name"]).first().toDict()
-
-        log.debug("Account and associated records updated successfully")
-        return response_data
-
-    except Exception as e:
-        db.session.rollback()  # Rollback in case of error
-        log.error(
-            f"An error occurred while updating account and associated records: {e}"
-        )
-        abort(500, "Failed to update account and associated records")
+    log.debug("Account and associated records updated successfully")
+    return account.to_dict()
 
 
 def delete_account(subject, account_name):
@@ -257,7 +215,6 @@ def get_accounts_all(subject):
     """
     Retrieve all accounts with optional filter parameters.
     """
-
     return jsonify(Accounts.get_all_accounts())
 
 
