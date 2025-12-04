@@ -1,7 +1,9 @@
 import pytest
 
 from tests.fixtures.account import *
+from tests.fixtures.iscsi_cluster import *
 from tests.fixtures.iscsi_quota import *
+from tests.fixtures.iscsi_target import *
 from tests.fixtures.pool import *
 
 
