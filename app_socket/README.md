@@ -8,7 +8,7 @@ This is a Flask application using WebSocket for monitoring disk statistics by fe
 
 Since this is a single-file project, all functionality is included in the main file:
 
-- `app.py` - The main file that initializes Flask, handles WebSocket events, fetches metrics from Prometheus, and manages client connections.
+- `app_socket_server.py` - The main file that initializes Flask, handles WebSocket events, fetches metrics from Prometheus, and manages client connections.
 
 ## Requirements
 
@@ -44,7 +44,7 @@ To start the application, execute the following command:
 python3 app.py
 ```
 
-The application will be available at http://0.0.0.0:8080/.
+The application will be available at <http://0.0.0.0:8080/>.
 
 ### Usage
 
@@ -82,7 +82,7 @@ socket.on('pong', () => {
 ### Prometheus Integration
 
 The application expects a Prometheus server to be available at the
-address defined by the CEPH_PROMETHEUS_HOST constant (e.g., http://10.254.20.50:9285/api/v1/metrics).
+address defined by the CEPH_PROMETHEUS_HOST constant (e.g., <http://10.254.20.50:9285/metrics>).
 Metrics are filtered by the ceph_librbd_ prefix and processed before being sent to clients.
 
 ### Logging
