@@ -77,10 +77,10 @@ def s3_user(api, aqa, s3_pool, clean_up_s3_user):
 
 
 @pytest.fixture(scope="function")
-def locked_s3_user(client, s3_user):
+def locked_s3_user(flask_client, s3_user):
     """Lock existing S3 user via API and return it."""
     header = HeadersPayload.build(operator=True)
-    r = client.put(
+    r = flask_client.put(
         f"/api/v2/s3/users/{s3_user['id']}",
         json={"status": "locked"},
         headers=header,

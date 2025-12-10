@@ -357,7 +357,7 @@ class Iscsi:
         )
 
         if is_failed(response):
-            self.delete_client(client)
+            self.delete_client(client.iqn)
 
         return response
 
@@ -394,23 +394,23 @@ class Iscsi:
 
         return response
 
-    def delete_client(self, client: IscsiClients) -> dict:
+    def delete_client(self, client_iqn: str) -> dict:
         """
         Delete an iSCSI client from the target.
 
         Args:
-            client (IscsiClients): The client object to be deleted.
+            client_iqn (str): The client object iqn to be deleted.
 
         Returns:
             dict: API response indicating success or an error message.
         """
-        if is_failed(self.get_client(client.iqn)):
-            log.info(f"Client '{client.iqn}' is already deleted from target '{self.target_iqn}'")
+        if is_failed(self.get_client(client_iqn)):
+            log.info(f"Client '{client_iqn}' is already deleted from target '{self.target_iqn}'")
             return ok("Client already deleted.")
 
-        request_url = f"/client/{self.target_iqn}/{client.iqn}"
+        request_url = f"/client/{self.target_iqn}/{client_iqn}"
 
-        log.info(f"Deleting client '{client.iqn}' from target '{self.target_iqn}'")
+        log.info(f"Deleting client '{client_iqn}' from target '{self.target_iqn}'")
 
         response = self.send_request(
             method=methods.DELETE,
@@ -485,12 +485,14 @@ class Iscsi:
             dict: API response indicating success or error message.
         """
         image_name = self.get_image_name(disk_name)
+        client_disks = self.get_client_disks(client_iqn)
 
         log.info(f"Disconnecting image '{image_name}' from client '{client_iqn}'")
-        if is_failed(self.get_disk(image_name)) or image_name not in self.get_client_disks(client_iqn):
+        if is_failed(self.get_disk(image_name)) or image_name not in client_disks:
             log.info(f"Disk '{image_name}' is already unassigned from client '{client_iqn}'")
             return ok("Disk already unassigned.")
 
+        client_disks.remove(image_name)
         request_url = f"/clientlun/{self.target_iqn}/{client_iqn}"
         data = {"disk": image_name}
 
@@ -499,6 +501,9 @@ class Iscsi:
             request_path=request_url,
             body=data,
         )
+
+        if len(client_disks) == 0:
+            self.delete_client(client_iqn)
 
         return response
 

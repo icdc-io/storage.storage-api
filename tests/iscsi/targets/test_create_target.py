@@ -5,6 +5,11 @@ from tests.factories.iscsi_targets import IscsiTargetPayload
 from tests.helpers import ensure_list
 
 
+def ensure_list(obj):
+    """Ensures object is a list (wraps single objects)."""
+    return obj if isinstance(obj, list) else [obj]
+
+
 @pytest.mark.parametrize("pool_name", ["nvme", "ssd"])
 def test_operator_create_target_returns_204(api, account_factory, cluster_factory, iscsi_pools, pool_name):
     """Operator can create targets (204 No Content)."""

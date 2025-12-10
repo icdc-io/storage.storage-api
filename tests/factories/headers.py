@@ -25,3 +25,4 @@ class HeadersPayload(DictFactory):
         aqa_admin  = factory.Trait(account="aqa", role="admin")
         aqa_member = factory.Trait(account="aqa", role="member")
         operator   = factory.Trait(account="devel", role="operator")
+        fake_user  = factory.Trait(user="fake_user@exaple.com")

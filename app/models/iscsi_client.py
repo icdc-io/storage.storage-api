@@ -43,6 +43,7 @@ class IscsiClients(AbstractModel):
         """
         UPDATE SET SQL
         """
+        self.name = body.get("name", self.name)
         self.chap_username = body.get("chap_username", self.chap_username)
         self.chap_password = body.get("chap_password", self.chap_password)
         self.owner = body.get("owner", self.owner)
@@ -71,31 +72,35 @@ class IscsiClientSchema(Schema):
 
     id = fields.Int(dump_only=True)
     name = fields.String(
+        required=True,
         validate=validate.And(
             validate.Length(min=1, max=24),
             validate.Regexp(regex=CLIENT_NAME_PATTERN)
         )
     )
     chap_username = fields.String(
+        required=True,
         validate=validate.And(
             validate.Length(min=8, max=64),
             validate.Regexp(CHAP_USERNAME_PATTERN)
         )
     )
     chap_password = fields.String(
+        required=True,
         validate=validate.And(
             validate.Length(min=12, max=16),
             validate.Regexp(CHAP_PASSWORD_PATTERN)
         )
     )
     iqn = fields.String(
+        required=True,
         validate=validate.And(
             validate.Length(min=1, max=128),
             validate.Regexp(CLIENT_IQN_PATTERN)
         )
     )
-    owner = fields.String(validate=validate.Email())
-    account_id = fields.Int(load_only=True)
+    owner = fields.String(required=True, validate=validate.Email())
+    account_id = fields.Int(required=True, load_only=True)
 
 
 class IscsiClientResponseSchema(IscsiClientSchema):
@@ -123,7 +128,7 @@ def before_delete(mapper, connection, client_instance):
             f"Attempting to delete client '{client_instance.name}' from target '{target.iqn}'"
         )
 
-        response = iscsi_service.delete_client(client=client_instance)
+        response = iscsi_service.delete_client(client_iqn=client_instance.iqn)
 
         if is_failed(response):
             log.error(

@@ -1,6 +1,24 @@
-import pytest
+from typing import Dict
 
-from tests.factories.pools import get_iscsi_pools, get_s3_pools
+import pytest
+from sqlalchemy import select
+
+from app.database import db
+from app.models.pool import Pools
+
+
+def get_s3_pools() -> Dict[str, Pools]:
+    """Return all S3 pools as {klass: pool}."""
+    stmt = select(Pools).where(Pools.type == "s3")
+    result = db.session.scalars(stmt)
+    return {pool.klass: pool for pool in result}
+
+
+def get_iscsi_pools() -> Dict[str, Pools]:
+    """Return all iSCSI pools as {klass: pool}."""
+    stmt = select(Pools).where(Pools.type == "iscsi")
+    result = db.session.scalars(stmt)
+    return {pool.klass: pool for pool in result}
 
 
 @pytest.fixture(scope="package")

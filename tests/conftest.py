@@ -9,8 +9,9 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from tests.api import Api
 from tests.factories.account import AccountFactory
+from tests.factories.iscsi_client import IscsiAssignedClientFactory, IscsiClientFactory
 from tests.factories.iscsi_cluster import IscsiClusterFactory
-from tests.factories.iscsi_disk import IscsiDiskFactory
+from tests.factories.iscsi_disk import IscsiDiskCephFactory, IscsiDiskFactory
 from tests.factories.iscsi_gateway import IscsiGatewayFactory
 from tests.factories.iscsi_quota import IscsiQuotaFactory
 from tests.factories.iscsi_targets import IscsiTargetFactory
@@ -29,7 +30,7 @@ def app():
 
 
 @pytest.fixture(scope="session")
-def client(app):
+def flask_client(app):
     """Return Flask test client."""
     return app.test_client()
 
@@ -63,6 +64,9 @@ def make_connection(app):
             IscsiTargetFactory,
             IscsiGatewayFactory,
             IscsiDiskFactory,
+            IscsiDiskCephFactory,
+            IscsiClientFactory,
+            IscsiAssignedClientFactory
         ]:
             factory._meta.sqlalchemy_session = db.session
 
@@ -74,6 +78,45 @@ def make_connection(app):
         return conn, cleanup
 
     return SimpleNamespace(start_connection=start_connection)
+
+
+class ObjectCleaner:
+    def __init__(self):
+        self.to_delete = []
+
+    def delete(self, model, objects=None, ids=None, immediate=False):
+        if ids:
+            if isinstance(ids, (int, str)):
+                obj = model.query.filter_by(id=ids).first()
+                if obj:
+                    objects = [obj]
+            else:
+                objects = model.query.filter(model.id.in_(ids)).all()
+        elif objects:
+            if isinstance(objects, model):
+                objects = [objects]
+            objects = objects or []
+
+        if not objects:
+            return
+
+        if immediate:
+            for obj in objects:
+                obj.destroy()
+            return
+
+        self.to_delete.extend(objects)
+
+    def finalize(self):
+        for obj in self.to_delete:
+            obj.destroy()
+
+
+@pytest.fixture
+def cleaner():
+    c = ObjectCleaner()
+    yield c
+    c.finalize()
 
 
 def get_environment_data(filename: str = None) -> dict:
@@ -123,6 +166,6 @@ def ceph_cleanup_registry_scope_package():
 
 
 @pytest.fixture(scope="session")
-def api(client) -> Api:
+def api(flask_client) -> Api:
     """Return API wrapper for making HTTP requests."""
-    return Api(client)
+    return Api(flask_client)
