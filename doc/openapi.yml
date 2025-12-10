@@ -108,7 +108,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AccountInfo'
+              $ref: '#/components/schemas/Account_Create'
         required: true
       responses:
         '200':
@@ -171,14 +171,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AccountInfo'
+              $ref: '#/components/schemas/Account_Create'
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Account'
+                $ref: '#/components/schemas/Account_Ref'
           description: OK
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -2011,37 +2011,82 @@ components:
           schema:
             type: array
             items:
-              $ref: '#/components/schemas/AccountInfo'
+              $ref: '#/components/schemas/Account'
           examples:
             All accounts:
               value:
               - name: acc1
-                description: Business account 1
-                quotas:
+                services:
                   s3:
-                    - id: 33
-                      objects: 2000
-                      buckets: 20
-                      users: 10
-                      data_size_mb: 10240
-                      pool:
-                        id: 13
-                        type: s3
-                        name: nvme-object
-                        class: nvme
+                    quotas:
+                      - id: 33
+                        objects: 2000
+                        buckets: 20
+                        users: 10
+                        data_size_mb: 10240
+                        pool:
+                          id: 13
+                          type: s3
+                          name: nvme-object
+                          class: nvme
+                        usage:
+                          objects: 1000
+                          buckets: 10
+                          users: 5
+                          data_size_mb: 5120
+                        limits:
+                          objects: 4000
+                          buckets: 40
+                          users: 20
+                          data_size_mb: 20480
                   iscsi:
-                    - id: 35
-                      clients: 50
-                      data_size_gb: 200
-                      disks: 10
-                      snapshots: 15
-                      pool:
-                        id: 15
-                        type: iscsi
-                        name: nvme-data
-                        class: nvme
+                    quotas:
+                      - id: 35
+                        clients: 50
+                        data_size_gb: 200
+                        disks: 10
+                        snapshots: 15
+                        pool:
+                          id: 15
+                          type: iscsi
+                          name: iscsi-nvme
+                          class: nvme
+                        usage:
+                          clients: 25
+                          data_size_gb: 100
+                          disks: 5
+                          snapshots: 7
+                        limits:
+                          clients: 100
+                          data_size_gb: 400
+                          disks: 20
+                          snapshots: 30
+                    clusters:
+                      - id: 42
+                        name: cluster-abcd1234
+                        # NOTE: @DS: account key is ignored as already used in root
+                        targets:
+                          # NOTE: @DS: left only basic reference level info (id, iqn and pool)
+                          - id: 23
+                            iqn: iqn.2020-01.io.icdc.loc:iscsi-hdd
+                            pool:
+                              id: 16
+                              name: iscsi-hdd
+                          - id: 24
+                            iqn: iqn.2020-01.io.icdc.loc:iscsi-ssd
+                            pool:
+                              id: 16
+                              name: iscsi-hdd
+                        gateways:
+                          # NOTE: @DS: left only basic reference level info (id and iqn)
+                          - id: 52
+                            name: cloudgw-bf401950
+                            portal_ip_address: 198.18.0.2
+                          - id: 53
+                            name: cloudgw-c0512a61
+                            portal_ip_address: 198.18.0.3
               - name: acc2
-                description: Business account 2
+                services: {}
     S3_Quota_List:
       description: A JSON array of Account's S3 Quota object per pool
       content:
@@ -2396,8 +2441,8 @@ components:
           example: fast_pool
 
 
-    # @DS: reviewed 2025-08-06
-    Account:
+    # @DS: reviewed 2025-12-10
+    Account_Ref:
       description: >-
         Reference to Account object, used in other objects to reference account
       type: object
@@ -2413,29 +2458,104 @@ components:
       required:
         - id
         - name
-    AccountInfo:
+    # @DS: reviewed 2025-12-10
+    Account:
+      description: >-
+        Account information used by setup and billing microservices
+      type: object
+      properties:
+        id:
+          readOnly: true
+          type: integer
+          example: 17
+        name:
+          type: string
+          example: acc1
+          description: >-
+            Alphanumeric account code (up to 5 symbols)
+        services:
+          description: Initiate parameters for sub-services
+          type: object
+          properties:
+            s3:
+              description: Initiate per-pool S3 quotas
+              type: object
+              properties:
+                quotas:
+                  description: List of quota for each pool, pool is referenced by name
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: '#/components/schemas/S3_Quota'
+                      - type: object
+                        properties:
+                          account:
+                            writeOnly: true
+                            description: Ignored as in the account already
+                          endpoints:
+                            writeOnly: true
+                            description: Hide redundant information for account scope
+            iscsi:
+              description: Initiate per-pool iSCSI quotas
+              type: object
+              properties:
+                quotas:
+                  description: List of quotas for each pool, pool is referenced by name
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: '#/components/schemas/iSCSI_Quota'
+                      - type: object
+                        properties:
+                          account:
+                            writeOnly: true
+                            description: Ignored as in the account already
+                          target:
+                            writeOnly: true
+                            description: Hide redundant information for account scope
+                clusters:
+                  description: >-
+                    iSCSI cluster referenced by cluster name, e.g. cluster_f7e34dd
+                    As well list of gateways by name to be initialized
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: '#/components/schemas/iSCSI_Cluster'
+                      - type: object
+                        properties:
+                          account:
+                            writeOnly: true
+                            description: Hide as in account scope already
+                          targets:
+                            type: array
+                            items:
+                              allOf:
+                                - $ref: "#/components/schemas/iSCSI_Target"
+                                - type: object
+                                  properties:
+                                    cluster:
+                                      writeOnly: true
+                                      description: Hide as in cluster scope already
+                          gateways:
+                            type: array
+                            items:
+                              allOf:
+                                - $ref: "#/components/schemas/Gateway"
+                                - type: object
+                                  properties:
+                                    cluster:
+                                      writeOnly: true
+                                      description: Hide as in cluster scope already
+    # @DS: reviewed 2025-12-10
+    Account_Create:
       description: >-
         Data required to create and activate new account
+        Those parameters allows to one-shot configure all objects (quotas, clusters, targets, gateways)
       allOf:
         - $ref: '#/components/schemas/Account'
         - type: object
           properties:
-            id:
-              readOnly: true
-              type: integer
-              example: 17
-            name:
-              type: string
-              example: acc1
-              description: >-
-                Alphanumeric account code (up to 5 symbols)
-            description:
-              type: string
-              example: Business Account 1 corp.
-              description: >-
-                Full name (business name) for account
             services:
-              writeOnly: true
               description: Initiate parameters for sub-services
               type: object
               properties:
@@ -2447,24 +2567,77 @@ components:
                       description: List of quota for each pool, pool is referenced by name
                       type: array
                       items:
-                        $ref: '#/components/schemas/S3_Quota'
+                        allOf:
+                          - $ref: '#/components/schemas/S3_Quota'
+                          - type: object
+                            properties:
+                              account_name:
+                                readOnly: true
+                                description: Ignored as creating in account scope
                 iscsi:
                   description: Initiate per-pool iSCSI quotas
                   type: object
+                  required:
+                    - quotas
+                    - clusters
                   properties:
                     quotas:
                       description: List of quotas for each pool, pool is referenced by name
                       type: array
                       items:
-                        $ref: '#/components/schemas/iSCSI_Quota'
+                        allOf:
+                          - $ref: '#/components/schemas/iSCSI_Quota'
+                          - type: object
+                            properties:
+                              account_name:
+                                readOnly: true
+                                description: Ignored as creating in account scope
                     clusters:
                       description: >-
                         iSCSI cluster referenced by cluster name, e.g. cluster_f7e34dd
                         As well list of gateways by name to be initialized
                       type: array
+                      readOnly: false
                       items:
-                        $ref: '#/components/schemas/iSCSI_Cluster'
-
+                        allOf:
+                          - $ref: '#/components/schemas/iSCSI_Cluster'
+                          - type: object
+                            required:
+                              - gateways
+                              - targets
+                            properties:
+                              account_id:
+                                readOnly: true
+                                description: Ignored as creating in account scope
+                              account_name:
+                                readOnly: true
+                                description: Ignored as creating in account scope
+                              gateways:
+                                description: >-
+                                  List of gateway names to be created in cluster
+                                type: array
+                                readOnly: false
+                                items:
+                                  allOf:
+                                    - $ref: "#/components/schemas/Gateway"
+                                    - type: object
+                                      properties:
+                                        cluster_id:
+                                          readOnly: true
+                                          description: Ignored as creating in a new cluster scope
+                              targets:
+                                description: >-
+                                  List of gateway names to be created in cluster
+                                type: array
+                                readOnly: false
+                                items:
+                                  allOf:
+                                    - $ref: "#/components/schemas/iSCSI_Target"
+                                    - type: object
+                                      properties:
+                                        cluster_id:
+                                          readOnly: true
+                                          description: Ignored as creating in a new cluster scope
     # @DS: reviewed 2024-01-29
     iSCSI_QuotaValue:
       description: >-
@@ -2492,64 +2665,54 @@ components:
           - limits
           - usage stats
           - target
-      type: object
-      properties:
-        id:
-          type: integer
-          example: 34
-          readOnly: true
-        clients:
-          type: integer
-          example: 50
-        data_size_gb:
-          type: integer
-          example: 500
-        disks:
-          type: integer
-          example: 12
-        snapshots:
-          type: integer
-          example: 30
-        account_name:
-          type: string
-          example: acc1
-          description: Global unique account name. Optional, if not specified current Subject account is used.
-          writeOnly: true
-        account:
-          readOnly: true
-          oneOf:
-          - $ref: '#/components/schemas/Account'
-        pool_id:
-          description: >-
-            Configured only once during creation of quota.
-          writeOnly: true
-          type: integer
-          example: 15
-        pool:
-          readOnly: true
-          oneOf:
-          - $ref: '#/components/schemas/Pool'
-        target:
-          description: >-
-            Target available for this quoted pools.
-            Target are describes endpoints which are needed to connect to.
-          readOnly: true
-          type: array
-          items:
-            $ref: '#/components/schemas/iSCSI_Target'
-        usage:
-          description: >-
-            Actual allocated disks and snapshots.
-            Defines minimum value for changing quota
-          readOnly: true
-          oneOf:
-          - $ref: '#/components/schemas/iSCSI_QuotaValue'
-        limits:
-          description: >-
-            Limits are maximum values to which current quota values can be changed to.
-          readOnly: true
-          oneOf:
-          - $ref: '#/components/schemas/iSCSI_QuotaValue'
+      allOf:
+        - $ref: '#/components/schemas/iSCSI_QuotaValue'
+        - type: object
+          properties:
+            id:
+              type: integer
+              example: 34
+              readOnly: true
+            account_name:
+              type: string
+              example: acc1
+              description: Global unique account name. Optional, if not specified current Subject account is used.
+              writeOnly: true
+            account:
+              readOnly: true
+              oneOf:
+              - $ref: '#/components/schemas/Account_Ref'
+            pool_id:
+              description: >-
+                Configured only once during creation of quota.
+              writeOnly: true
+              type: integer
+              example: 15
+            pool:
+              readOnly: true
+              oneOf:
+              - $ref: '#/components/schemas/Pool'
+            target:
+              description: >-
+                Target available for this quoted pools.
+                Target are describes endpoints which are needed to connect to.
+              readOnly: true
+              type: array
+              items:
+                $ref: '#/components/schemas/iSCSI_Target'
+            usage:
+              description: >-
+                Actual allocated disks and snapshots.
+                Defines minimum value for changing quota
+              readOnly: true
+              oneOf:
+              - $ref: '#/components/schemas/iSCSI_QuotaValue'
+            limits:
+              description: >-
+                Limits are maximum values to which current quota values can be changed to.
+              readOnly: true
+              oneOf:
+              - $ref: '#/components/schemas/iSCSI_QuotaValue'
 
     # @DS: reviewed 2025-10-08
     iSCSI_Cluster:
@@ -2580,7 +2743,7 @@ components:
         account:
           readOnly: true
           oneOf:
-          - $ref: '#/components/schemas/Account'
+          - $ref: '#/components/schemas/Account_Ref'
         targets:
           readOnly: true
           type: array
@@ -2728,7 +2891,7 @@ components:
         account:
           readOnly: true
           oneOf:
-            - $ref: '#/components/schemas/Account'
+            - $ref: '#/components/schemas/Account_Ref'
 
 
     # @DS: reviewed 2024-01-29
@@ -2769,7 +2932,7 @@ components:
         account:
           readOnly: true
           oneOf:
-          - $ref: '#/components/schemas/Account'
+          - $ref: '#/components/schemas/Account_Ref'
         disks:
           readOnly: true
           type: array
@@ -2821,10 +2984,6 @@ components:
         Non-persistent object which is used to reference values in Quotas, Quota Limits and Quota Usage.
       type: object
       properties:
-        id:
-          type: integer
-          example: 33
-          readOnly: true
         users:
           description: Number of S3 user entries
           type: integer
@@ -2851,53 +3010,43 @@ components:
           - related account
           - related pool
           - endpoints
-      type: object
-      properties:
-        id:
-          readOnly: true
-          type: integer
-          example: 33
-        objects:
-            type: integer
-            example: 2000
-        buckets:
-          type: integer
-          example: 20
-        users:
-          type: integer
-          example: 10
-        data_size_mb:
-          type: integer
-          example: 10240
-        account_name:
-          type: string
-          example: acc1
-          description: Global unique account name. Optional, if not specified current Subject account is used.
-          writeOnly: true
-        account:
-          readOnly: true
-          oneOf:
-          - $ref: '#/components/schemas/Account'
-        pool_id:
-          writeOnly: true
-          type: integer
-          example: 4
-        pool:
-          readOnly: true
-          oneOf:
-          - $ref: '#/components/schemas/Pool'
-        usage:
-          readOnly: true
-          oneOf:
-          - $ref: '#/components/schemas/S3_QuotaValue'
-        limits:
-          readOnly: true
-          oneOf:
-          - $ref: '#/components/schemas/S3_QuotaValue'
-        endpoints:
-          readOnly: true
-          oneOf:
-            - $ref: '#/components/schemas/S3_Endpoints'
+      allOf:
+        - $ref: '#/components/schemas/S3_QuotaValue'
+        - type: object
+          properties:
+            id:
+              type: integer
+              example: 33
+              readOnly: true
+            account_name:
+              type: string
+              example: acc1
+              description: Global unique account name. Optional, if not specified current Subject account is used.
+              writeOnly: true
+            account:
+              readOnly: true
+              oneOf:
+              - $ref: '#/components/schemas/Account_Ref'
+            pool_id:
+              writeOnly: true
+              type: integer
+              example: 4
+            pool:
+              readOnly: true
+              oneOf:
+              - $ref: '#/components/schemas/Pool'
+            usage:
+              readOnly: true
+              oneOf:
+              - $ref: '#/components/schemas/S3_QuotaValue'
+            limits:
+              readOnly: true
+              oneOf:
+              - $ref: '#/components/schemas/S3_QuotaValue'
+            endpoints:
+              readOnly: true
+              oneOf:
+                - $ref: '#/components/schemas/S3_Endpoints'
     # @DS: reviewed 2024-01-26
     S3_Endpoints:
       type: object
