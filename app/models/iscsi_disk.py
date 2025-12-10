@@ -147,6 +147,7 @@ class IscsiDiskSchema(Schema):
 
 
 class IscsiDiskResponseSchema(IscsiDiskSchema):
+    target = fields.Nested("IscsiTargetSchema", dump_only=True)
     clients = fields.Nested("IscsiClientSchema", dump_only=True, many=True)
     snapshots = fields.Nested("SnapshotSchema", dump_only=True, many=True)
 

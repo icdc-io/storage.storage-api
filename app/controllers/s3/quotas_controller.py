@@ -4,7 +4,7 @@ from sqlalchemy.orm import selectinload
 
 from app.lib.request_utils import abort_detailed, parse_jsonapi_filters, request_json
 from app.models.account import Accounts
-from app.models.s3_quota import S3Quotas, S3QuotaSchema
+from app.models.s3_quota import S3QuotaResponseSchema, S3Quotas, S3QuotaSchema
 from app.models.s3_user import S3Users
 
 
@@ -15,7 +15,7 @@ def index(subject):
             .except_(S3Quotas.get_default_limitsets()).all()
     except ValidationError as e:
         abort_detailed(400, "Invalid query parameters.", e.messages)
-    return jsonify(S3QuotaSchema(many=True).dump(quotas))
+    return jsonify(S3QuotaResponseSchema(many=True).dump(quotas))
 
 
 def create(subject, body=None):
@@ -37,7 +37,7 @@ def create(subject, body=None):
     account.s3_quotas.append(quota)
     account.save()
 
-    return S3QuotaSchema().dump(quota)
+    return quota.to_dict()
 
 
 def update(subject, quota_id, body=None):
@@ -55,7 +55,7 @@ def update(subject, quota_id, body=None):
 
     quota.update(validated_body)
 
-    return S3QuotaSchema().dump(quota)
+    return quota.to_dict()
 
 
 def destroy(subject, quota_id):
