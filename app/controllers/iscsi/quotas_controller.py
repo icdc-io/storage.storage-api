@@ -9,7 +9,11 @@ from app.lib.request_utils import (
     request_json,
 )
 from app.models.account import Accounts
-from app.models.iscsi_quota import IscsiQuotas, IscsiQuotaSchema
+from app.models.iscsi_quota import (
+    IscsiQuotaResponseSchema,
+    IscsiQuotas,
+    IscsiQuotaSchema,
+)
 from app.models.iscsi_target import IscsiTargets
 
 
@@ -20,7 +24,7 @@ def get_account_quotas(subject):
             .except_(IscsiQuotas.get_default_limitsets()).all()
     except ValidationError as e:
         abort_detailed(400, "Invalid query parameters.", e.messages)
-    return jsonify(IscsiQuotaSchema(many=True).dump(quotas))
+    return jsonify(IscsiQuotaResponseSchema(many=True).dump(quotas))
 
 
 def create(subject, body=None):
@@ -42,7 +46,7 @@ def create(subject, body=None):
         abort(409, "Quota for this pool already exists.")
     quota = IscsiQuotas(**validated_body)
     quota.save()
-    return IscsiQuotaSchema().dump(quota)
+    return quota.to_dict()
 
 
 def update(subject, quota_id, body=None):
@@ -58,7 +62,7 @@ def update(subject, quota_id, body=None):
         abort_detailed(400, "Invalid parameters.", e.messages)
 
     quota.update(validated_body)
-    return IscsiQuotaSchema().dump(quota)
+    return quota.to_dict()
 
 
 def destroy(subject, quota_id):

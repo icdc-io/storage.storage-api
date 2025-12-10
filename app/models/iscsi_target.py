@@ -117,16 +117,18 @@ class IscsiTargets(AbstractModel):
 
         return iscsi_service
 
+    def to_dict(self):
+        """Serialize model"""
+        return IscsiTargetResponseSchema().dump(self)
+
 
 class IscsiTargetSchema(Schema):
-    CONFIG_IQN_PATTERN = r"^iqn\.\d{4}-\d{2}\.[a-z0-9\-.]+(:[a-z0-9.@_\-]+)?$"
-    CONFIG_NAME_PATTERN = r"^[a-z0-9._\-]+$"
-
     id = fields.Int(dump_only=True)
+    iqn = fields.String(dump_only=True)
     pool_id = fields.Int(load_only=True, required=True)
     cluster_id = fields.Int(load_only=True, required=True)
     pool = fields.Nested("PoolSchema", dump_only=True)
 
 
 class IscsiTargetResponseSchema(IscsiTargetSchema):
-    cluster = fields.Nested("IscsiClusterSchema", dump_only=True)
+    cluster = fields.Nested("IscsiClusterSchema", exclude=["targets"], dump_only=True)

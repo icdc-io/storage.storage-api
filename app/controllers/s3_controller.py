@@ -32,7 +32,7 @@ def get_s3_limits(subject):
     """
     limitsets = S3Quotas.get_default_limitsets().all()
     # NOTE: currently we do not support non-default limitsets
-    limitsets = [limitset.toDict() for limitset in limitsets]
+    limitsets = [limitset.to_dict() for limitset in limitsets]
     return jsonify(limitsets)
 
 

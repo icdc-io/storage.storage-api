@@ -77,8 +77,15 @@ class IscsiClusterSchema(Schema):
     name = fields.String(
         required=True,
         validate=validate.And(
-            validate.Length(min=1, max=64),
-            validate.Regexp(regex=CLUSTER_NAME_PATTERN)
+            validate.Length(
+                min=1,
+                max=64,
+                error="Cluster name length must be between 1 and 64 characters."
+            ),
+            validate.Regexp(
+                regex=CLUSTER_NAME_PATTERN,
+                error="Cluster.name: String does not match expected pattern."
+            ),
         ),
     )
 

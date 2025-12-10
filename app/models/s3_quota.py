@@ -167,6 +167,6 @@ class S3QuotaSchema(Schema):
         return pool
 
 
-class S3QuotaResponseSchema(Schema):
+class S3QuotaResponseSchema(S3QuotaSchema):
     account      = fields.Nested("AccountSchema", dump_only=True)
     pool         = fields.Nested("PoolSchema", dump_only=True)

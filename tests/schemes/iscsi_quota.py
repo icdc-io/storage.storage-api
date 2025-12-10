@@ -29,4 +29,4 @@ class IscsiQuotaResponseTestSchema(IscsiQuotaTestSchema):
     pool = fields.Nested("PoolTestSchema", required=True)
     limits = fields.Nested(IscsiLimitsTestSchema, required=True)
     usage = fields.Nested(IscsiQuotaUsageTestSchema, required=True)
-    cluster = fields.Dict(required=True)
+    target = fields.Dict(required=True)

@@ -88,13 +88,13 @@ class IscsiQuotas(AbstractModel):
         limitset = self.get_limitset()
         return {restriction: getattr(limitset, restriction) for restriction in self.get_restriction_names()}
 
-    def get_cluster(self):
+    def get_target(self):
         from app.models.iscsi_target import IscsiTargets
 
         target = IscsiTargets.get_target(self.account_id, self.pool_id)
         if not target:
             return None
-        return target.cluster.to_dict()
+        return target.to_dict()
 
     def compute_usage(self):
         from app.models.iscsi_target import IscsiTargets
@@ -174,4 +174,4 @@ class IscsiQuotaSchema(Schema):
 class IscsiQuotaResponseSchema(IscsiQuotaSchema):
     pool = fields.Nested("PoolSchema", dump_only=True)
     account = fields.Nested("AccountSchema", dump_only=True)
-    cluster = fields.Function(lambda quota: quota.get_cluster(), dump_only=True)
+    target = fields.Function(lambda quota: quota.get_target(), dump_only=True)

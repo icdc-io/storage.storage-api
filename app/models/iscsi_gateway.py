@@ -75,8 +75,15 @@ class IscsiGatewaySchema(Schema):
     name = fields.String(
         required=True,
         validate=validate.And(
-            validate.Length(min=1, max=64),
-            validate.Regexp(regex=GATEWAY_NAME_PATTERN)
+            validate.Length(
+                min=1,
+                max=64,
+                error="Gateway name length must be between 1 and 64 characters."
+            ),
+            validate.Regexp(
+                regex=GATEWAY_NAME_PATTERN,
+                error="Gateway.name: String does not match expected pattern."
+            )
         )
     )
     portal_ip_address = fields.String(validate=validate_ip, required=True)
