@@ -24,6 +24,12 @@ class IscsiQuotaFactory(BaseFactory):
             clients=4,
             disks=10,
         )
+        big = factory.Trait(
+            data_size_gb=10000,
+            snapshots=10000,
+            clients=10000,
+            disks=10000,
+        )
 
 
 def get_limitset(pool_id: int):

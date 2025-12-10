@@ -10,6 +10,7 @@ from marshmallow import ValidationError
 from app.lib.request_utils import (
     abort_detailed,
     is_failed,
+    is_fake,
     log,
     no_content,
     parse_jsonapi_filters,
@@ -139,7 +140,7 @@ def create_gateway(subject, body=None):
     if not body:
         body = request_json(request)
     log.info("Start process of create iSCSI Gateway")
-    cluster_id = body["cluster_id"]
+    cluster_id = body.get("cluster_id")
     cluster = IscsiClusters.filtered(subject).filter_by(id=cluster_id).first()
     if not cluster:
         abort(404, "Cluster with such id not found or you haven't permission.")
@@ -197,11 +198,11 @@ def create_disk(subject):
 
     target = IscsiTargets.get_target(account.id, body.pop("pool_id"))
     if target is None:
-        abort(400, "There is no target with such id or you haven't permission.")
+        abort(404, "There is no target with such id or you haven't permission.")
 
     quota = IscsiQuotas.query.filter_by(account_id=target.account.id, pool_id=target.pool_id).first()
     if not quota:
-        abort(400, "Account doesn't have quota for this pool")
+        abort(404, "Account doesn't have quota for this pool")
 
     # Prepare arguments for service call
     # Two flows: simple disk creation and snapshot-based creation
@@ -228,20 +229,21 @@ def create_disk(subject):
         abort_detailed(400, "Invalid parameters.", e.messages)
     args.update(body=validated_body)
 
-    try:
-        iscsi_service = target.iscsi_service()
-    except ValueError as e:
-        abort(400, str(e))
+    if not is_fake():
+        try:
+            iscsi_service = target.iscsi_service()
+        except ValueError as e:
+            abort(400, str(e))
 
-    # Select appropriate service method based on mode
-    iscsi_service_method = (
-        iscsi_service.new_disk_from_snapshot if snapshot_id
-        else iscsi_service.create_disk
-    )
+        # Select appropriate service method based on mode
+        iscsi_service_method = (
+            iscsi_service.new_disk_from_snapshot if snapshot_id
+            else iscsi_service.create_disk
+        )
 
-    response = iscsi_service_method(**args)
-    if is_failed(response):
-        abort(response["code"], response["data"])
+        response = iscsi_service_method(**args)
+        if is_failed(response):
+            abort(response["code"], response["data"])
 
     disk = IscsiDisks(**validated_body)
     disk.save()
@@ -254,10 +256,10 @@ def update_disk(subject, disk_id):
     Update disk. Resize disk can be only heigher than before resize
     """
     body = request_json(request)
+
     disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
     if not disk:
         abort(404, "Disk not found or you haven't permission.")
-
     try:
         validated_body = IscsiDiskSchema(
             context={
@@ -268,12 +270,12 @@ def update_disk(subject, disk_id):
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters.", e.messages)
 
-    try:
-        iscsi_service = disk.target.iscsi_service()
-    except ValueError as e:
-        abort(400, str(e))
+    if not is_fake() and "size_gb" in validated_body:
+        try:
+            iscsi_service = disk.target.iscsi_service()
+        except ValueError as e:
+            abort(400, str(e))
 
-    if "size_gb" in validated_body:
         response = iscsi_service.update_disk(disk.name, validated_body)
         if is_failed(response):
             abort(response["code"], response["data"])
@@ -330,17 +332,17 @@ def create_client(subject):
         if not account:
             abort(404, "Account with this name not found or you haven't permission.")
 
+        body["account_id"] = account.id
         try:
             validated_body = IscsiClientSchema().load(body)
         except ValidationError as e:
             abort_detailed(400, "Invalid parameters", e.messages)
 
-        validated_body["account_id"] = account.id
         client = IscsiClients(**validated_body)
         client.save()
         if client.id is None:
             abort(409, "Can not create client with such IQN")
-        return IscsiClientSchema().dump(client)
+        return client.to_dict()
     except TypeError as exception:
         abort_detailed(400, "Payload is not valid.", str(exception))
     except ValidationError as e:
@@ -354,7 +356,6 @@ def update_client(subject, client_id):
     Update Client. Depends on role of requester
     """
     body = request_json(request)
-
     client = IscsiClients.filtered(subject).filter_by(id=client_id).first()
     if not client:
         abort(404, "Client with this ID not found or you haven't permission.")
@@ -362,25 +363,26 @@ def update_client(subject, client_id):
     log.debug(f"Update client {client.iqn}.")
 
     try:
-        validated_body = IscsiClientSchema().load(body)
+        validated_body = IscsiClientSchema(partial=True).load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid input data.", e.messages)
 
     if body.get("owner", None) and "set-owner" not in subject.policy["iscsi.clients"]["permissions"]:
         del validated_body["owner"]  # pylint: disable=multiple-statements
 
-    for disk in client.disks:
-        try:
-            iscsi_service = disk.target.iscsi_service()
-        except ValueError as e:
-            abort(400, str(e))
+    if not is_fake():
+        for disk in client.disks:
+            try:
+                iscsi_service = disk.target.iscsi_service()
+            except ValueError as e:
+                abort(400, str(e))
 
-        response = iscsi_service.update_client(client, validated_body)
-        if is_failed(response):
-            abort(response.get("code", 500), response.get("data", "Internal server error."))
+            response = iscsi_service.update_client(client, validated_body)
+            if is_failed(response):
+                abort(response.get("code", 500), response.get("data", "Internal server error."))
 
     client.update(validated_body)
-    return IscsiClientSchema().dump(client)
+    return client.to_dict()
 
 
 def delete_client(subject, client_id):
@@ -429,19 +431,23 @@ def disks_to_client(subject, client_id):
         if not disk:
             abort(404, "Disk with this ID does not exist or you don't have permission.")
 
+        if disk.account_id != client.account_id:
+            abort(400, "Disk and client belong to different accounts.")
+
         if disk in client.disks:
             continue
 
-        try:
-            iscsi_service = disk.target.iscsi_service()
-        except ValueError as e:
-            abort(400, str(e))
-
         _check_clients_quota_exceeds(disk.target)
 
-        response = iscsi_service.assign_disk(client, disk.name)
-        if is_failed(response):
-            abort(response["code"], response["data"])
+        if not is_fake():
+            try:
+                iscsi_service = disk.target.iscsi_service()
+            except ValueError as e:
+                abort(400, str(e))
+
+            response = iscsi_service.assign_disk(client, disk.name)
+            if is_failed(response):
+                abort(response["code"], response["data"])
 
         client.disks.append(disk)
         client.save()
@@ -468,18 +474,21 @@ def unassign_client_disk(subject, client_id, disk_id):
     disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
     if not disk:
         abort(404, "Disk with this ID not found or you don't have permission.")
+    if not is_fake():
+        try:
+            iscsi_service = disk.target.iscsi_service()
+        except ValueError as e:
+            abort(400, str(e))
 
-    try:
-        iscsi_service = disk.target.iscsi_service()
-    except ValueError as e:
-        abort(400, str(e))
+        response = iscsi_service.disconnect_disk(client.iqn, disk.name)
 
-    response = iscsi_service.disconnect_disk(client.iqn, disk.name)
+        if is_failed(response):
+            abort(response["code"], response["data"])
 
-    if is_failed(response):
-        abort(response["code"], response["data"])
-    client.disks.remove(disk)
-    client.save()
+    if disk in client.disks:
+        client.disks.remove(disk)
+        client.save()
+
     return jsonify("No content.")
 
 

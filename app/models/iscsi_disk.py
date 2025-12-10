@@ -99,15 +99,16 @@ class IscsiDiskSchema(Schema):
     DISK_NAME_PATTERN = r"^[a-z0-9._\-]+$"
 
     id = fields.Int(dump_only=True)
-    owner = fields.String(validate=validate.Email())
-    size_gb = fields.Int(validate=validate.Range(min=0))
+    owner = fields.String(validate=validate.Email(), required=True)
+    size_gb = fields.Int(validate=validate.Range(min=1), required=True)
     name = fields.String(
         validate=validate.And(
             validate.Length(min=1, max=24),
             validate.Regexp(regex=DISK_NAME_PATTERN)
-        )
+        ),
+        required=True
     )
-    target_id = fields.Int(load_only=True)
+    target_id = fields.Int(load_only=True, required=True)
 
     @validates_schema
     def validate_quota_exceeding(self, data, **kwargs):
@@ -123,7 +124,7 @@ class IscsiDiskSchema(Schema):
                 account_id=disk.account_id, pool_id=disk.pool_id
             ).first()
         if not quota:
-            return
+            raise ValidationError("Quota for this pool not found.")
 
         usage = quota.compute_usage()
         delta = size_gb - (disk.size_gb if disk else 0)
@@ -170,8 +171,8 @@ def before_delete(mapper, connection, disk_instance):
         return
     try:
         iscsi_service = target.iscsi_service()
-    except ValueError as e:
-        abort(400, str(e))
+    except ValueError:
+        return
 
     for client in disk_instance.clients:
         response = iscsi_service.disconnect_disk(client.iqn, disk_instance.name)
