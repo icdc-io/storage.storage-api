@@ -2289,8 +2289,10 @@ components:
                 gateways:
                 - id: 52
                   name: cloudgw-bf401950
+                  portal_ip_address: 198.18.0.2
                 - id: 53
                   name: cloudgw-c0512a61
+                  portal_ip_address: 198.18.0.3
               - id: 43
                 name: cluster-567890ef
                 account:
@@ -2307,6 +2309,7 @@ components:
                 gateways:
                 - id: 54
                   name: cloudgw-ff401950
+                  portal_ip_address: 198.18.0.4
     iSCSI_Target_List:
       description: A JSON array of iSCSI Target objects.
       content:
@@ -2495,6 +2498,9 @@ components:
                           endpoints:
                             writeOnly: true
                             description: Hide redundant information for account scope
+                          limits:
+                            writeOnly: true
+                            description: Hide redundant information (not used in billing) for account scope
             iscsi:
               description: Initiate per-pool iSCSI quotas
               type: object
@@ -2513,6 +2519,9 @@ components:
                           target:
                             writeOnly: true
                             description: Hide redundant information for account scope
+                          limits:
+                            writeOnly: true
+                            description: Hide redundant information (not used in billing) for account scope
                 clusters:
                   description: >-
                     iSCSI cluster referenced by cluster name, e.g. cluster_f7e34dd
@@ -2748,12 +2757,24 @@ components:
           readOnly: true
           type: array
           items:
-            $ref: '#/components/schemas/iSCSI_Target'
+            allOf:
+              - $ref: '#/components/schemas/iSCSI_Target'
+              - type: object
+                properties:
+                  cluster:
+                    writeOnly: true
+                    description: Hide as in cluster scope already
         gateways:
           readOnly: true
           type: array
           items:
-            $ref: "#/components/schemas/Gateway"
+            allOf:
+              - $ref: "#/components/schemas/Gateway"
+              - type: object
+                properties:
+                  cluster:
+                    writeOnly: true
+                    description: Hide as in cluster scope already
 
     # @DS: reviewed 2025-10-08
     iSCSI_Target:
