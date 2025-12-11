@@ -9,6 +9,7 @@ class IscsiDiskTestSchema(Schema):
 
 
 class IscsiDiskResponseTestSchema(IscsiDiskTestSchema):
+    target = fields.Nested("IscsiTargetTestSchema", required=True)
     clients = fields.List(
         fields.Nested("IscsiClientTestSchema"),
         required=True,

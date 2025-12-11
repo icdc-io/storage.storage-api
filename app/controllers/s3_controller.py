@@ -375,14 +375,13 @@ def list_buckets(subject):
     Get buckets for s3 users.
     """
     api_filters = parse_jsonapi_filters(request.args)
-    s3user_filters = api_filters.pop("user", {})
+    bucket_filters = api_filters.pop("base", {})
 
     try:
-        filters = S3UserSchema(partial=True).load(s3user_filters)
+        s3_users = S3Users.filtered(subject, request_filters=api_filters).all()
     except ValidationError as e:
-        abort_detailed(400, "Invalid filter key for related user.", e.messages)
+        abort_detailed(400, "Invalid query parameters.", e.messages)
 
-    s3_users = S3Users.filtered(subject).filter_by(**filters).all()
     if not s3_users:
         abort(404, "User not found or you haven't permission.")
 
@@ -398,7 +397,7 @@ def list_buckets(subject):
         bucket = Bucket.from_bucket_info(bucket_info)
         # Buckets are not stored in database, so we have to filter them iterating by fields
         try:
-            if bucket.user_name in s3_user_names and bucket.filter(api_filters.pop("base", {})):
+            if bucket.user_name in s3_user_names and bucket.filter(bucket_filters):
                 buckets.append(bucket)
         except AttributeError as e:
             abort(400, e.args[0])
