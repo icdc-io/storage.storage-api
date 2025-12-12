@@ -233,7 +233,7 @@ paths:
           Role: []
       responses:
         '200':
-          $ref: '#/components/responses/S3_Quota_List'
+          $ref: '#/components/responses/S3_LimitSet_List'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -260,7 +260,7 @@ paths:
           Role: []
       responses:
         '200':
-          $ref: '#/components/responses/S3_Quota_List'
+          $ref: '#/components/responses/S3_QuotaSet_List'
         '401':
           $ref: '#/components/responses/Unauthorized'
     # @DS: reviewed 2024-01-26
@@ -408,7 +408,7 @@ paths:
           Role: []
       responses:
         '200':
-          $ref: '#/components/responses/iSCSI_Quota_List'
+          $ref: '#/components/responses/iSCSI_LimitSet_List'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -435,7 +435,7 @@ paths:
           Role: []
       responses:
         '200':
-          $ref: '#/components/responses/iSCSI_Quota_List'
+          $ref: '#/components/responses/iSCSI_QuotaSet_List'
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:
@@ -2087,8 +2087,45 @@ components:
                             portal_ip_address: 198.18.0.3
               - name: acc2
                 services: {}
-    S3_Quota_List:
-      description: A JSON array of Account's S3 Quota object per pool
+    S3_LimitSet_List:
+      description: A JSON array of Account's per-pool S3 LimitSets
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/S3_Quota'
+          examples:
+            All account S3 quotas:
+              value:
+              - id: 133
+                objects: 2000
+                buckets: 20
+                users: 10
+                data_size_mb: 10240
+                account:
+                  id: 17
+                  name: acc1
+                pool:
+                  id: 13
+                  type: s3
+                  name: nvme-object
+                  class: nvme
+              - id: 134
+                objects: 3000
+                buckets: 300
+                users: 30
+                data_size_mb: 512
+                account:
+                  id: 17
+                  name: acc1
+                pool:
+                  id: 14
+                  type: s3
+                  name: hdd-object
+                  class: hdd
+    S3_QuotaSet_List:
+      description: A JSON array of Account's per-pool S3 QuotaSets
       content:
         application/json:
           schema:
@@ -2111,6 +2148,19 @@ components:
                   type: s3
                   name: nvme-object
                   class: nvme
+                usage:
+                  objects: 1000
+                  buckets: 10
+                  users: 5
+                  data_size_mb: 5120
+                limits:
+                  objects: 4000
+                  buckets: 40
+                  users: 2
+                  data_size_mb: 20480
+                endpoints:
+                  public: "https://s3.loc.vendor.tld"
+                  private: "https://s3.local.loc.vendor.tld"
               - id: 34
                 objects: 3000
                 buckets: 300
@@ -2124,6 +2174,19 @@ components:
                   type: s3
                   name: hdd-object
                   class: hdd
+                usage:
+                  objects: 1500
+                  buckets: 150
+                  users: 16
+                  data_size_mb: 256
+                limits:
+                  objects: 6000
+                  buckets: 600
+                  users: 60
+                  data_size_mb: 1024
+                endpoints:
+                  public: "https://s3-hdd.loc.vendor.tld"
+                  private: "https://s3-hdd.local.loc.vendor.tld"
     S3_User_List:
       description: A JSON array of Account's S3 User object
       content:
@@ -2211,8 +2274,8 @@ components:
                   data_size_mb: 200
                   objects: 50
                 user_name: acc1$user1
-    iSCSI_Quota_List:
-      description: A JSON array of Account's iSCSI Quota object per pool
+    iSCSI_LimitSet_List:
+      description: A JSON array of Account's per-pool iSCSI LimitSets
       content:
         application/json:
           schema:
@@ -2220,7 +2283,44 @@ components:
             items:
               $ref: '#/components/schemas/iSCSI_Quota'
           examples:
-            All account iSCSI quotas:
+            All account iSCSI per-pool limits:
+              value:
+              - id: 135
+                clients: 50
+                data_size_gb: 200
+                disks: 10
+                snapshots: 15
+                account:
+                  id: 17
+                  name: acc1
+                pool:
+                  id: 15
+                  type: iscsi
+                  name: nvme-data
+                  class: nvme
+              - id: 136
+                clients: 35
+                data_size_gb: 300
+                disks: 3
+                snapshots: 5
+                account:
+                  id: 17
+                  name: acc1
+                pool:
+                  id: 16
+                  type: iscsi
+                  name: hdd-data
+                  class: hdd
+    iSCSI_QuotaSet_List:
+      description: A JSON array of Account's per-pool iSCSI QuotaSets
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/iSCSI_Quota'
+          examples:
+            All account iSCSI per-pool quotas:
               value:
               - id: 35
                 clients: 50
@@ -2237,10 +2337,14 @@ components:
                   class: nvme
                 target:
                   - id: 42
-                  - cluster_id: 22
-                  - cluster:
+                    iqn: "iqn.2020-01.tld.vendor.loc:iscsi-nvme"
+                    cluster:
                       id: 22
                       name: cluster-sav21gtr
+                      gateways:
+                        - id: 51
+                          name: cloudgw-bf401950
+                          portal_ip_address: 198.18.0.2
               - id: 36
                 clients: 35
                 data_size_gb: 300
