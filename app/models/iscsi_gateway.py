@@ -87,8 +87,8 @@ class IscsiGatewaySchema(Schema):
         )
     )
     portal_ip_address = fields.String(validate=validate_ip, required=True)
-    ip_address = fields.String(validate=validate_ip, required=True)
 
+    ip_address = fields.String(load_only=True, validate=validate_ip, required=True)
     cloudgw_id = fields.String(load_only=True, required=True)
     api_user = fields.String(load_only=True, required=True)
     api_password = fields.String(load_only=True, required=True)
