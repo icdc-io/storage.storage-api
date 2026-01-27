@@ -18,8 +18,6 @@ build:
   stage: build
   tags:
     - testing
-  before_script:
-    - cp config/config.yaml.example config/config.yaml
   script:
     - echo "Building the project..."
     - podman build --build-arg CR_SERVER=$CR_SERVER -t $IMAGE_NAME .

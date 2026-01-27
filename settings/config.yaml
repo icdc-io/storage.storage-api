@@ -1,14 +1,12 @@
 ---
 log:
   level: DEBUG
-operator:
-  group: devel.operator
 location:
   domain: dcz.lab.icdc.io
 account:
   default: default
 ceph:
-  host: # VIP address of haproxy node
+  host:  # VIP address of haproxy node
   port: 80 # haproxy on nodes
   prometheus:
     host: "{CEPH_HOST}:9285"
@@ -77,3 +75,5 @@ database:
   username:
   password:
   name:
+operator:
+  group: devel.operator

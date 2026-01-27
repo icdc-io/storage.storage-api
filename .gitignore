@@ -78,5 +78,3 @@ target/
 
 # Config files
 config/*
-!config/config.yaml.examples
-!config/config.yaml.example
