@@ -38,7 +38,7 @@ class Accounts(AbstractModel, RbacAccount):
         "S3Users", back_populates="account", cascade="all, delete-orphan"
     )
     iscsi_clients = relationship(
-        "IscsiClients", backref="clients", cascade="all, delete-orphan"
+        "IscsiClients", back_populates="account", cascade="all, delete-orphan"
     )
 
     def update(self, body):
@@ -121,7 +121,7 @@ class Accounts(AbstractModel, RbacAccount):
                 "quotas": S3QuotaSchema(many=True, exclude=["limits", "endpoints"]).dump(self.s3_quotas)
             },
             "iscsi": {
-                "quotas": IscsiQuotaSchema(many=True, exclude=["limits"]).dump(self.iscsi_quotas),
+                "quotas": IscsiQuotaSchema(many=True, exclude=["limits", "target"]).dump(self.iscsi_quotas),
                 "clusters": IscsiClusterSchema(many=True).dump(self.iscsi_clusters)
             },
         }
@@ -160,7 +160,6 @@ class Accounts(AbstractModel, RbacAccount):
 
 class AccountSchema(Schema):
     ACCOUNT_NAME_PATTERN = r"^[a-z0-9]+$"
-    ACCOUNT_DESCRIPTION_PATTERN = r"^[\w ,.:/;\[\]!@^*()_\-+=]*$"
 
     id = fields.Int()
 
@@ -170,13 +169,6 @@ class AccountSchema(Schema):
             validate.Length(min=1, max=24),
             validate.Regexp(regex=ACCOUNT_NAME_PATTERN)
         ),
-    )
-
-    description = fields.String(
-        validate=validate.And(
-            validate.Length(min=0, max=24),
-            validate.Regexp(regex=ACCOUNT_DESCRIPTION_PATTERN)
-        )
     )
 
 

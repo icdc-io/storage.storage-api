@@ -107,11 +107,16 @@ class S3Quotas(AbstractModel):
         limitset = self.get_limitset()
         return {restriction: getattr(limitset, restriction) for restriction in self.get_restriction_names()}
 
-    def to_dict(self):
+    def to_dict(self, *, is_limit: bool = False) -> dict:
         """
         Convert the S3Quotas object into a JSON-compatible dictionary.
+        Args:
+            is_limit (bool): If True, exclude non-limit fields.
+        Returns:
+            dict
         """
-        return S3QuotaResponseSchema().dump(self)
+        exclude = {"limits", "usage", "endpoints"} if is_limit else set()
+        return S3QuotaResponseSchema(exclude=exclude).dump(self)
 
 
 
@@ -127,6 +132,7 @@ class S3QuotaSchema(Schema):
     endpoints    = fields.Method("generate_endpoints", dump_only=True)
     usage        = fields.Function(lambda quota: quota.compute_usage(), dump_only=True)
     limits       = fields.Function(lambda quota: quota.get_schema_limits(), dump_only=True)
+    pool         = fields.Nested("PoolSchema", dump_only=True)
 
     def generate_endpoints(self, obj):
         location_domain = consts.LOCATION_DOMAIN
@@ -169,4 +175,3 @@ class S3QuotaSchema(Schema):
 
 class S3QuotaResponseSchema(S3QuotaSchema):
     account      = fields.Nested("AccountSchema", dump_only=True)
-    pool         = fields.Nested("PoolSchema", dump_only=True)

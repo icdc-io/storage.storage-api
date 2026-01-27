@@ -4,7 +4,7 @@ Flask-SQLAlchemy
 Flask-Migrate
 Flask-Cors
 flask-socketio
-marshmallow==3.26.1
+marshmallow==3.26.2
 
 # Database and ORM
 SQLAlchemy
