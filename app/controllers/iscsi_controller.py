@@ -34,7 +34,7 @@ def get_iscsi_limits(subject):
     """
     limitsets = IscsiQuotas.get_default_limitsets().all()
     # NOTE: currently we do not support non-default limitsets
-    limitsets = [limitset.to_dict() for limitset in limitsets]
+    limitsets = [limitset.to_dict(is_limit=True) for limitset in limitsets]
     return jsonify(limitsets)
 
 

@@ -26,7 +26,7 @@ class IscsiClients(AbstractModel):
     owner = db.Column(db.String(128))
     account = db.relationship(
         "Accounts",
-        backref="clients"
+        back_populates="iscsi_clients"
     )
     disks = db.relationship(
         "IscsiDisks",

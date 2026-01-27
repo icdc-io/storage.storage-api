@@ -118,13 +118,16 @@ class IscsiQuotas(AbstractModel):
 
         return usage
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, is_limit: bool = False) -> dict:
         """
         Convert model instance to JSON-serializable dictionary, optionally excluding specified fields.
+        Args:
+            is_limit (bool): If True, exclude non-limit fields.
         Returns:
             dict: JSON-serializable dictionary representation of the model instance.
         """
-        return IscsiQuotaResponseSchema().dump(self)
+        exclude = {"limits", "usage", "target"} if is_limit else set()
+        return IscsiQuotaResponseSchema(exclude=exclude).dump(self)
 
 
 class IscsiQuotaSchema(Schema):
@@ -135,8 +138,11 @@ class IscsiQuotaSchema(Schema):
     snapshots = fields.Int(validate=validate.Range(min=0), required=True)
     pool_id = fields.Int(load_only=True, required=True)
     account_id = fields.Int(load_only=True, required=True)
+
     limits = fields.Function(lambda quota: quota.get_schema_limits(), dump_only=True)
     usage = fields.Function(lambda quota: quota.compute_usage(), dump_only=True)
+    pool = fields.Nested("PoolSchema", dump_only=True)
+    target = fields.Function(lambda quota: quota.get_target(), dump_only=True)
 
     @pre_load
     def set_limits(self, data, many, **kwargs):
@@ -172,6 +178,4 @@ class IscsiQuotaSchema(Schema):
 
 
 class IscsiQuotaResponseSchema(IscsiQuotaSchema):
-    pool = fields.Nested("PoolSchema", dump_only=True)
     account = fields.Nested("AccountSchema", dump_only=True)
-    target = fields.Function(lambda quota: quota.get_target(), dump_only=True)
