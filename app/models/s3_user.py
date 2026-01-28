@@ -44,8 +44,10 @@ class S3Users(AbstractModel):
     @classmethod
     def related_objects(cls) -> list:
         from app.models.account import Accounts
+        from app.models.pool import Pools
         return [
             (Accounts, cls.account_id),
+            (Pools, cls.pool_id)
         ]
 
     @property
