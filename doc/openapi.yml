@@ -2015,7 +2015,8 @@ components:
           examples:
             All accounts:
               value:
-              - name: acc1
+              - id: 17
+                name: acc1
                 services:
                   s3:
                     quotas:
@@ -2056,6 +2057,7 @@ components:
                           data_size_gb: 100
                           disks: 5
                           snapshots: 7
+                          snapshots_size_gb: 15
                         limits:
                           clients: 100
                           data_size_gb: 400
@@ -2072,11 +2074,16 @@ components:
                             pool:
                               id: 16
                               name: iscsi-hdd
+                              clss: hdd
+                              # NOTE: @DS type may be skipped as they are obvious from context
+                              type: iscsi
                           - id: 24
                             iqn: iqn.2020-01.io.icdc.loc:iscsi-ssd
                             pool:
-                              id: 16
-                              name: iscsi-hdd
+                              id: 17
+                              name: iscsi-ssd
+                              clss: ssd
+                              type: iscsi
                         gateways:
                           # NOTE: @DS: left only basic reference level info (id and iqn)
                           - id: 52
@@ -2085,7 +2092,8 @@ components:
                           - id: 53
                             name: cloudgw-c0512a61
                             portal_ip_address: 198.18.0.3
-              - name: acc2
+              - id: 18
+                name: acc2
                 services: {}
     S3_LimitSet_List:
       description: A JSON array of Account's per-pool S3 LimitSets
