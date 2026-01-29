@@ -8,12 +8,11 @@ set -o pipefail  # Prevent errors in a pipeline from being masked
 IMAGE_NAME="$1"
 NETWORK_NAME="storage-net"
 DB_CONTAINER="storage-postgres"
-APP_CONTAINER="storage"
-DB_IMAGE="docker.io/library/postgres:16"
+APP_CONTAINER="storage-api-tests"
+DB_IMAGE="${BASE_REGISTRY}/postgres:16"
 DB_PORT=5432
 MAX_ATTEMPTS=10
 SLEEP_INTERVAL=5
-CR_SERVER="artifactory.icz.icdc.io/icdc-docker-proxy"
 
 export DATABASE_HOST="$DB_CONTAINER"
 export DATABASE_PORT="$DB_PORT"
@@ -91,10 +90,5 @@ if ! podman run --rm --name "$APP_CONTAINER" \
   "$IMAGE_NAME" sh -c "pytest -s -v --setup-show --junitxml=/usr/src/app/report.xml"; then
   error "Tests failed" 4
 fi
-
-# Stop and remove all running containers
-log "Stopping and removing all running containers"
-podman stop -a || true
-podman rm -a || true
 
 log "Tests completed successfully!"
