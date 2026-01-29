@@ -2828,6 +2828,11 @@ components:
               readOnly: true
               oneOf:
               - $ref: '#/components/schemas/iSCSI_QuotaValue'
+              - type: object
+                properties:
+                  snapshots_size_gb:
+                    type: integer
+                    example: 15
             limits:
               description: >-
                 Limits are maximum values to which current quota values can be changed to.
