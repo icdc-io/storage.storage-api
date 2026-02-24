@@ -2817,7 +2817,6 @@ components:
               description: >-
                 Target available for this quoted pools.
                 Target are describes endpoints which are needed to connect to.
-              readOnly: true
               type: array
               items:
                 $ref: '#/components/schemas/iSCSI_Target'
@@ -2897,7 +2896,6 @@ components:
     iSCSI_Target:
       type: object
       required:
-        - cluster_id
         - pool_id
       properties:
         id:
@@ -2914,6 +2912,14 @@ components:
           writeOnly: true
           type: integer
           example: 41
+        cluster_name:
+          description: >-
+            iSCSI Cluster name used to process the pool.
+            Alternative way to set iSCSI Cluster for external systems (like Setup API)
+            If not specified, then current least loaded cluster will be used.
+          writeOnly: true
+          type: string
+          example: cluster-aaaa01234
         cluster:
           readOnly: true
           oneOf:
