@@ -118,10 +118,10 @@ class Accounts(AbstractModel, RbacAccount):
         from app.models.s3_quota import S3QuotaSchema
         return {
             "s3": {
-                "quotas": S3QuotaSchema(many=True, exclude=["limits", "endpoints"]).dump(self.s3_quotas)
+                "quotas": S3QuotaSchema(many=True, exclude=["endpoints"]).dump(self.s3_quotas)
             },
             "iscsi": {
-                "quotas": IscsiQuotaSchema(many=True, exclude=["limits", "target"]).dump(self.iscsi_quotas),
+                "quotas": IscsiQuotaSchema(many=True, exclude=["target"]).dump(self.iscsi_quotas),
                 "clusters": IscsiClusterSchema(many=True).dump(self.iscsi_clusters)
             },
         }

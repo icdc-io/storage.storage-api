@@ -51,6 +51,7 @@ class PoolSchema(Schema):
         )
     )
     klass = fields.String(
+        data_key="class",
         validate=validate.And(
             validate.Length(min=1, max=128),
             validate.Regexp(POOL_KLASS_PATTERN)
