@@ -3341,6 +3341,7 @@ components:
             Quota for specific bucket
           $ref: "#/components/schemas/Bucket_Quota"
         usage:
+          readOnly: true
           description: >-
             Resource usage for specific bucket
           $ref: "#/components/schemas/Bucket_Usage"
