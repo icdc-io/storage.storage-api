@@ -2281,12 +2281,22 @@ components:
                 quota:
                   data_size_mb: 300
                   objects: 100
+                usage:
+                  data_size_mb: 250
+                  total_objects: 80
+                  objects: 70
+                  multipart_objects: 10
                 user_name: acc1$user1
               - path: acc1/bucket1
                 name: data-bucket
                 quota:
                   data_size_mb: 200
                   objects: 50
+                usage:
+                  data_size_mb: 150
+                  total_objects: 40
+                  objects: 35
+                  multipart_objects: 5
                 user_name: acc1$user1
     iSCSI_LimitSet_List:
       description: A JSON array of Account's per-pool iSCSI LimitSets
@@ -3324,6 +3334,10 @@ components:
           description: >-
             Quota for specific bucket
           $ref: "#/components/schemas/Bucket_Quota"
+        usage:
+          description: >-
+            Resource usage for specific bucket
+          $ref: "#/components/schemas/Bucket_Usage"
         # TODO @DS: may be return user object, which includes user.id and user.name.
         #           because we manipulate by s3user ID everywhere.
         user_name:
@@ -3348,6 +3362,33 @@ components:
             Bucket-specific quota on number of objects
           type: integer
           example: 30
+
+    Bucket_Usage:
+      description: >-
+        Bucket-specific resource usage as defined in Ceph
+      type: object
+      properties:
+        data_size_mb:
+          description: >-
+            Bucket-specific resource usage on data size, specified in MB
+          type: integer
+          example: 300
+        total_objects:
+          description: >-
+            Total number of objects stored in a Bucket.
+            Quotas are applied to this value.
+          type: integer
+          example: 25
+        objects:
+          description: >-
+            Number of objects with user's data in a bucket
+          type: integer
+          example: 20
+        multipart_objects:
+          description: >-
+            Number of temporary/shadow objects used by multipart uploads in a bucket
+          type: integer
+          example: 5
 
     # @DS: reviewed 2024-02-06
     Keys:
