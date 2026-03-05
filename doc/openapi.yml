@@ -3208,7 +3208,7 @@ components:
           type: string
           example: "http://s3.local.dcz.lab.icdc.io/acc1, https://s3.local.dcz.lab.icdc.io/acc1"
 
-    # @DS: reviewed 2024-02-05
+    # @DS: reviewed 2026-03-05
     S3_User:
       type: object
       properties:
@@ -3233,9 +3233,12 @@ components:
           readOnly: true
           oneOf:
           - $ref: '#/components/schemas/Account_Ref'
-        is_locked:
-          type: boolean
-          example: true
+        status:
+          type: string
+          description: >-
+            S3 user status, e.g. active, locked, deleted
+            Set to locked to disable operations with S3 user without deleting it.
+          example: active
         owner:
           type: string
           example: user@example.net
@@ -3256,7 +3259,9 @@ components:
         quota:
           $ref: '#/components/schemas/S3_User_Quota'
         usage:
-          $ref: '#/components/schemas/S3_User_Usage'
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/S3_User_Usage'
 
     # @DS: reviewed 2024-02-05
     S3_User_Quota:
