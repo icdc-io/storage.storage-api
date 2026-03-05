@@ -2212,6 +2212,9 @@ components:
                 description: S3User for application 1 in account 1
                 status: locked
                 owner: user1@example.net
+                account:
+                  id: 17
+                  name: acc1
                 pool:
                   id: 13
                   type: s3
@@ -2220,11 +2223,11 @@ components:
                 keys:
                   s3:
                     user: acc1$app1
-                    access_key: T99JA8DRRC6SL7VLO03
-                    secret_key: mZ13a3rB6s3hGBFLVUzawqnRsUAUN2Nbc6BofNWD
+                    access_key: T99JA8DRRC6SL7VLO03 # gitleaks:allow
+                    secret_key: mZ13a3rB6s3hGBFLVUzawqnRsUAUN2Nbc6BofNWD # gitleaks:allow
                   swift:
                     user: acc1$app1:swift
-                    secret_key: T6fOLwLIDJ8SEvj4RWrgbYAToIZztTeKfkFYqZh4
+                    secret_key: T6fOLwLIDJ8SEvj4RWrgbYAToIZztTeKfkFYqZh4 # gitleaks:allow
                 quota:
                   objects: 2000
                   buckets: 20
@@ -2238,6 +2241,9 @@ components:
                 description: S3User in global scope
                 status: active
                 owner: user2@example.net
+                account:
+                  id: 18
+                  name: acc2
                 pool:
                   id: 14
                   type: s3
@@ -2246,11 +2252,11 @@ components:
                 keys:
                   s3:
                     user: global-s3user
-                    access_key: A99JA8DRRC6SL7VLO04
-                    secret_key: qZ13a3rB6s3hGBFLVUzawqnRsUAUN2Nbc6BofNWG
+                    access_key: A99JA8DRRC6SL7VLO04 # gitleaks:allow
+                    secret_key: qZ13a3rB6s3hGBFLVUzawqnRsUAUN2Nbc6BofNWG # gitleaks:allow
                   swift:
                     user: global-s3user:swift
-                    secret_key: i7fOLwLIDJ8SEvj4RWrgbYAToIZztTeKfkFYqZh5
+                    secret_key: i7fOLwLIDJ8SEvj4RWrgbYAToIZztTeKfkFYqZh5 # gitleaks:allow
                 quota:
                   objects: 3000
                   buckets: 300
@@ -3223,6 +3229,10 @@ components:
         description:
           type: string
           example: Application 1 User
+        account:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/Account_Ref'
         is_locked:
           type: boolean
           example: true
