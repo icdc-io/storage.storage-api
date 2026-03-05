@@ -1896,7 +1896,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Bucket'
+              allOf:
+              - $ref: '#/components/schemas/Bucket'
+              - type: object
+                properties:
+                  name:
+                    type: string
+                    readOnly: true
       responses:
         '200':
           description: S3 user for object storage
