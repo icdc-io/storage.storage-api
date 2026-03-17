@@ -7,8 +7,8 @@ import json
 import paramiko
 
 from app import consts
-from app.lib.request_utils import abort, log, ok
-
+from app.lib.request_utils import log, ok
+from app.lib.s3.exceptions import CephServiceException
 
 def send(command):
     """
@@ -55,5 +55,5 @@ def send(command):
         return ok(response)
 
     # Handle the exception when the Ceph host is unreachable
-    except paramiko.ssh_exception.NoValidConnectionsError: # pylint: disable=no-member
-        return abort("Ceph host is unreachable")
+    except paramiko.ssh_exception.NoValidConnectionsError as e:  # pylint: disable=no-member
+        raise CephServiceException(f"Failed to create SSH client: {str(e)}")
