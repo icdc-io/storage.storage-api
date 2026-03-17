@@ -37,9 +37,6 @@ class S3Quotas(AbstractModel):
         return f"S3Quotas({self.id}, {self.objects}, {self.data_size_mb}, \
             {self.buckets}, {self.users}, {self.pool_id}, {self.account_id})"
 
-    def _pool(self):
-        return Pools.get_by("id", self.pool_id).serialize()
-
     @classmethod
     def schema(cls):
         return S3QuotaSchema()
@@ -77,9 +74,8 @@ class S3Quotas(AbstractModel):
 
         users = S3Users.query.filter_by(pool_id=self.pool_id, account_id=self.account_id).all()
         for user in users:
-            user_quota = user.get_quota()
             for key in usage.keys():
-                usage[key] = usage.get(key, 0) + user_quota[key]
+                usage[key] = usage.get(key, 0) + user.quota[key]
 
         usage = usage | {"users": len(users)}
 

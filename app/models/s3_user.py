@@ -15,11 +15,25 @@ from marshmallow import (
 from sqlalchemy import event
 
 from app.database import db
-from app.lib.ceph_utils import ceph_connection as rgwadmin_conn
+from app.lib.s3.operations import S3UserQuery
 from app.loggers import log
-from app.models.account import Accounts, AccountSchema
+from app.models.account import AccountSchema
 from app.models.model import AbstractModel
-from app.models.pool import Pools, PoolSchema
+from app.models.pool import PoolSchema
+
+
+class S3UserStatus(StrEnum):
+    UNKNOWN = "unknown"
+    DELETED = "deleted"
+    LOCKED = "locked"
+    ACTIVE = "active"
+
+
+DEFAULT_QUOTA = {
+    "data_size_mb": 0,
+    "objects": 0,
+    "buckets": 0
+}
 
 
 class S3Users(AbstractModel):
@@ -27,6 +41,8 @@ class S3Users(AbstractModel):
     Define columns in database and methods of model
     """
     RESOURCE_NAME = "s3.users"
+    query_class = S3UserQuery
+
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(128))
     owner = db.Column(db.String(128))
@@ -35,7 +51,11 @@ class S3Users(AbstractModel):
     pool_id = db.Column(db.Integer, db.ForeignKey("pools.id"))
     account = db.relationship("Accounts", back_populates="s3_users")
     pool = db.relationship("Pools", back_populates="s3_users")
-    _user_info_cache = None
+
+    status = S3UserStatus.UNKNOWN
+    usage = {}
+    quota = {}
+    keys = {}
 
     def __repr__(self):
         return f"S3Users({self.id}, {self.description}, {self.owner}, \
@@ -50,66 +70,24 @@ class S3Users(AbstractModel):
             (Pools, cls.pool_id)
         ]
 
-    @property
-    def user_info(self):
-        if self._user_info_cache is None:
-            try:
-                self._user_info_cache = rgwadmin_conn().get_user(self.name)
-            except rgwadmin.exceptions.NoSuchUser:
-                return {}
-        return self._user_info_cache
-
-    @property
-    def status(self):
-        if not self.user_info:
-            return S3UserStatus.DELETED
-        if self.user_info.get("suspended"):
-            return S3UserStatus.LOCKED
-
-        return S3UserStatus.ACTIVE
-
-    def serialize(self, hide_params=None):
-        """
-        Serialize model method
-        """
-        super()._serialize()
-        fields = {
-            "id": "self.id",
-            "description": "self.description",
-            "owner": "self.owner",
-            "name": "self.name",
-            "account": "self._account()",
-            "pool": "self._get_pool()",
-        }
-        return self.response_filter(fields, hide_params)
-
-    def _get_pool(self):
-        return Pools.get_by("id", self.pool_id).serialize()
-
-    def _account(self):
-        return Accounts.get_by("id", self.account_id)
-
     def update(self, body):
         """
         UPDATE SET SQL
         """
         self.description = body.get("description", self.description)
         self.owner = body.get("owner", self.owner)
-        if 'status' in body:
-            self._lock(body['status'])
-        self._user_info_cache = None
         self.save()
 
-    def full_name(self):
-        return self.name
+    def inject_ceph_state(self, data: dict = None):
+        if not data:
+            data = {}
 
-    def _lock(self, new_status):
-        """
-        Suspend or unsuspend the S3 user
-        """
-        cases = {"locked": True, "active": False}
-        if new_status != self.status:
-            rgwadmin_conn().modify_user(uid=self.name, suspended=cases.get(new_status))
+        self.status = data.get("status", S3UserStatus.DELETED)
+
+        self.usage = data.get("usage") or DEFAULT_QUOTA.copy()
+        self.quota = data.get("quota") or DEFAULT_QUOTA.copy()
+
+        self.keys = data.get("keys") or {"s3": {}, "swift": {}}
 
     def is_deleted(self):
         """
@@ -123,113 +101,9 @@ class S3Users(AbstractModel):
         """
         return self.status == S3UserStatus.LOCKED
 
-    def get_quota(self):
-        """
-        Get the S3 user's quota.
-        """
-        if self.is_deleted():
-            return S3UserQuota.default().to_dict()
-        quota = S3UserQuota.from_user_info(self.user_info)
-        return quota.to_dict()
-
-    def get_keys(self):
-        """
-        Get the S3 user's access keys and Swift keys.
-        """
-        s3_keys_list = self.user_info.get("keys", [])
-        swift_keys_list = self.user_info.get("swift_keys", [])
-
-        return {
-            "s3": s3_keys_list[0] if s3_keys_list else {},
-            "swift": swift_keys_list[0] if swift_keys_list else {}
-        }
-
-    def get_usage(self):
-        """
-        Get the usage statistics for the S3 user.
-        """
-        if self.is_deleted():
-            return S3UserQuota.default().to_dict()
-
-        if self.is_locked():
-            return S3UserQuota.from_user_info(self.user_info).to_dict()
-
-        keys = self.get_keys()
-        access_key = keys["s3"]["access_key"]
-        secret_key = keys["s3"]["secret_key"]
-        usage_info = rgwadmin_conn(access_key=access_key, secret_key=secret_key).request(
-            "GET", "/?usage&format=json"
-        )
-        return S3UserQuota.from_usage_info(usage_info).to_dict()
-
-    def get_buckets_name(self) -> list[str]:
-        """
-        Get Buckets name of S3 User.
-        """
-
-        buckets_name = rgwadmin_conn().request(
-            "GET", f"/admin/bucket?format=json&uid={self.name}"
-        )
-
-        return buckets_name
-
-    def get_buckets_info(self) -> list[dict]:
-        """
-        Get Buckets info of S3 User
-        """
-
-        buckets_info = rgwadmin_conn().request(
-            "GET", f"/admin/bucket?format=json&uid={self.name}&stats=True"
-        )
-
-        return buckets_info
-
     @classmethod
     def schema(cls):
         return S3UserSchema()
-
-
-class S3UserStatus(StrEnum):
-    DELETED = "deleted"
-    LOCKED = "locked"
-    ACTIVE = "active"
-
-
-class S3UserQuota:
-    def __init__(self, data_size_mb=0, objects=0, buckets=0):
-        self.data_size_mb = data_size_mb
-        self.objects = objects
-        self.buckets = buckets
-
-    def __repr__(self):
-        return f"<S3UserQuota(data_size_mb={self.data_size_mb}, objects={self.objects}, buckets={self.buckets})>"
-
-    @classmethod
-    def from_user_info(cls, user_info):
-        return cls(
-            data_size_mb=user_info["user_quota"]["max_size_kb"] // 1024,
-            objects=user_info["user_quota"]["max_objects"],
-            buckets=user_info["max_buckets"]
-        )
-
-    @classmethod
-    def from_usage_info(cls, usage_info):
-        return cls(
-            data_size_mb=usage_info['Summary'][6] // (1024 * 1024),
-            objects=usage_info['Summary'][7],
-            buckets=len(usage_info['CapacityUsed'][0]['Buckets'])
-        )
-
-    @classmethod
-    def default(cls):
-        return cls(
-            data_size_mb=0,
-            objects=0,
-            buckets=0
-        )
-
-    def to_dict(self):
-        return S3UserQuotaSchema().dump(self)
 
 
 class S3UserQuotaSchema(Schema):
@@ -254,20 +128,20 @@ class S3UserSchema(Schema):
             # Max length = 89: 24 for account prefix + 1 for '$' delimiter + remaining part
             validate.Length(min=1, max=89),
             validate.Regexp(regex=USER_NAME_PATTERN)
-        )
+        ),
+        required=True
     )
-    owner = fields.String(validate=validate.Email())
-    account_id = fields.Int(load_only=True)
-    pool_id = fields.Int(load_only=True)
-    status = fields.Function(serialize=lambda s3user: s3user.status, deserialize=lambda value: value)
+    owner = fields.String(validate=validate.Email(), required=True)
+    account_id = fields.Int(load_only=True, required=True)
+    pool_id = fields.Int(load_only=True, required=True)
 
     account = fields.Nested(AccountSchema(), dump_only=True)
     pool = fields.Nested(PoolSchema(), dump_only=True)
-    quota = fields.Nested(S3UserQuotaSchema(), load_only=True)
 
-    user_quota = fields.Function(lambda s3user: s3user.get_quota(), dump_only=True)
-    keys = fields.Function(lambda s3user: s3user.get_keys(), dump_only=True)
-    usage = fields.Function(lambda s3user: s3user.get_usage(), dump_only=True)
+    status = fields.String(serialize=lambda s3user: s3user.status, deserialize=lambda value: value)
+    quota = fields.Dict(serialize=lambda s3user: s3user.quota, deserialize=lambda value: value, required=True)
+    usage = fields.Dict(dump_only=True)
+    keys = fields.Dict(dump_only=True)
 
     @validates_schema
     def validate_user_quota(self, data, **kwargs):
@@ -289,8 +163,8 @@ class S3UserSchema(Schema):
         usage = None
         if self.context.get("user"):
             s3_user = self.context.get("user")
-            cur_quota = s3_user.get_quota()
-            usage = s3_user.get_usage()
+            cur_quota = s3_user.quota
+            usage = s3_user.usage
 
         new_quota = {
             key: new_quota.get(key, cur_quota[key])
@@ -329,9 +203,10 @@ def before_delete(mapper, connection, s3_user_instance):
     Listener function, called before deleting a S3_user object.
     """
     try:
+        from app.lib.s3.service import CephService
         log.info(f"Deleting s3 user in Ceph "
                  f"(name = {s3_user_instance.name})")
-        rgwadmin_conn().remove_user(s3_user_instance.name, purge_data=True)
+        CephService().remove_s3_user(s3_user_instance)
         log.info(f"Delete s3 user in Ceph "
                  f"(name = {s3_user_instance.name}) was successful")
     except rgwadmin.exceptions.NoSuchUser:
