@@ -67,16 +67,16 @@ def delete_cluster(subject, cluster_id):
     return controller.delete_cluster(subject, cluster_id), 204
 
 
-@iscsi.route("/targets", methods=["POST"])
-@rbac.allow("iscsi.targets.create")
-def create_target(subject):
-    return controller.create_target(subject), 204
-
-
-@iscsi.route("/targets/<target_id>", methods=["DELETE"])
-@rbac.allow("iscsi.targets.delete")
-def delete_target(subject, target_id):
-    return controller.delete_target(subject, target_id), 204
+# @iscsi.route("/targets", methods=["POST"])
+# @rbac.allow("iscsi.targets.create")
+# def create_target(subject):
+#     return controller.create_target(subject), 204
+#
+#
+# @iscsi.route("/targets/<target_id>", methods=["DELETE"])
+# @rbac.allow("iscsi.targets.delete")
+# def delete_target(subject, target_id):
+#     return controller.delete_target(subject, target_id), 204
 
 
 @iscsi.route("/gateways", methods=["POST"])

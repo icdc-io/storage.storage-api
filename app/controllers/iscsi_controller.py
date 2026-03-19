@@ -100,16 +100,21 @@ def get_cluster(subject, cluster_id):
     return cluster.to_dict()
 
 
-def create_target(subject, body=None):
+def _create_target(subject, account, body):
     """
-    Create Target instance in Database.
+    Internal helper to create a target.
     """
-    if not body:
-        body = request_json(request)
+    cluster_name = body.get("cluster_name")
+    cluster = None
 
-    cluster = IscsiClusters.filtered(subject).filter_by(id=body.get("cluster_id", None)).first()
+    if cluster_name:
+        cluster = IscsiClusters.filtered(subject).filter_by(name=cluster_name).first()
+
     if not cluster:
-        abort(404, "Cluster with this ID not found or you have not permission.")
+        cluster = account.get_least_loaded_cluster()
+
+    if not cluster:
+        abort(404, f"No suitable cluster found for account {account.name}")
 
     pool = Pools.get_by("id", body.get("pool_id", None))
     if not pool:
@@ -118,19 +123,24 @@ def create_target(subject, body=None):
     if IscsiTargets.get_target(cluster.account_id, pool.id):
         abort(409, "Target for this pool already exist in this account.")
 
-    target = IscsiTargets(**body)
+    log.debug(f"Creating Target for account {account.id} on cluster {cluster.id} for pool {pool.name}")
+
+    target_params = {"pool_id": pool.id, "cluster_id": cluster.id}
+    target = IscsiTargets(**target_params)
     target.save()
+
     if not target.id:
-        abort(500, "Unexpected error.")
+        abort(500, "Unexpected error: Target was not saved.")
+
     return no_content()
 
 
-def delete_target(subject, target_id):
-    target = IscsiTargets.filtered(subject).filter_by(id=target_id).first()
-    if not target:
-        abort(404, "Target with this ID not found or you have not permission.")
-    target.destroy()
-    return no_content()
+# def delete_target(subject, target_id):
+#     target = IscsiTargets.filtered(subject).filter_by(id=target_id).first()
+#     if not target:
+#         abort(404, "Target with this ID not found or you have not permission.")
+#     target.destroy()
+#     return no_content()
 
 
 def create_gateway(subject, body=None):
