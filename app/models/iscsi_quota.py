@@ -35,6 +35,16 @@ class IscsiQuotas(AbstractModel):
         ),
     )
 
+    @property
+    def target(self):
+        from app.models.iscsi_target import IscsiTargets
+
+        target = IscsiTargets.get_target(self.account_id, self.pool_id)
+        if not target:
+            return None
+
+        return target
+
     def __repr__(self):
         return f"ISCSIQuotas({self.id}, {self.clients},{self.data_size_gb}, \
             {self.disks}, {self.pool_id}, {self.pool_id}, {self.account_id})"
@@ -88,14 +98,6 @@ class IscsiQuotas(AbstractModel):
         limitset = self.get_limitset()
         return {restriction: getattr(limitset, restriction) for restriction in self.get_restriction_names()}
 
-    def get_target(self):
-        from app.models.iscsi_target import IscsiTargetResponseSchema, IscsiTargets
-
-        target = IscsiTargets.get_target(self.account_id, self.pool_id)
-        if not target:
-            return None
-        return IscsiTargetResponseSchema(exclude=["pool"]).dump(target)
-
     def compute_usage(self):
         from app.models.iscsi_target import IscsiTargets
 
@@ -138,11 +140,11 @@ class IscsiQuotaSchema(Schema):
     snapshots = fields.Int(validate=validate.Range(min=0), required=True)
     pool_id = fields.Int(load_only=True, required=True)
     account_id = fields.Int(load_only=True, required=True)
+    target = fields.Nested("IscsiTargetResponseSchema")
 
     pool = fields.Nested("PoolSchema", dump_only=True)
     limits = fields.Function(lambda quota: quota.get_schema_limits(), dump_only=True)
     usage = fields.Function(lambda quota: quota.compute_usage(), dump_only=True)
-    target = fields.Function(lambda quota: quota.get_target(), dump_only=True)
 
     @pre_load
     def set_limits(self, data, many, **kwargs):

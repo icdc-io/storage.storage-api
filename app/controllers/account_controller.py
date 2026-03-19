@@ -13,7 +13,6 @@ from app.controllers.iscsi.quotas_controller import update as update_iscsi_quota
 from app.controllers.iscsi_controller import (
     create_cluster,
     create_gateway,
-    create_target,
 )
 from app.controllers.s3.quotas_controller import create as create_s3_quota
 from app.controllers.s3.quotas_controller import update as update_s3_quota
@@ -68,13 +67,6 @@ def create_account(subject):
         create_s3_quota(subject, s3_quota)
     log.debug("S3 Quotas processed successfully")
 
-    # Process iSCSI Quotas
-    log.debug("Start creating iSCSI Quotas")
-    for iscsi_quota in (data.get("iscsi", {}).get("quotas", [])):
-        iscsi_quota["account_name"] = account.name
-        create_iscsi_quota(subject, iscsi_quota)
-    log.debug("iSCSI Quotas processed successfully")
-
     # Process iSCSI Clusters and Gateways
     for iscsi_cluster in (
             data.get("iscsi", {}).get("clusters", [])
@@ -83,20 +75,21 @@ def create_account(subject):
 
         iscsi_cluster["account_name"] = account.name
         iscsi_gateways = iscsi_cluster.pop("gateways", [])
-        iscsi_targets = iscsi_cluster.pop("targets", [])
 
         iscsi_cluster = create_cluster(subject, iscsi_cluster)
         for gateway in iscsi_gateways:
             log.debug(f"Start creating iSCSI Gateway with name: {gateway['name']}")
             gateway["cluster_id"] = iscsi_cluster["id"]
             create_gateway(subject, gateway)
+    log.debug("Clusters and gateways processed successfully")
 
-        for target in iscsi_targets:
-            log.debug(f"Start creating iSCSI Target for pool: {target['pool_id']}")
-            target["cluster_id"] = iscsi_cluster["id"]
-            create_target(subject, target)
+    # Process iSCSI Quotas
+    log.debug("Start creating iSCSI Quotas")
+    for iscsi_quota in (data.get("iscsi", {}).get("quotas", [])):
+        iscsi_quota["account_name"] = account.name
+        create_iscsi_quota(subject, iscsi_quota)
+    log.debug("iSCSI Quotas and targets processed successfully")
 
-    log.debug("Clusters, gateways and targets processed successfully")
     log.debug("Account and associated records created successfully")
 
     return account.to_dict()
@@ -161,7 +154,6 @@ def update_account(subject, account_name):
         iscsi_quota_obj = IscsiQuotas.query.filter_by(
             pool_id=iscsi_quota.get("pool_id", None), account_id=account.id
         ).first()
-
         log.debug(iscsi_quota_obj)
         if iscsi_quota_obj is not None:
             update_iscsi_quota(subject, iscsi_quota_obj.id, iscsi_quota)
@@ -180,17 +172,11 @@ def update_account(subject, account_name):
         log.debug(f"Start creating iSCSI Cluster with name: {iscsi_cluster['name']}")
         iscsi_cluster["account_name"] = account.name
         iscsi_gateways = iscsi_cluster.pop("gateways", [])
-        iscsi_targets = iscsi_cluster.pop("targets", [])
         iscsi_cluster = create_cluster(subject, iscsi_cluster)
         for gateway in iscsi_gateways:
             log.debug(f"Start creating iSCSI Gateway with name: {gateway['name']}")
             gateway["cluster_id"] = iscsi_cluster["id"]
             create_gateway(subject, gateway)
-
-        for target in iscsi_targets:
-            log.debug(f"Start creating iSCSI Target for pool: {target['pool_id']}")
-            target["cluster_id"] = iscsi_cluster["id"]
-            create_target(subject, target)
 
     log.debug("Account and associated records updated successfully")
     return account.to_dict()

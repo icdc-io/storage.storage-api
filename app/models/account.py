@@ -77,7 +77,6 @@ class Accounts(AbstractModel, RbacAccount):
         from app.models.iscsi_cluster import IscsiClusterSchema
         from app.models.iscsi_gateway import IscsiGatewaySchema
         from app.models.iscsi_quota import IscsiQuotaSchema
-        from app.models.iscsi_target import IscsiTargetSchema
         from app.models.s3_quota import S3QuotaSchema
 
         s3 = data.get("s3", {})
@@ -86,13 +85,12 @@ class Accounts(AbstractModel, RbacAccount):
 
         iscsi = data.get("iscsi", {})
         for quota in iscsi.get("quotas", []):
+            quota.pop("target", None)
             IscsiQuotaSchema(partial=["account_id"]).load(quota)
 
         for cluster in iscsi.get("clusters", []):
             for gw in cluster.pop("gateways", []):
                 IscsiGatewaySchema(partial=["cluster_id"]).load(gw)
-            for target in cluster.pop("targets", []):
-                IscsiTargetSchema(partial=["cluster_id"]).load(target)
 
             IscsiClusterSchema(partial=["account_id"]).load(cluster)
 
@@ -108,6 +106,13 @@ class Accounts(AbstractModel, RbacAccount):
     def get_by_name(cls, account_name: str) -> Optional["Accounts"]:
         """Retrive account by name"""
         return cls.query.filter_by(name=account_name).first()
+
+    def get_least_loaded_cluster(self):
+        """ Get least loaded iSCSI cluster"""
+        if not self.iscsi_clusters:
+            return None
+
+        return min(self.iscsi_clusters, key=lambda c: len(c.targets))
 
     def _services(self):
         """
