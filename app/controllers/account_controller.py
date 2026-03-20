@@ -16,8 +16,8 @@ from app.controllers.iscsi_controller import (
 )
 from app.controllers.s3.quotas_controller import create as create_s3_quota
 from app.controllers.s3.quotas_controller import update as update_s3_quota
-from app.lib.request_utils import abort_detailed, log, request_json
 from app.lib.s3 import paramiko
+from app.lib.request_utils import abort_detailed, log, request_json
 from app.models.account import Accounts, AccountSchema
 from app.models.iscsi_quota import IscsiQuotas
 from app.models.s3_quota import S3Quotas
