@@ -5,13 +5,12 @@ user/bucket states, quotas, and usage metrics.
 """
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List, Optional, Union
+from typing import Union, List, Optional, Dict, Any
 
-from app import consts
-from app.lib.s3.client import CephAdminClient, CephServiceException, CephUserClient
-from app.loggers import log
-from app.models.bucket import Bucket
+from app.lib.s3.client import CephAdminClient, CephUserClient, CephServiceException
 from app.models.s3_user import S3Users, S3UserStatus
+from app.models.bucket import Bucket
+from app.loggers import log
 
 
 class CephService:
@@ -84,7 +83,7 @@ class CephService:
 
         log.debug(f"Executing parallel s3 user usage fetch for {len(names)} users")
         # ThreadPoolExecutor is used because usage fetching is an I/O bound task
-        with ThreadPoolExecutor(max_workers=consts.CEPH_MAX_WORKERS) as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:
             future_to_name = {}
 
             for name in names:
@@ -103,9 +102,9 @@ class CephService:
                 name = future_to_name[future]
                 # Store the calculated usage stats indexed by username
                 users_usage[name] = future.result()
-        log.debug("Successfully fetch all metadata for users")
+        log.debug(f"Successfully fetch all metadata for users")
 
-        log.debug("Build state dictionary for s3 users.")
+        log.debug(f"Build state dictionary for s3 users.")
         # Final step: Merge metadata and calculated usage into a standard response format
         for name, metadata in indexed_metadata.items():
             if name in names and metadata:
@@ -132,7 +131,7 @@ class CephService:
 
         # Use executor.map to trigger multiple 'get_user_info' calls in parallel.
         # This returns results in the same order as the 'names' list.
-        with ThreadPoolExecutor(max_workers=consts.CEPH_MAX_WORKERS) as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:
             raw_results = list(executor.map(self.admin.get_user_info, names))
 
         indexed_metadata = {}
@@ -150,7 +149,7 @@ class CephService:
             if name not in indexed_metadata:
                 indexed_metadata[name] = {}
 
-        log.debug("Successfully fetch all metadata for users")
+        log.debug(f"Successfully fetch all metadata for users")
         return indexed_metadata
 
     def _fetch_user_usage(self, metadata: Dict[str, Any]) -> Dict[str, int]:
@@ -276,7 +275,7 @@ class CephService:
         """
         Remove S3 user.
         """
-        self.admin.remove_user(user.name)
+        self.admin.rgw.remove_user(user.name)
 
     def update_s3_user(
         self,

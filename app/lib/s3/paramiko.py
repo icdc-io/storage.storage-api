@@ -10,7 +10,6 @@ from app import consts
 from app.lib.request_utils import log, ok
 from app.lib.s3.exceptions import CephServiceException
 
-
 def send(command):
     """
     Send a bash command to a remote host via Paramiko SSHClient.

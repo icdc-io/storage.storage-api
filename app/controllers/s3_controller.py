@@ -4,6 +4,8 @@ S3 Controller
 from flask import abort, jsonify, request
 from marshmallow import ValidationError
 
+from app.lib.s3.exceptions import CephServiceException
+from app.lib.s3.service import CephService
 from app.lib.request_utils import (
     abort_detailed,
     log,
@@ -11,8 +13,6 @@ from app.lib.request_utils import (
     parse_jsonapi_filters,
     request_json,
 )
-from app.lib.s3.exceptions import CephServiceException
-from app.lib.s3.service import CephService
 from app.models.account import Accounts
 from app.models.bucket import BucketSchema
 from app.models.pool import Pools
@@ -206,7 +206,7 @@ def list_buckets(subject):
     try:
         buckets = service.list_s3_buckets(s3_users=s3_users, filters=bucket_filters)
     except CephServiceException as e:
-        abort_detailed(e.code, "Failed to retrieve buckets from the ceph.", e.message)
+        abort_detailed(e.code, f"Failed to retrieve buckets from the ceph.", e.message)
 
     return jsonify(BucketSchema(many=True).dump(buckets))
 

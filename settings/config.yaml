@@ -8,7 +8,6 @@ account:
 ceph:
   host:  # VIP address of haproxy node
   port: 80 # haproxy on nodes
-  max_workers: 10
   prometheus:
     host: "{CEPH_HOST}:9285"
   ssh:
