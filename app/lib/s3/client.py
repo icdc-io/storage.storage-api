@@ -2,18 +2,20 @@
 Ceph Infrastructure Clients.
 Provides Admin-level orchestration via RGWAdmin and User-level operations via Boto3.
 """
+from functools import cached_property
+from typing import Any, List, Optional
 
 import boto3
 import requests.exceptions as req_exceptions
 import rgwadmin.exceptions as rgw_exceptions
-from botocore.client import Config
 from botocore.exceptions import ClientError
 from rgwadmin import RGWAdmin
-from typing import List, Any, Optional
 
 from app import consts
 from app.lib.s3 import paramiko
 from app.lib.s3.exceptions import CephServiceException
+
+BOTO3_SESSION = boto3.Session()
 
 
 class CephAdminClient:
@@ -63,7 +65,7 @@ class CephAdminClient:
         except rgw_exceptions.UserExists:
             raise CephServiceException(f"User {name} already exists", code=400)
         except rgw_exceptions.RGWAdminException as e:
-            raise CephServiceException(f"Ceph API error during user creation", code=502, details=str(e))
+            raise CephServiceException("Ceph API error during user creation", code=502, details=str(e))
         except (req_exceptions.ConnectionError, req_exceptions.Timeout):
             raise CephServiceException("Ceph S3 API connection timeout", code=504)
         except Exception as e:
@@ -156,7 +158,7 @@ class CephAdminClient:
         except rgw_exceptions.NoSuchBucket:
             raise CephServiceException(f"Bucket {bucket_path} not found", code=404)
         except Exception as e:
-            raise CephServiceException(f"Failed to fetch bucket info", code=502, details=str(e))
+            raise CephServiceException("Failed to fetch bucket info", code=502, details=str(e))
 
     def get_buckets_by_user(self, uid: str, stats: bool = True) -> List[dict]:
         """List all buckets owned by a specific user."""
@@ -174,7 +176,7 @@ class CephAdminClient:
         except (req_exceptions.ConnectionError, req_exceptions.Timeout):
             raise CephServiceException("Ceph S3 API connection timeout", code=504)
         except Exception as e:
-            raise CephServiceException(f"Failed to fetch bucket info", code=502, details=str(e))
+            raise CephServiceException("Failed to fetch bucket info", code=502, details=str(e))
 
     def remove_bucket(self, bucket_path: str, purge: bool = False) -> dict:
         """Remove a bucket and optionally purge its objects."""
@@ -185,7 +187,7 @@ class CephAdminClient:
         except rgw_exceptions.NoSuchBucket:
             raise CephServiceException(f"Bucket {bucket_path} not found", code=404)
         except Exception as e:
-            raise CephServiceException(f"Failed to remove bucket", code=502, details=str(e))
+            raise CephServiceException("Failed to remove bucket", code=502, details=str(e))
 
     def remove_key(self, uid: str, access_key: str) -> dict:
         """Revoke a specific S3 access key from a user."""
@@ -218,19 +220,30 @@ class CephUserClient:
     """
 
     def __init__(self, access_key: str, secret_key: str) -> None:
-        session = boto3.Session(
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key
-        )
-        self.s3 = session.client(
+        self._access_key = access_key
+        self._secret_key = secret_key
+
+    @cached_property
+    def s3(self):
+        """
+        Lazily initializes and caches a Boto3 S3 client.
+        """
+        return BOTO3_SESSION.client(
             "s3",
+            aws_access_key_id=self._access_key,
+            aws_secret_access_key=self._secret_key,
             endpoint_url=f"http://{consts.CEPH_HOST}:{consts.CEPH_PORT}",
             use_ssl=False,
-            config=Config(signature_version="s3v4"),
         )
-        self.rgw_user = RGWAdmin(
-            access_key=access_key,
-            secret_key=secret_key,
+
+    @cached_property
+    def rgw_user(self):
+        """
+        Lazily initializes and caches an RGWAdmin client for user-scoped operations.
+        """
+        return RGWAdmin(
+            access_key=self._access_key,
+            secret_key=self._secret_key,
             server=f"{consts.CEPH_HOST}:{consts.CEPH_PORT}",
             secure=False,
             verify=False,
@@ -267,4 +280,4 @@ class CephUserClient:
         except ClientError as e:
             raise CephServiceException(f"S3 Client Error: {str(e)}", code=400)
         except Exception as e:
-            raise CephServiceException(f"Unexpected S3 error", code=500, details=str(e))
+            raise CephServiceException("Unexpected S3 error", code=500, details=str(e))
