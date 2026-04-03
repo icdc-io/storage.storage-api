@@ -63,25 +63,22 @@ def format_validation_errors(errors: any) -> list[str]:
     return errors_list
 
 
-def parse_jsonapi_filters(args: dict):
-    """
-    Parse args dictionary in JSON:API format for filters
-    """
-    filters = {}
-    for key, value in args.items():
-        if key.startswith("filter[") and key.endswith("]"):
-            field_name = key[7:-1]
-            if "." in field_name:
-                related_object, related_field = field_name.split(".", 1) # e.g. user.name
-                if related_object not in filters:
-                    filters[related_object] = {}
-                filters[related_object][related_field] = value
-            else:
-                if "base" not in filters:
-                    filters["base"] = {}
-                filters["base"][field_name] = value
-    return filters
+def parse_jsonapi_filters(args: dict) -> dict:
+    """Parse args dictionary in JSON:API format for filters"""
+    filters = {"base": {}}
 
+    for key, value in args.items():
+        if not (key.startswith("filter[") and key.endswith("]")):
+            continue
+        field_name = key[7:-1]
+
+        if "." in field_name:
+            relation, attr = field_name.split(".", 1)
+            filters.setdefault(relation, {})[attr] = value
+        else:
+            filters["base"][field_name] = value
+
+    return filters
 
 def is_fake() -> bool:
     """

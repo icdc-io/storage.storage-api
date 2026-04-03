@@ -57,14 +57,6 @@ class IscsiClients(AbstractModel):
     def to_dict_many(cls, clients):
         return IscsiClientResponseSchema(many=True).dump(clients)
 
-    @classmethod
-    def related_objects(cls) -> list:
-        """
-        Define related models for recursive filtering.
-        """
-        from app.models.account import Accounts
-        return [(Accounts, cls.account_id)]
-
     def to_dict(self):
         """
         Serialize model method

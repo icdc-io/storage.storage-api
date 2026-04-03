@@ -63,15 +63,6 @@ class IscsiQuotas(AbstractModel):
     def schema(cls) -> Schema:
         return IscsiQuotaSchema()
 
-    @classmethod
-    def related_objects(cls) -> list:
-        from app.models.account import Accounts
-        from app.models.pool import Pools
-        return [
-            (Accounts, cls.account_id),
-            (Pools,  cls.pool_id)
-        ]
-
     @staticmethod
     def get_restriction_names():
         return ["clients", "data_size_gb", "disks", "snapshots"]

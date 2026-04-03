@@ -889,6 +889,42 @@ paths:
           - `member` have full access only to own disks
           - `owner`\`admin` can see all disks for authorized account
           - `operator` can see all disks for any account
+        
+        #### Filtering
+              Supports JSON:API filter format `filter[object.field]=value`.  
+              Available filter objects: `cluster`, `pool`.  
+              Shortcut filters: `filter[account_id]` — equivalent to `filter[cluster.account_id]`.
+
+      parameters:
+        - name: filter[cluster.name]
+          in: query
+          schema:
+            type: string
+          example: cluster-f9e8da7s
+        - name: filter[cluster.id]
+          in: query
+          schema:
+            type: integer
+        - name: filter[pool.name]
+          in: query
+          schema:
+            type: string
+          example: hdd-2
+        - name: filter[pool.class]
+          in: query
+          schema:
+            type: string
+          example: nvme
+        - name: filter[pool.id]
+          in: query
+          schema:
+            type: integer
+        - name: filter[account_id]
+          in: query
+          schema:
+            type: integer
+          description: Shortcut for filter[account.id]
+
       security:
         - JWT: []
           Account: []
@@ -1305,6 +1341,52 @@ paths:
           - `member` have access to list of snapshots for own disks
           - `owner`\`admin` can see list of all snapshots in authorized account
           - `operator` can see list of all snapshots in any account
+        
+        #### Filtering
+            Supports JSON:API filter format `filter[object.field]=value`.  
+            Available filter objects: `cluster`, `pool`,`disk`.
+            Shortcut filters: `filter[account_id]` — equivalent to `filter[cluster.account_id]`.
+
+      parameters:
+        - name: filter[cluster.name]
+          in: query
+          schema:
+            type: string
+          example: cluster-f9e8da7s
+        - name: filter[cluster.id]
+          in: query
+          schema:
+            type: integer
+        - name: filter[pool.name]
+          in: query
+          schema:
+            type: string
+          example: hdd-2
+        - name: filter[pool.class]
+          in: query
+          schema:
+            type: string
+          example: nvme
+        - name: filter[pool.id]
+          in: query
+          schema:
+            type: integer
+        - name: filter[disk.name]
+          in: query
+          schema:
+            type: string
+          example: disk1
+        - name: filter[account_id]
+          in: query
+          schema:
+            type: integer
+          description: Shortcut for filter[account.id]
+        - name: filter[owner]
+          in: query
+          schema:
+            type: string
+          description: Shortcut for filter[disk.owner]
+
       security:
         - JWT: []
           Account: []
@@ -1312,8 +1394,6 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - $ref: '#/components/parameters/Account'
       responses:
         '200':
           $ref: "#/components/responses/iSCSI_Snapshot_List"
@@ -1609,6 +1689,28 @@ paths:
           - `member` can get list of own s3users.
           - `owner`\`admin` can get list of all s3users in authorized account
           - `operator` can get list of all s3users in any account
+
+        #### Filtering
+              Supports JSON:API filter format `filter[object.field]=value`.  
+              Available filter objects: pool.  
+              Shortcut filters: `filter[account_id]` — equivalent to `filter[account.id]`.
+
+      parameters:
+        - name: filter[pool.name]
+          in: query
+          schema:
+            type: string
+          example: hdd-2
+        - name: filter[pool.class]
+          in: query
+          schema:
+            type: string
+          example: nvme
+        - name: filter[pool.id]
+          in: query
+          schema:
+            type: integer
+
       security:
         - JWT: []
           Account: []
@@ -1796,9 +1898,42 @@ paths:
           - `owner`\`admin` can get list of buckets for all s3users in authorized account
           - `operator` can get list of buckets for all s3users in any account  
 
-        Filtering:
-          - `filter[user.name]` - filter by the name of related S3 user
-          - `filter[user_name]` - (deprecated) filter by S3 user name
+        #### Filtering
+          Supports JSON:API filter format `filter[object.field]=value`.  
+          Available filter objects: `user`, `pool`.  
+          Shortcut filters: `filter[owner]` — equivalent to `filter[user.owner]`.
+
+      parameters:
+        - name: filter[user.name]
+          in: query
+          schema:
+            type: string
+          example: user1
+        - name: filter[pool.name]
+          in: query
+          schema:
+            type: string
+          example: hdd-2
+        - name: filter[pool.class]
+          in: query
+          schema:
+            type: string
+          example: nvme
+        - name: filter[pool.id]
+          in: query
+          schema:
+            type: integer
+        - name: filter[account_id]
+          in: query
+          schema:
+            type: integer
+          description: Shortcut for filter[account.id]
+        - name: filter[owner]
+          in: query
+          schema:
+            type: string
+          description: Shortcut for filter[user.owner]
+
       security:
         - JWT: []
           Account: []
@@ -1806,19 +1941,6 @@ paths:
         - basicAuth: []
           Account: []
           Role: []
-      parameters:
-        - in: query
-          name: filter[user.name]
-          description: Filter by the name of related S3 user
-          required: false
-          schema:
-            type: string
-        - in: query
-          name: filter[user_name]
-          description: (deprecated) Filter by S3 user name
-          required: false
-          schema:
-            type: string
       responses:
         '200':
           $ref: '#/components/responses/S3_Bucket_List'

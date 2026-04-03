@@ -57,18 +57,17 @@ class S3Users(AbstractModel):
     quota = {}
     keys = {}
 
+    @classmethod
+    def _get_related_filters(cls) -> dict:
+        from app.models.pool import Pools
+
+        return {
+            'pool': ("pool", Pools),
+        }
+
     def __repr__(self):
         return f"S3Users({self.id}, {self.description}, {self.owner}, \
             {self.name}, {self.account_id}, {self.pool_id})"
-
-    @classmethod
-    def related_objects(cls) -> list:
-        from app.models.account import Accounts
-        from app.models.pool import Pools
-        return [
-            (Accounts, cls.account_id),
-            (Pools, cls.pool_id)
-        ]
 
     def update(self, body):
         """

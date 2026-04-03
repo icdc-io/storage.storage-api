@@ -14,7 +14,7 @@ from app.lib.request_utils import (
 from app.lib.s3.exceptions import CephServiceException
 from app.lib.s3.service import CephService
 from app.models.account import Accounts
-from app.models.bucket import BucketSchema
+from app.models.bucket import Bucket, BucketSchema
 from app.models.pool import Pools
 from app.models.s3_quota import S3Quotas
 from app.models.s3_user import S3Users, S3UserSchema
@@ -192,7 +192,12 @@ def list_buckets(subject):
     Get buckets for s3 users.
     """
     api_filters = parse_jsonapi_filters(request.args)
+
     bucket_filters = api_filters.pop("base", {})
+    for key in Bucket.OBJECT_SHORTCUTS:
+        if key in bucket_filters:
+            api_filters.setdefault(Bucket.RELATED_OBJECT, {})[key] = bucket_filters.pop(key)
+    api_filters["base"] = api_filters.pop(Bucket.RELATED_OBJECT, {})
 
     try:
         s3_users = S3Users.filtered(subject, request_filters=api_filters).all()

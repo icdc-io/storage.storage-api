@@ -157,7 +157,8 @@ roles:
         account_id: account_id
     iscsi.targets:
       permissions: []
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.disks:
       permissions:
         - list
@@ -168,7 +169,8 @@ roles:
         - unassign
         - set-owner
         - from-snapshot
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.clients:
       permissions:
         - list
@@ -186,10 +188,12 @@ roles:
         - update
         - delete
         - rollback
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.gateways:
       permissions: []
-      filters: {}
+      filters:
+        account_id: account_id
     pools:
       permissions:
         - list
@@ -251,7 +255,8 @@ roles:
         account_id: account_id
     iscsi.targets:
       permissions: []
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.disks:
       permissions:
         - list
@@ -262,7 +267,8 @@ roles:
         - unassign
         - set-owner
         - from-snapshot
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.clients:
       permissions:
         - list
@@ -280,10 +286,12 @@ roles:
         - update
         - delete
         - rollback
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.gateways:
       permissions: []
-      filters: {}
+      filters:
+        account_id: account_id
     pools:
       permissions:
         - list
@@ -340,7 +348,8 @@ roles:
         account_id: account_id
     iscsi.targets:
       permissions: []
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.disks:
       permissions:
         - list
@@ -351,6 +360,7 @@ roles:
         - unassign
         - from-snapshot
       filters:
+        account_id: account_id
         owner: owner
     iscsi.clients:
       permissions:
@@ -369,10 +379,13 @@ roles:
         - update
         - delete
         - rollback
-      filters: {}
+      filters:
+        account_id: account_id
+        owner: owner
     iscsi.gateways:
       permissions: []
-      filters: {}
+      filters:
+        account_id: account_id
     pools:
       permissions:
         - list

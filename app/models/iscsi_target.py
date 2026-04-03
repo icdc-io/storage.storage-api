@@ -60,18 +60,6 @@ class IscsiTargets(AbstractModel):
         return IscsiTargetSchema()
 
     @classmethod
-    def related_objects(cls):
-        """
-        Define related models for recursive filtering.
-        """
-        from app.models.iscsi_cluster import IscsiClusters
-        from app.models.pool import Pools
-        return [
-            (Pools, cls.pool_id),
-            (IscsiClusters, cls.cluster_id),
-        ]
-
-    @classmethod
     def get_target(cls, account_id, pool_id):
         """
         Get target by account_id and pool_id.
