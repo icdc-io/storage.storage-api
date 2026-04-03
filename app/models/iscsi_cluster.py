@@ -44,14 +44,6 @@ class IscsiClusters(AbstractModel):
         return IscsiClusterSchema()
 
     @classmethod
-    def related_objects(cls) -> list:
-        """
-        Define related models for recursive filtering.
-        """
-        from app.models.account import Accounts
-        return [(Accounts, cls.account_id)]
-
-    @classmethod
     def to_dict_many(cls, clusters):
         """
         Serialize a list of clusters.

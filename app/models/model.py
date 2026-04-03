@@ -3,7 +3,9 @@ Abstract model
 """
 
 import marshmallow
-from sqlalchemy import select
+from marshmallow import ValidationError, INCLUDE
+from sqlalchemy.orm import aliased
+from sqlalchemy.orm import query as sql_query
 
 from app.database import db
 from app.loggers import log
@@ -90,139 +92,156 @@ class AbstractModel(db.Model):
         raise NotImplementedError(f"{cls.__name__}.schema() must be implemented")
 
     @classmethod
-    def filter_object_name(cls) -> str:
+    def _get_related_filters(cls) -> dict:
         """
-        Extract the logical name part from RESOURCE_NAME.
+        Defines available relation filters for this model.
 
-        Returns
-        -------
-        str
-            The object part of the resource name.
+        Structure:
+            {
+                'filter_alias': (join_path, target_model),
+                'filter_alias': (join_path, target_model, shortcut_alias),
+            }
 
-        Example
-        -------
-        "iscsi.disks" -> "disks"
-        "s3" -> "s3"
+        Fields:
+            filter_alias  (str) — the name used in request filter, e.g. filter[cluster.name]
+                                  or filter[account_id] for shortcut filters
+            join_path     (str) — dot-separated path of relationships to traverse,
+                                  e.g. 'disk.target.cluster' means
+                                  cls -> disk -> target -> cluster
+            target_model  (Model) — the final model at the end of join_path,
+                                    filters will be applied against its columns
+            shortcut_alias (str, optional) — if provided, this filter_alias is treated
+                                             as a direct field shortcut on target_model,
+                                             meaning filter[account_id] maps to
+                                             target_model.account_id without needing
+                                             a dot notation in the request
+
+        Examples:
+            'cluster': ('disk.target.cluster', IscsiClusters)
+                → filter[cluster.name]=foo
+                → JOIN ... iscsi_clusters WHERE iscsi_clusters.name = 'foo'
+
+            'account_id': ('disk.target.cluster', IscsiClusters, 'cluster')
+                → filter[account_id]=2
+                → shortcut: moved from base into 'cluster' group
+                → JOIN ... iscsi_clusters WHERE iscsi_clusters.account_id = 2
         """
-        parts = cls.RESOURCE_NAME.split(".")
-        return parts[1] if len(parts) == 2 else parts[0]
+        return {}
 
     @classmethod
-    def related_objects(cls) -> list[tuple[type, object]]:
+    def _preprocess_filters(cls, filters: dict) -> dict:
         """
-        Return related model classes and their linking fields.
+        Moves shortcut fields from 'base' into their target relation group.
 
-        Returns
-        -------
-        list[tuple[type, object]]
-            List of tuples in the format:
-            [
-                (RelatedModelClass, cls.foreign_key_field)
-            ]
+        Example:
+            IN:  {'base': {'account_id': 2}, 'cluster': {'name': 'foo'}}
+            OUT: {'base': {}, 'cluster': {'name': 'foo', 'account_id': 2}}
 
-        Description
-        -----------
-        This allows the model to recursively apply filters
-        to related models, e.g., a Disk filtered by its Target.
+        This allows filter[account_id]=2 to be applied against IscsiClusters
+        instead of being treated as a direct column on cls.
         """
-        return []
-
-    # ----------------------------
-    # Filtering and query helpers
-    # ----------------------------
-
-    @classmethod
-    def apply_filters(cls, subject, request_filters: dict) -> dict:
-        """
-        Combine and validate filters from different sources.
-
-        Parameters
-        ----------
-        subject :
-            Used internally for RBAC filters.
-        request_filters : dict
-            Dictionary containing filters for the current model ("base")
-            and for related objects.
-
-        Returns
-        -------
-        dict
-            Validated and merged filters for the current model.
-
-        Notes
-        -----
-        Example structure of request_filters:
-        {
-            "disks": {"size_gb": 100},
-            "base": {"name": "disk-001"},
-        }
-
-        Example of returned filters:
-        {
-            "size_gb": 100,
-            "name": "disk-001"
-        }
-        """
-        filters: dict = {}
-
-        # Model-specific filters (e.g. {"disks": {...}})
-        key = cls.filter_object_name()
-        filters.update(request_filters.pop(key, {}))
-
-        # Filters for the current (base) resource
-        filters.update(request_filters.pop("base", {}))
-
-        # Add RBAC or account-level filters if subject provides them
-        filters.update(subject.filters(cls.RESOURCE_NAME))
-
-        # Validate filters using Marshmallow schema
-        cls.schema().load(filters, partial=True)
+        related_filters = cls._get_related_filters()
+        base = filters.get("base", {})
+        for field_name, value in list(base.items()):
+            filter_def = related_filters.get(field_name)
+            # Only process shortcut fields (those with a third element — target_relation)
+            if not filter_def or len(filter_def) < 3:
+                continue
+            _, _, target_relation = filter_def
+            filters.setdefault(target_relation, {})[field_name] = value
+            del base[field_name]
 
         return filters
 
     @classmethod
-    def filtered(cls, subject, request_filters: dict | None = None):
+    def filtered(cls, subject, request_filters=None) -> sql_query:
         """
-        Build a SQLAlchemy query for the model, applying all filters
-        and recursively filtering related objects.
+        Applies request filters and subject scope filters to cls.query.
 
-        Parameters
-        ----------
-        subject :
-            Used internally for access-based filters.
-        request_filters : dict | None, optional
-            Dictionary of filters from the request payload.
-
-        Returns
-        -------
-        sqlalchemy.orm.Query
-            SQLAlchemy query object with applied filters.
-
-        Notes
-        -----
-        related_objects define dependencies, for example:
-            [
-                (IscsiTargets, cls.target_id)
-            ]
-
-        In that case, it performs subqueries on related tables and
-        filters results accordingly.
+        Handles two types of filters:
+            - base: direct column filters on this model, e.g. filter[name]=foo
+            - relation: filters on related models via joins, e.g. filter[cluster.name]=foo
         """
         if request_filters is None:
             request_filters = {}
 
-        # Apply all filters and validate them
-        filters = cls.apply_filters(subject, request_filters)
+        # Merge subject scope filters (e.g. account_id restriction) into base
+        request_filters.setdefault("base", {}).update(subject.filters(cls.RESOURCE_NAME))
+        filters = cls._preprocess_filters(request_filters)
 
         query = cls.query
-        # Recursively apply filters to related models
-        for related_model, field in cls.related_objects():
-            related_subquery = (
-                related_model.filtered(subject, request_filters)
-                .with_entities(related_model.id)
-                .subquery()
-            )
-            query = query.filter(field.in_(select(related_subquery.c.id)))
+        # Tracks already joined nodes to avoid duplicate joins across filter iterations
+        _aliases = {}
+        related_filters = cls._get_related_filters()
 
-        # Apply final filters to the main query
-        return query.filter_by(**filters)
+        for relation_alias, attr_filters in filters.items():
+            if relation_alias == "base":
+                attr_filters = cls.schema().load(attr_filters, unknown=INCLUDE, partial=True)
+                for field_name in attr_filters:
+                    if not hasattr(cls, field_name):
+                        raise ValidationError(f"No field {field_name} on the object")
+                query = query.filter_by(**attr_filters)
+            else:
+                if relation_alias not in related_filters:
+                    raise ValidationError(f"Unknown relation filter: {relation_alias}")
+
+                join_path, related_model, *_ = related_filters[relation_alias]
+
+                query = cls._apply_relation_join(query, join_path, relation_alias, _aliases)
+
+                # final_alias is the aliased version of related_model at the end of join_path
+                # we must filter against the alias, not the original model,
+                # otherwise SQL will reference the unaliased table and break
+                final_alias = _aliases[relation_alias]
+                attr_filters = related_model.schema().load(attr_filters, unknown=INCLUDE, partial=True)
+                for attr, value in attr_filters.items():
+                    if not hasattr(related_model, attr):
+                        raise ValidationError(f"No field {attr} on {relation_alias}")
+                    query = query.filter(getattr(final_alias, attr) == value)
+
+        return query
+
+    @classmethod
+    def _apply_relation_join(cls, query, join_path: str, relation_alias: str, _aliases: dict) -> sql_query:
+        """
+        Traverses join_path and adds JOIN clauses to query, skipping already joined nodes.
+
+        Each node in the path gets an aliased version of its model to avoid
+        duplicate table errors when the same table is joined via different paths.
+
+        Alias naming:
+            - Intermediate nodes: 'tablename_relation_relation' e.g. 'snapshots_disk_target'
+            - Final node: relation_alias e.g. 'cluster', 'real_cluster'
+
+        After the loop, _aliases[relation_alias] points to the final aliased model
+        so filtered() can apply .filter() against it directly.
+        """
+        parts = join_path.split('.')
+        current_model = cls
+        current_path = cls.__tablename__
+
+        for i, part in enumerate(parts):
+            relation = getattr(current_model, part)
+            next_model = relation.property.mapper.class_
+            next_path = f"{current_path}.{part}"
+            is_last = i == len(parts) - 1
+
+            if next_path not in _aliases:
+                # Intermediate nodes get a path-based name, final node gets relation_alias
+                # so that _aliases[relation_alias] works as a shortcut in filtered()
+                alias_name = relation_alias if is_last else next_path.replace('.', '_')
+                alias = aliased(next_model, name=alias_name)
+                # Pass both alias and relation so SQLAlchemy knows which FK to use
+                query = query.join(alias, relation)
+                _aliases[next_path] = alias
+
+            # Always move forward from the alias, not the original model —
+            # next getattr() must resolve relationships from the aliased instance
+            current_model = _aliases[next_path]
+            current_path = next_path
+
+        # Shortcut so filtered() can do _aliases[relation_alias] instead of
+        # reconstructing the full path key
+        _aliases[relation_alias] = _aliases[f"{cls.__tablename__}.{'.'.join(parts)}"]
+
+        return query

@@ -41,15 +41,6 @@ class S3Quotas(AbstractModel):
     def schema(cls):
         return S3QuotaSchema()
 
-    @classmethod
-    def related_objects(cls) -> list:
-        from app.models.account import Accounts
-        from app.models.pool import Pools
-        return [
-            (Accounts, cls.account_id),
-            (Pools,  cls.pool_id)
-        ]
-
     def update(self, body):
         """
         UPDATE SET SQL

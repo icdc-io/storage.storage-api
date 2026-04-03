@@ -43,6 +43,18 @@ class IscsiDisks(AbstractModel):
         cascade="all, delete-orphan"
     )
 
+    @classmethod
+    def _get_related_filters(cls) -> dict:
+        from app.models.iscsi_cluster import IscsiClusters
+        from app.models.pool import Pools
+
+        return {
+            'cluster': ('target.cluster', IscsiClusters),
+            'pool': ("target.pool", Pools),
+
+            'account_id': ("target.cluster", IscsiClusters, "cluster"),
+        }
+
     def __repr__(self):
         return f"IscsiDisks({self.id}, {self.owner}, {self.size_gb}, \
             {self.name}, {self.target_id}, {self.clients}, {self.snapshots})"
@@ -52,11 +64,6 @@ class IscsiDisks(AbstractModel):
         self.size_gb = body.get("size_gb", self.size_gb)
         self.owner = body.get("owner", self.owner)
         self.save()
-
-    @classmethod
-    def related_objects(cls) -> list:
-        from app.models.iscsi_target import IscsiTargets
-        return [(IscsiTargets, cls.target_id)]
 
     @classmethod
     def schema(cls):

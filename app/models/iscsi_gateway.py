@@ -42,16 +42,6 @@ class IscsiGateways(AbstractModel):
         """
         return IscsiGatewaySchema()
 
-    @classmethod
-    def related_objects(cls) -> list:
-        """
-        Define related models for recursive filtering.
-        """
-        from app.models.iscsi_target import IscsiClusters
-        return [
-            (IscsiClusters, cls.cluster_id)
-        ]
-
     def to_dict(self):
         """
         Serialize the current gateway to a dictionary.

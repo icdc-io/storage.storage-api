@@ -9,7 +9,6 @@ from sqlalchemy.sql import func
 from app.database import db
 from app.lib.request_utils import is_failed
 from app.loggers import log
-from app.models.iscsi_disk import IscsiDisks
 from app.models.model import AbstractModel
 
 
@@ -27,6 +26,21 @@ class Snapshots(AbstractModel):
     disk_id = db.Column(db.Integer, db.ForeignKey("iscsi_disks.id"))
     disk = db.relationship("IscsiDisks", back_populates="snapshots")
 
+    @classmethod
+    def _get_related_filters(cls):
+        from app.models.iscsi_cluster import IscsiClusters
+        from app.models.iscsi_disk import IscsiDisks
+        from app.models.pool import Pools
+
+        return {
+            'cluster': ('disk.target.cluster', IscsiClusters),
+            'pool': ('disk.target.pool', Pools),
+            'disk': ('disk', IscsiDisks),
+
+            'account_id': ('disk.target.cluster', IscsiClusters, 'cluster'),
+            'owner': ('disk', IscsiDisks, 'disk')
+        }
+
     def __repr__(self):
         return f"Snapshots({self.id}, {self.name}, {self.size_gb}, \
             {self.description}, {self.creation_time}, {self.disk_id})"
@@ -38,11 +52,6 @@ class Snapshots(AbstractModel):
         self.description = body.get("description", self.description)
         self.name = body.get("name", self.name)
         self.save()
-
-    @classmethod
-    def related_objects(cls) -> list:
-        from app.models.iscsi_disk import IscsiDisks
-        return [(IscsiDisks, cls.disk_id)]
 
     @property
     def target(self):
@@ -95,17 +104,14 @@ def before_delete(mapper, connection, snapshot_instance):
     Listener function, called before deleting a Snapshots object.
     """
     log.info(f"Deleting snapshot in RBD with name: {snapshot_instance.name}")
-    from app.models.iscsi_target import IscsiTargets
-    target = IscsiTargets.get_by("id", snapshot_instance.target.id)
+    target = snapshot_instance.disk.target
 
     try:
         iscsi_service = target.iscsi_service()
     except ValueError as e:
         abort(400, str(e))
 
-    disk = IscsiDisks.get_by("id", snapshot_instance.disk_id)
-
-    response = iscsi_service.delete_snapshot(snapshot_name=snapshot_instance.name, disk_name=disk.name)
+    response = iscsi_service.delete_snapshot(snapshot_name=snapshot_instance.name, disk_name=snapshot_instance.disk.name)
     if is_failed(response) and response["code"] != 404:
         abort(response["code"], response["data"])
 

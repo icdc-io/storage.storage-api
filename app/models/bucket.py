@@ -6,6 +6,9 @@ from marshmallow import Schema, ValidationError, fields, validate, validates_sch
 
 
 class Bucket:
+    RELATED_OBJECT = 'user'
+    OBJECT_SHORTCUTS = {'account_id', 'owner'}
+
     def __init__(self, name, path, user_name, quota, usage=None):
         self.path = path
         self.name = name
