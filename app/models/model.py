@@ -177,10 +177,10 @@ class AbstractModel(db.Model):
         for relation_alias, attr_filters in filters.items():
             if relation_alias == "base":
                 attr_filters = cls.schema().load(attr_filters, unknown=INCLUDE, partial=True)
-                for field_name in attr_filters:
+                for field_name, value in attr_filters.items():
                     if not hasattr(cls, field_name):
                         raise ValidationError(f"No field {field_name} on the object")
-                query = query.filter_by(**attr_filters)
+                    query = query.filter(getattr(cls, field_name) == value)
             else:
                 if relation_alias not in related_filters:
                     raise ValidationError(f"Unknown relation filter: {relation_alias}")
@@ -199,7 +199,7 @@ class AbstractModel(db.Model):
                         raise ValidationError(f"No field {attr} on {relation_alias}")
                     query = query.filter(getattr(final_alias, attr) == value)
 
-        return query
+        return query.reset_joinpoint()
 
     @classmethod
     def _apply_relation_join(cls, query, join_path: str, relation_alias: str, _aliases: dict) -> sql_query:
@@ -219,7 +219,6 @@ class AbstractModel(db.Model):
         parts = join_path.split('.')
         current_model = cls
         current_path = cls.__tablename__
-
         for i, part in enumerate(parts):
             relation = getattr(current_model, part)
             next_model = relation.property.mapper.class_
