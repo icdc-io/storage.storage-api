@@ -178,12 +178,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Account_Ref'
+                $ref: '#/components/schemas/Account'
           description: OK
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/Notfound'
+        '409':
+          $ref: '#/components/responses/Conflict'
     delete:
       operationId: accounts.delete
       tags:
@@ -339,7 +341,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/S3_Quota'
+              $ref: '#/components/schemas/S3_Quota_Update'
       responses:
         '200':
           description: Updated S3 Quota quota values
@@ -2202,7 +2204,7 @@ components:
                             pool:
                               id: 16
                               name: iscsi-hdd
-                              clss: hdd
+                              class: hdd
                               # NOTE: @DS type may be skipped as they are obvious from context
                               type: iscsi
                           - id: 24
@@ -2210,7 +2212,7 @@ components:
                             pool:
                               id: 17
                               name: iscsi-ssd
-                              clss: ssd
+                              class: ssd
                               type: iscsi
                         gateways:
                           # NOTE: @DS: left only basic reference level info (id and iqn)
@@ -2497,6 +2499,17 @@ components:
                         - id: 51
                           name: cloudgw-bf401950
                           portal_ip_address: 198.18.0.2
+                usage:
+                  - disks: 3
+                    clients: 6
+                    data_size_gb: 10
+                    snapshots: 2
+                    snapshots_size_gb: 6
+                limits:
+                  - disks: 50
+                    clients: 40
+                    data_size_gb: 200
+                    snapshots: 30
               - id: 36
                 clients: 35
                 data_size_gb: 300
@@ -2511,6 +2524,17 @@ components:
                   name: hdd-data
                   class: hdd
                 target: [] # no target for the pool
+                usage:
+                  - disks: 4
+                    clients: 8
+                    data_size_gb: 12
+                    snapshots: 1
+                    snapshots_size_gb: 4
+                limits:
+                  - disks: 30
+                    clients: 20
+                    data_size_gb: 125
+                    snapshots: 15
     iSCSI_Cluster_List:
       description: A JSON array of Account's iSCSI Cluster objects
       content:
@@ -2969,7 +2993,7 @@ components:
                 Actual allocated disks and snapshots.
                 Defines minimum value for changing quota
               readOnly: true
-              oneOf:
+              allOf:
               - $ref: '#/components/schemas/iSCSI_QuotaValue'
               - type: object
                 properties:
@@ -3289,17 +3313,14 @@ components:
             type: integer
             example: 2000
     # @DS: reviewed 2024-01-26
-    S3_Quota:
-      description: >-
-        This is an object which describes account quota for some pool:
-          - quota values (attributes)
-          - limits
-          - usage stats
-          - related account
-          - related pool
-          - endpoints
+    S3_Quota_Update:
       allOf:
         - $ref: '#/components/schemas/S3_QuotaValue'
+
+    S3_Quota:
+      description: Full S3 Quota object with relations and usage
+      allOf:
+        - $ref: '#/components/schemas/S3_Quota_Update'
         - type: object
           properties:
             id:
@@ -3309,32 +3330,26 @@ components:
             account_name:
               type: string
               example: acc1
-              description: Global unique account name. Optional, if not specified current Subject account is used.
+              writeOnly: true
+            pool_id:
+              type: integer
+              example: 4
               writeOnly: true
             account:
               readOnly: true
-              oneOf:
-              - $ref: '#/components/schemas/Account_Ref'
-            pool_id:
-              writeOnly: true
-              type: integer
-              example: 4
+              $ref: '#/components/schemas/Account_Ref'
             pool:
               readOnly: true
-              oneOf:
-              - $ref: '#/components/schemas/Pool'
+              $ref: '#/components/schemas/Pool'
             usage:
               readOnly: true
-              oneOf:
-              - $ref: '#/components/schemas/S3_QuotaValue'
+              $ref: '#/components/schemas/S3_QuotaValue'
             limits:
               readOnly: true
-              oneOf:
-              - $ref: '#/components/schemas/S3_QuotaValue'
+              $ref: '#/components/schemas/S3_QuotaValue'
             endpoints:
               readOnly: true
-              oneOf:
-                - $ref: '#/components/schemas/S3_Endpoints'
+              $ref: '#/components/schemas/S3_Endpoints'
     # @DS: reviewed 2024-01-26
     S3_Endpoints:
       type: object
