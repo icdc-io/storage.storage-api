@@ -126,6 +126,9 @@ class IscsiDiskSchema(Schema):
         disk = self.context.get("disk")
         quota = self.context.get("quota")
 
+        if not quota and not disk:
+            return
+
         if not quota and disk:
             quota = IscsiQuotas.query.filter_by(
                 account_id=disk.account_id, pool_id=disk.pool_id
