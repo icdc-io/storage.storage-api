@@ -17,7 +17,7 @@ def start_conn(make_connection):
 
 
 @pytest.fixture(scope="package", autouse=True)
-def seeding(start_conn, seed_account, seed_s3_quota):
+def seeding(start_conn, seed_full_environment):
     yield
 
 

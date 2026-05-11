@@ -51,10 +51,15 @@ roles:
         - update
         - delete
       filters: {}
-    iscsi.configs:
+    iscsi.clusters:
       permissions:
         - list
         - get
+        - create
+        - delete
+      filters: {}
+    iscsi.targets:
+      permissions:
         - create
         - delete
       filters: {}
@@ -88,8 +93,8 @@ roles:
       filters: {}
     iscsi.gateways:
       permissions:
-        - list
         - create
+        - delete
       filters: {}
     pools:
       permissions:
@@ -144,11 +149,14 @@ roles:
         - delete
       filters:
         account_id: account_id
-    iscsi.configs:
+    iscsi.clusters:
       permissions:
         - list
         - get
-        - delete
+      filters:
+        account_id: account_id
+    iscsi.targets:
+      permissions: []
       filters:
         account_id: account_id
     iscsi.disks:
@@ -161,7 +169,8 @@ roles:
         - unassign
         - set-owner
         - from-snapshot
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.clients:
       permissions:
         - list
@@ -179,11 +188,12 @@ roles:
         - update
         - delete
         - rollback
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.gateways:
-      permissions:
-        - list
-      filters: {}
+      permissions: []
+      filters:
+        account_id: account_id
     pools:
       permissions:
         - list
@@ -237,11 +247,14 @@ roles:
         - delete
       filters:
         account_id: account_id
-    iscsi.configs:
+    iscsi.clusters:
       permissions:
         - list
         - get
-        - delete
+      filters:
+        account_id: account_id
+    iscsi.targets:
+      permissions: []
       filters:
         account_id: account_id
     iscsi.disks:
@@ -254,7 +267,8 @@ roles:
         - unassign
         - set-owner
         - from-snapshot
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.clients:
       permissions:
         - list
@@ -272,11 +286,12 @@ roles:
         - update
         - delete
         - rollback
-      filters: {}
+      filters:
+        account_id: account_id
     iscsi.gateways:
-      permissions:
-        - list
-      filters: {}
+      permissions: []
+      filters:
+        account_id: account_id
     pools:
       permissions:
         - list
@@ -325,10 +340,14 @@ roles:
         - list
       filters:
         account_id: account_id
-    iscsi.configs:
+    iscsi.clusters:
       permissions:
         - list
         - get
+      filters:
+        account_id: account_id
+    iscsi.targets:
+      permissions: []
       filters:
         account_id: account_id
     iscsi.disks:
@@ -341,6 +360,7 @@ roles:
         - unassign
         - from-snapshot
       filters:
+        account_id: account_id
         owner: owner
     iscsi.clients:
       permissions:
@@ -359,11 +379,13 @@ roles:
         - update
         - delete
         - rollback
-      filters: {}
+      filters:
+        account_id: account_id
+        owner: owner
     iscsi.gateways:
-      permissions:
-        - list
-      filters: {}
+      permissions: []
+      filters:
+        account_id: account_id
     pools:
       permissions:
         - list

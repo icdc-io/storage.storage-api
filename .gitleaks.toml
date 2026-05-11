@@ -1,7 +1,8 @@
-title = "Storage API gitleaks config"
+# NOTE: extending default set of rules
+[extend]
+useDefault = true
 
 [allowlist]
-description = "Allowlist for Storage API gitleaks config"
 # Regexes to match against commit messages to skip scanning for secrets and other issues with gitleaks
 regexes = [
   '''consts\.CEPH_ACCESS_KEY.*REDACTED''',

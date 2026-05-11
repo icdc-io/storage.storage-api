@@ -5,7 +5,7 @@ import logging as log
 import sys
 from enum import StrEnum
 
-from flask import abort, jsonify
+from flask import abort, jsonify, request
 
 from app import consts
 
@@ -63,22 +63,40 @@ def format_validation_errors(errors: any) -> list[str]:
     return errors_list
 
 
-def parse_jsonapi_filters(args: dict):
-    """
-    Parse args dictionary in JSON:API format for filters
-    """
-    filters = {}
+def parse_jsonapi_filters(args: dict) -> dict:
+    """Parse args dictionary in JSON:API format for filters"""
+    filters = {"base": {}}
+
     for key, value in args.items():
-        if key.startswith("filter[") and key.endswith("]"):
-            field_name = key[7:-1]
-            if "." in field_name:
-                related_object, related_field = field_name.split(".", 1) # e.g. user.name
-                if related_object not in filters:
-                    filters[related_object] = {}
-                filters[related_object][related_field] = value
-            else:
-                filters[field_name] = value
+        if not (key.startswith("filter[") and key.endswith("]")):
+            continue
+        field_name = key[7:-1]
+
+        if "." in field_name:
+            relation, attr = field_name.split(".", 1)
+            filters.setdefault(relation, {})[attr] = value
+        else:
+            filters["base"][field_name] = value
+
     return filters
+
+def is_fake() -> bool:
+    """
+    Determines whether Ceph calls should be skipped.
+
+    Logic:
+    - If the request contains the header `X-Fake-Ceph` with a truthy value
+      (true / yes / 1, case-insensitive), the request is treated as a fake-run
+      and no real Ceph operations will be performed.
+    - Otherwise, Ceph calls will be executed normally.
+    """
+    fake_header = "X-Fake-Ceph"
+    header_val = request.headers.get(fake_header)
+
+    if header_val is None:
+        return False
+
+    return header_val.lower() in ("1", "true", "yes")
 
 
 def dig(self, *keys):

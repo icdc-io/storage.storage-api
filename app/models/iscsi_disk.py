@@ -14,23 +14,23 @@ from sqlalchemy import event
 from app.database import db
 from app.lib.request_utils import is_failed
 from app.loggers import log
-from app.models.iscsi_config import IscsiConfigs
 from app.models.iscsi_quota import IscsiQuotas
 from app.models.model import AbstractModel
 from app.models.relationships import iscsi_assigned_clients
 
 
-class IscsiDisks(db.Model, AbstractModel):
+class IscsiDisks(AbstractModel):
     """
     Define columns in database and methods of model
     """
-
     RESOURCE_NAME = "iscsi.disks"
     id = db.Column(db.Integer, primary_key=True)
     owner = db.Column(db.String(128))
     size_gb = db.Column(db.Integer)
     name = db.Column(db.String(128))
-    config_id = db.Column(db.Integer, db.ForeignKey("iscsi_configs.id"))
+    target_id = db.Column(db.Integer, db.ForeignKey("iscsi_targets.id"))
+
+    target = db.relationship("IscsiTargets", back_populates="disks")
     clients = db.relationship(
         "IscsiClients",
         secondary=iscsi_assigned_clients,
@@ -38,94 +38,84 @@ class IscsiDisks(db.Model, AbstractModel):
         overlaps="client,clients"
     )
     snapshots = db.relationship(
-        "Snapshots", back_populates="disk", cascade="all, delete-orphan"
+        "Snapshots",
+        back_populates="disk",
+        cascade="all, delete-orphan"
     )
+
+    @classmethod
+    def _get_related_filters(cls) -> dict:
+        from app.models.iscsi_cluster import IscsiClusters
+        from app.models.pool import Pools
+
+        return {
+            'cluster': ('target.cluster', IscsiClusters),
+            'pool': ("target.pool", Pools),
+
+            'account_id': ("target.cluster", IscsiClusters, "cluster"),
+        }
 
     def __repr__(self):
         return f"IscsiDisks({self.id}, {self.owner}, {self.size_gb}, \
-            {self.name}, {self.config_id}, {self.clients}, {self.snapshots})"
-
-    def save(self):
-        """
-        INSERT SQL
-        """
-        self._commit(db)
-
-    def remove(self):
-        """
-        DELETE SQL
-        """
-        self._delete(db)
-
-    def serialize(self, hide_params=None):
-        """
-        Serialize model method
-        """
-        super()._serialize()
-        fields = {
-            "id": "self.id",
-            "owner": "self.owner",
-            "size_gb": "self.size_gb",
-            "name": "self.name",
-            "config": "self.config_id",
-            "clients": "self._clients()",
-            "snapshots": "self._snapshots()",
-        }
-        return self.response_filter(fields, hide_params)
-
-    def _clients(self):
-        """
-        Retrieves and serializes IscsiClients associated with the clients attribute.
-        No parameters.
-        Returns a list of serialized IscsiClients with specified attributes.
-        """
-        from app.models.iscsi_client import IscsiClients  # fix circular import
-
-        return [
-            IscsiClients.get_by("id", object.id).serialize(["disks", "account"])
-            for object in self.clients
-        ]
-
-    def _snapshots(self):
-        response = {"count": 0, "storage_gb": 0}
-        for snapshot in self.snapshots:
-            response["count"] += 1
-            response["storage_gb"] += snapshot.size_gb
-
-        return response
+            {self.name}, {self.target_id}, {self.clients}, {self.snapshots})"
 
     def update(self, body):
-        """
-        UPDATE SET SQL
-        """
+        """UPDATE SET SQL"""
         self.size_gb = body.get("size_gb", self.size_gb)
         self.owner = body.get("owner", self.owner)
         self.save()
 
+    @classmethod
+    def schema(cls):
+        return IscsiDiskSchema()
+
+    @classmethod
+    def to_dict_many(cls, disks):
+        return IscsiDiskResponseSchema(many=True).dump(disks)
+
+    @property
+    def account_id(self):
+        return self.target.account.id
+
+    @property
+    def pool_id(self):
+        return self.target.pool_id
+
+    def to_dict(self):
+        """Serialize model"""
+        return IscsiDiskResponseSchema().dump(self)
+
+    def _snapshots(self):
+        """Calculate snapshot statistics for this disk"""
+        response = {"count": 0, "storage_gb": 0}
+        for snapshot in self.snapshots:
+            response["count"] += 1
+            response["storage_gb"] += snapshot.size_gb
+        return response
+
     def get_usage(self):
-        usage = {
+        """Return usage summary for quotas"""
+        return {
             "data_size_gb": self.size_gb,
             "snapshots": len(self.snapshots),
-            "disks": 1
+            "disks": 1,
         }
-        return usage
 
 
 class IscsiDiskSchema(Schema):
     DISK_NAME_PATTERN = r"^[a-z0-9._\-]+$"
 
     id = fields.Int(dump_only=True)
-    owner = fields.String(validate=validate.Email())
-    size_gb = fields.Int(validate=validate.Range(min=0))
+    owner = fields.String(validate=validate.Email(), required=True)
+    size_gb = fields.Int(validate=validate.Range(min=1), required=True)
     name = fields.String(
         validate=validate.And(
             validate.Length(min=1, max=24),
             validate.Regexp(regex=DISK_NAME_PATTERN)
-        )
+        ),
+        required=True
     )
-    config_id = fields.Int()
-    clients = fields.Function(lambda disk: disk._clients(), dump_only=True)
-    snapshots = fields.Function(lambda disk: disk._snapshots(), dump_only=True)
+    target_id = fields.Int(load_only=True, required=True)
 
     @validates_schema
     def validate_quota_exceeding(self, data, **kwargs):
@@ -133,17 +123,19 @@ class IscsiDiskSchema(Schema):
         if size_gb is None:
             return
 
-        config = self.context.get("config")
         disk = self.context.get("disk")
         quota = self.context.get("quota")
 
-        if not quota and config:
-            quota = IscsiQuotas.query.filter_by(
-                account_id=config.account_id, pool_id=config.pool_id
-            ).first()
-
-        if not quota:
+        if not quota and not disk:
             return
+
+        if not quota and disk:
+            quota = IscsiQuotas.query.filter_by(
+                account_id=disk.account_id, pool_id=disk.pool_id
+            ).first()
+        if not quota:
+            raise ValidationError("Quota for this pool not found.")
+
         usage = quota.compute_usage()
         delta = size_gb - (disk.size_gb if disk else 0)
         new_usage = usage["data_size_gb"] + delta
@@ -165,6 +157,12 @@ class IscsiDiskSchema(Schema):
             })
 
 
+class IscsiDiskResponseSchema(IscsiDiskSchema):
+    target = fields.Nested("IscsiTargetSchema", dump_only=True)
+    clients = fields.Nested("IscsiClientSchema", dump_only=True, many=True)
+    snapshots = fields.Nested("SnapshotSchema", dump_only=True, many=True)
+
+
 def before_delete(mapper, connection, disk_instance):
     """
     Listener function called before deleting an IscsiDisks object.
@@ -173,19 +171,18 @@ def before_delete(mapper, connection, disk_instance):
     the iSCSI gateway if possible.
     """
     log.info(f"Deleting disk from cloud gateway (name={disk_instance.name}).")
-
-    config = IscsiConfigs.get_by("id", disk_instance.config_id)
-    if not config:
+    from app.models.iscsi_target import IscsiTargets
+    target = IscsiTargets.get_by("id", disk_instance.target_id)
+    if not target:
         log.warning(
-            f"Config or gateways not found for disk (name={disk_instance.name}). "
+            f"Target or gateways not found for disk (name={disk_instance.name}). "
             "Aborting deletion."
         )
         return
-
     try:
-        iscsi_service = config.iscsi_service()
-    except ValueError as e:
-        abort(400, str(e))
+        iscsi_service = target.iscsi_service()
+    except ValueError:
+        return
 
     for client in disk_instance.clients:
         response = iscsi_service.disconnect_disk(client.iqn, disk_instance.name)

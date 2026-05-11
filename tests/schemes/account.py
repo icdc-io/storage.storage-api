@@ -1,15 +1,15 @@
 from marshmallow import Schema, fields, validate
 
-from tests.schemes.iscsi_quota import IscsiQuotaSchema
-from tests.schemes.s3_quota import S3QuotaSchema
+from tests.schemes.iscsi_quota import IscsiQuotaTestSchema
+from tests.schemes.s3_quota import S3QuotaTestSchema
 
 
 class QuotasSchema(Schema):
-    iscsi = fields.List(fields.List(fields.Nested(IscsiQuotaSchema())))
-    s3 = fields.List(fields.List(fields.Nested(S3QuotaSchema())))
+    iscsi = fields.List(fields.List(fields.Nested(IscsiQuotaTestSchema())))
+    s3 = fields.List(fields.List(fields.Nested(S3QuotaTestSchema())))
 
 
-class AccountResponseSchema(Schema):
+class AccountTestResponseSchema(Schema):
     description = fields.String(allow_none=True)
     id = fields.Integer(required=True)
     name = fields.String(required=True)

@@ -1,31 +1,31 @@
-from marshmallow import Schema, fields, validate
-
-from tests.schemes.pool import PoolSchema
-from tests.schemes.shared import AccountSchema
+from marshmallow import Schema, fields
 
 
-class S3LimitsSchema(Schema):
+class S3LimitsTestSchema(Schema):
     buckets = fields.Integer(required=True)
     data_size_mb = fields.Integer(required=True)
     objects = fields.Integer(required=True)
     users = fields.Integer(required=True)
 
 
-class S3QuotaUsageSchema(Schema):
+class S3QuotaUsageTestSchema(Schema):
     buckets = fields.Integer(required=True)
     data_size_mb = fields.Integer(required=True)
     objects = fields.Integer(required=True)
     users = fields.Integer(required=True)
 
 
-class S3QuotaSchema(Schema):
-    account = fields.Nested(AccountSchema)
+class S3QuotaTestSchema(Schema):
+    id = fields.Integer(required=True)
+    users = fields.Integer(required=True)
     buckets = fields.Integer(required=True)
+    objects = fields.Integer(required=True)
     data_size_mb = fields.Integer(required=True)
     endpoints = fields.Dict(keys=fields.String(), values=fields.String())
-    id = fields.Integer(required=True)
-    limits = fields.Nested(S3LimitsSchema())
-    objects = fields.Integer(required=True)
-    pool = fields.Nested(PoolSchema())
-    usage = fields.Nested(S3QuotaUsageSchema())
-    users = fields.Integer(required=True)
+    limits = fields.Nested(S3LimitsTestSchema)
+    usage = fields.Nested(S3QuotaUsageTestSchema)
+
+
+class S3QuotaResponseTestSchema(S3QuotaTestSchema):
+    account = fields.Nested("AccountTestSchema")
+    pool = fields.Nested("PoolTestSchema")

@@ -8,13 +8,11 @@ from sqlalchemy import event
 from app.database import db
 from app.lib.request_utils import is_failed
 from app.loggers import log
-from app.models.iscsi_config import IscsiConfigs
-from app.models.iscsi_disk import IscsiDiskSchema
 from app.models.model import AbstractModel
 from app.models.relationships import iscsi_assigned_clients
 
 
-class IscsiClients(db.Model, AbstractModel):
+class IscsiClients(AbstractModel):
     """
     Define columns in database and methods of model
     """
@@ -26,6 +24,10 @@ class IscsiClients(db.Model, AbstractModel):
     chap_password = db.Column(db.String(128))
     iqn = db.Column(db.String(128), unique=True)
     owner = db.Column(db.String(128))
+    account = db.relationship(
+        "Accounts",
+        back_populates="iscsi_clients"
+    )
     disks = db.relationship(
         "IscsiDisks",
         secondary=iscsi_assigned_clients,
@@ -33,57 +35,33 @@ class IscsiClients(db.Model, AbstractModel):
         overlaps="client,clients"
     )
 
-    def save(self):
-        """
-        INSERT SQL
-        """
-        self._commit(db)
-
-    def remove(self):
-        """
-        DELETE SQL
-        """
-        self._delete(db)
-
     def __repr__(self):
         return f"IscsiClients({self.id}, {self.account_id}, {self.name}, {self.chap_username}, \
             {self.chap_password}, {self.owner}, {self.disks})"
-
-    def serialize(self, hide_params=None):
-        """
-        Serialize model method
-        """
-        super()._serialize()
-        fields = {
-            "id": "self.id",
-            "name": "self.name",
-            "chap_username": "self.chap_username",
-            "chap_password": "self.chap_password",
-            "owner": "self.owner",
-            "iqn": "self.iqn",
-            "disks": "self._disks()",
-        }
-        return self.response_filter(fields, hide_params)
-
-    def _disks(self):
-        """
-        Return a list of serialized IscsiDisks objects based on the "id" attribute, including "clients" and "config" fields.
-        """
-        from app.models.iscsi_disk import IscsiDisks
-
-        return [
-            IscsiDisks.get_by("id", object.id).serialize(["clients", "config"])
-            for object in self.disks
-        ]
 
     def update(self, body):
         """
         UPDATE SET SQL
         """
+        self.name = body.get("name", self.name)
         self.chap_username = body.get("chap_username", self.chap_username)
         self.chap_password = body.get("chap_password", self.chap_password)
         self.owner = body.get("owner", self.owner)
         self.save()
+
+    @classmethod
+    def schema(cls, partial=False, many=False):
+        return IscsiClientSchema(partial=partial, many=many)
+
+    @classmethod
+    def to_dict_many(cls, clients):
+        return IscsiClientResponseSchema(many=True).dump(clients)
+
+    def to_dict(self):
+        """
+        Serialize model method
+        """
+        return IscsiClientResponseSchema().dump(self)
 
 
 class IscsiClientSchema(Schema):
@@ -94,64 +72,73 @@ class IscsiClientSchema(Schema):
 
     id = fields.Int(dump_only=True)
     name = fields.String(
+        required=True,
         validate=validate.And(
             validate.Length(min=1, max=24),
             validate.Regexp(regex=CLIENT_NAME_PATTERN)
         )
     )
     chap_username = fields.String(
+        required=True,
         validate=validate.And(
             validate.Length(min=8, max=64),
             validate.Regexp(CHAP_USERNAME_PATTERN)
         )
     )
     chap_password = fields.String(
+        required=True,
         validate=validate.And(
             validate.Length(min=12, max=16),
             validate.Regexp(CHAP_PASSWORD_PATTERN)
         )
     )
     iqn = fields.String(
+        required=True,
         validate=validate.And(
             validate.Length(min=1, max=128),
             validate.Regexp(CLIENT_IQN_PATTERN)
         )
     )
-    owner = fields.String(validate=validate.Email())
-    account_id = fields.Int(load_only=True)
-    disks = fields.Nested(IscsiDiskSchema(many=True, exclude=["snapshots", "clients"]), dump_only=True)
+    owner = fields.String(required=True, validate=validate.Email())
+    account_id = fields.Int(required=True, load_only=True)
+
+
+class IscsiClientResponseSchema(IscsiClientSchema):
+    account = fields.Nested("AccountSchema", dump_only=True)
+    disks = fields.Nested("IscsiDiskSchema", dump_only=True, many=True)
 
 
 def before_delete(mapper, connection, client_instance):
     """
     Listener function, called before deleting an IscsiClients object.
     """
-    configs = IscsiConfigs.query.filter_by(account_id=client_instance.account_id).all()
+    from app.models.iscsi_target import IscsiTargets
+    targets = IscsiTargets.get_account_targets(account_id=client_instance.account_id)
 
-    for config in configs:
+    for target in targets:
         try:
-            iscsi_service = config.iscsi_service()
+            iscsi_service = target.iscsi_service()
         except ValueError as e:
             log.warning(
-                f"Skipping target '{config.target_iqn}' — {e}"
+                f"Skipping target '{target.iqn}' — {e}"
             )
             continue
 
         log.info(
-            f"Attempting to delete client '{client_instance.name}' from target '{config.target_iqn}'"
+            f"Attempting to delete client '{client_instance.name}' from target '{target.iqn}'"
         )
 
-        response = iscsi_service.delete_client(client=client_instance)
+        response = iscsi_service.delete_client(client_iqn=client_instance.iqn)
 
         if is_failed(response):
             log.error(
-                f"Failed to delete client '{client_instance.name}' from target '{config.target_iqn}': "
+                f"Failed to delete client '{client_instance.name}' from target '{target.iqn}': "
                 f"{response['data']}"
             )
             abort(response["code"], response["data"])
 
         log.info(
-            f"Client '{client_instance.name}' successfully deleted from target '{config.target_iqn}'"
+            f"Client '{client_instance.name}' successfully deleted from target '{target.iqn}'"
         )
 
 

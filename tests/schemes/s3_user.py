@@ -1,7 +1,7 @@
 from marshmallow import Schema, fields, validate
 
-from tests.schemes.pool import PoolSchema
-from tests.schemes.shared import AccountSchema
+from tests.schemes.pool import PoolTestSchema
+from tests.schemes.shared import AccountTestSchema
 
 
 class KeysS3Schema(Schema):
@@ -32,14 +32,14 @@ class S3UserUsageSchema(Schema):
     objects = fields.Integer(required=True)
 
 
-class S3UserResponseSchema(Schema):
-    account = fields.Nested(AccountSchema, required=True)
+class S3UserTestResponseSchema(Schema):
+    account = fields.Nested(AccountTestSchema, required=True)
     description = fields.String(allow_none=True)
     id = fields.Integer(required=True)
     keys = fields.Nested(KeysSchema(), required=True)
     name = fields.String(required=True)
     owner = fields.String(required=True)
-    pool = fields.Nested(PoolSchema(), required=True)
+    pool = fields.Nested(PoolTestSchema(), required=True)
     status = fields.String(
         required=True,
         validate=validate.OneOf(["active", "locked", "delete"])

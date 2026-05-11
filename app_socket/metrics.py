@@ -9,7 +9,7 @@ from app_socket.utils import consolidate_metrics, get_metric_name
 def send_disk_stats(query):
     try:
         log.debug(f"Collecting disk stats from Prometheus: {CEPH_PROMETHEUS_HOST}")
-        res = _collect_stats(f"http://{CEPH_PROMETHEUS_HOST}/api/v1/metrics", query)
+        res = _collect_stats(f"http://{CEPH_PROMETHEUS_HOST}/metrics", query)
         return {i: res[i] for i in res if i in query} if res else {}
     except ConnectionError:
         log.error("Failed to connect to Prometheus.")

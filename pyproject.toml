@@ -94,6 +94,10 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
+markers = [
+    "ceph: marks tests that perform Ceph operations or require Ceph environment"
+]
+
 filterwarnings = []
 log_cli = true
 log_cli_level = "CRITICAL"

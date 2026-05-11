@@ -1,34 +1,32 @@
-from marshmallow import Schema, fields, validate
-
-from tests.schemes.iscsi_config import ConfigSchema
-from tests.schemes.pool import PoolSchema
-from tests.schemes.shared import AccountSchema
+from marshmallow import Schema, fields
 
 
-class IscsiLimitsSchema(Schema):
-    clients = fields.Integer(required=True)
-    data_size_gb = fields.Integer(required=True)
-    disks = fields.Integer(required=True)
-    snapshots = fields.Integer(required=True)
+class IscsiLimitsTestSchema(Schema):
+    clients = fields.Int(required=True)
+    data_size_gb = fields.Int(required=True)
+    disks = fields.Int(required=True)
+    snapshots = fields.Int(required=True)
 
 
-class IscsiQuotaUsageSchema(Schema):
-    clients = fields.Integer(required=True)
-    data_size_gb = fields.Integer(required=True)
-    disks = fields.Integer(required=True)
-    snapshots = fields.Integer(required=True)
-    snapshots_size_gb = fields.Integer(required=True)
+class IscsiQuotaUsageTestSchema(Schema):
+    clients = fields.Int(required=True)
+    data_size_gb = fields.Int(required=True)
+    disks = fields.Int(required=True)
+    snapshots = fields.Int(required=True)
+    snapshots_size_gb = fields.Int(required=True)
 
 
-class IscsiQuotaSchema(Schema):
-    account = fields.Nested(AccountSchema)
-    account_id = fields.Integer(required=True)
-    clients = fields.Integer(required=True)
-    configs = fields.List(fields.Nested(ConfigSchema()), required=False)
-    data_size_gb = fields.Integer(required=True)
-    disks = fields.Integer(required=True)
-    id = fields.Integer(required=True)
-    limits = fields.Nested(IscsiLimitsSchema())
-    pool = fields.Nested(PoolSchema())
-    snapshots = fields.Integer(required=True)
-    usage = fields.Nested(IscsiQuotaUsageSchema())
+class IscsiQuotaTestSchema(Schema):
+    id = fields.Int(required=True)
+    clients = fields.Int(required=True)
+    data_size_gb = fields.Int(required=True)
+    disks = fields.Int(required=True)
+    snapshots = fields.Int(required=True)
+
+
+class IscsiQuotaResponseTestSchema(IscsiQuotaTestSchema):
+    account = fields.Nested("AccountTestSchema", required=True)
+    pool = fields.Nested("PoolTestSchema", required=True)
+    limits = fields.Nested(IscsiLimitsTestSchema, required=True)
+    usage = fields.Nested(IscsiQuotaUsageTestSchema, required=True)
+    target = fields.Dict(required=True)

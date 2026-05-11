@@ -32,24 +32,22 @@ class Iscsi:
 
     def __init__(
             self,
-            gateway=None,
-            config=None,
-            target_iqn=None,
+            target=None,
             port=5001 # socat proxy to access API without IP allowlist
     ):
-        self.gateway = gateway
-        self.config = config
-        self.target_iqn = config.target_iqn if config else target_iqn
+        self.target = target
+        self.gateway = target.gateway
+        self.target_iqn = target.iqn
         self.pool_name = self._get_pool_name()
         self.account_name = self._get_account_name()
         self.port = port
 
     def _get_account_name(self) -> str:
-        account = Accounts.get_by("id", self.config.account_id)
+        account = Accounts.get_by("id", self.target.cluster.account_id)
         return account.name
 
     def _get_pool_name(self) -> str:
-        pool = Pools.get_by("id", self.config.pool_id)
+        pool = self.target.pool
         return f"{pool.type}-{pool.klass}"
 
     def get_image_name(self, disk_name) -> str:
@@ -121,71 +119,6 @@ class Iscsi:
 
         return status_codes.get(response.status_code)(message)
 
-    def assign_gateway(self) -> dict:
-        """
-        Ensure that an iSCSI target is created and assigned to a portal.
-
-        Workflow:
-        1. Verify whether the iSCSI target already exists.
-        2. If it does not exist, create it.
-        3. Assign the portal to the target.
-        4. If binding fails and the target was newly created, roll back by deleting the target.
-
-        Returns:
-            dict: API response of the failing step, or a success message.
-        """
-        log.info(f"Starting configuration of iSCSI target {self.target_iqn}")
-
-        target_created = False  # Flag indicating if the target was newly created in this method
-
-        # step 1: check the target existing
-        if is_failed(self.get_target()):
-            # step 2: create the target
-            response = self.create_target()
-            if is_failed(response):
-                return response
-            target_created = True
-
-        # step 3: assign the portal to the target
-        response = self.assign_portal_to_target()
-        if (response.get('code') == 400) and ("Gateway already exists" in response.get('data', '')):
-            log.info(f"iSCSI target {self.target_iqn} already configured with portal {self.gateway.name}. Skipping")
-        else:
-            if is_failed(response):
-                # step 4: rollback on failure
-                if target_created:
-                    self.delete_target()
-                return response
-
-        log.info(f"Successfully configured iSCSI target {self.target_iqn} with portal {self.gateway.name}")
-
-        return ok("Target configured successfully")
-
-    def create_target(self) -> dict:
-        """
-        Create iSCSI target
-        """
-        request_url = f"/target/{self.target_iqn}"
-        log.info(f"Create iSCSI target with target_iqn: {self.target_iqn}")
-
-        response = self.send_request(methods.PUT, request_path=request_url)
-
-        return response
-
-    def delete_target(self) -> dict:
-        """
-        Delete iSCSI target
-        """
-        if is_failed(self.get_target()):
-            return ok("Target already deleted.")
-
-        request_url = f"/target/{self.target_iqn}"
-        log.info(f"Delete iSCSI target with target_iqn: {self.target_iqn}")
-
-        response = self.send_request(methods.DELETE, request_path=request_url)
-
-        return response
-
     def get_target(self) -> dict:
         """
         Get iSCSI target
@@ -207,29 +140,6 @@ class Iscsi:
             return ok(self.target_iqn)
         else:
             return not_found("Target with such iqn not found.")
-
-    def assign_portal_to_target(self) -> dict:
-        """
-        Assign an iSCSI portal on the gateway to the iSCSI target.
-        """
-        request_url = f"/gateway/{self.target_iqn}/{self.gateway.name}"
-        log.info(f"Assign iSCSI portal {self.gateway.name} to target {self.target_iqn}")
-
-        body = {"ip_address": self.gateway.portal_ip_address}
-        response = self.send_request(methods.PUT, request_path=request_url, body=body)
-
-        return response
-
-    def unassign_portal_from_target(self) -> dict:
-        """
-        Unassign an iSCSI portal on the gateway from the target.
-        """
-        request_url = f"/gateway/{self.target_iqn}/{self.gateway.name}"
-        log.info(f"Delet iSCSI portal {self.gateway.name} to {self.target_iqn}")
-
-        response = self.send_request("delete", request_path=request_url)
-
-        return response
 
     def create_disk(self, body: dict) -> dict:
         """
@@ -447,7 +357,7 @@ class Iscsi:
         )
 
         if is_failed(response):
-            self.delete_client(client)
+            self.delete_client(client.iqn)
 
         return response
 
@@ -484,23 +394,23 @@ class Iscsi:
 
         return response
 
-    def delete_client(self, client: IscsiClients) -> dict:
+    def delete_client(self, client_iqn: str) -> dict:
         """
         Delete an iSCSI client from the target.
 
         Args:
-            client (IscsiClients): The client object to be deleted.
+            client_iqn (str): The client object iqn to be deleted.
 
         Returns:
             dict: API response indicating success or an error message.
         """
-        if is_failed(self.get_client(client.iqn)):
-            log.info(f"Client '{client.iqn}' is already deleted from target '{self.target_iqn}'")
+        if is_failed(self.get_client(client_iqn)):
+            log.info(f"Client '{client_iqn}' is already deleted from target '{self.target_iqn}'")
             return ok("Client already deleted.")
 
-        request_url = f"/client/{self.target_iqn}/{client.iqn}"
+        request_url = f"/client/{self.target_iqn}/{client_iqn}"
 
-        log.info(f"Deleting client '{client.iqn}' from target '{self.target_iqn}'")
+        log.info(f"Deleting client '{client_iqn}' from target '{self.target_iqn}'")
 
         response = self.send_request(
             method=methods.DELETE,
@@ -575,12 +485,14 @@ class Iscsi:
             dict: API response indicating success or error message.
         """
         image_name = self.get_image_name(disk_name)
+        client_disks = self.get_client_disks(client_iqn)
 
         log.info(f"Disconnecting image '{image_name}' from client '{client_iqn}'")
-        if is_failed(self.get_disk(image_name)) or image_name not in self.get_client_disks(client_iqn):
+        if is_failed(self.get_disk(image_name)) or image_name not in client_disks:
             log.info(f"Disk '{image_name}' is already unassigned from client '{client_iqn}'")
             return ok("Disk already unassigned.")
 
+        client_disks.remove(image_name)
         request_url = f"/clientlun/{self.target_iqn}/{client_iqn}"
         data = {"disk": image_name}
 
@@ -589,6 +501,9 @@ class Iscsi:
             request_path=request_url,
             body=data,
         )
+
+        if len(client_disks) == 0:
+            self.delete_client(client_iqn)
 
         return response
 

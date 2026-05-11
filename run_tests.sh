@@ -8,12 +8,11 @@ set -o pipefail  # Prevent errors in a pipeline from being masked
 IMAGE_NAME="$1"
 NETWORK_NAME="storage-net"
 DB_CONTAINER="storage-postgres"
-APP_CONTAINER="storage"
-DB_IMAGE="docker.io/library/postgres:16"
+APP_CONTAINER="storage-api-tests"
+DB_IMAGE="${BASE_REGISTRY}/postgres:16"
 DB_PORT=5432
 MAX_ATTEMPTS=10
 SLEEP_INTERVAL=5
-CR_SERVER="artifactory.icz.icdc.io/icdc-docker-proxy"
 
 export DATABASE_HOST="$DB_CONTAINER"
 export DATABASE_PORT="$DB_PORT"
@@ -71,7 +70,6 @@ done
 
 log "Database is available!"
 
-# Run the application container and execute tests
 log "Starting application container: $APP_CONTAINER and running tests"
 if ! podman run --rm --name "$APP_CONTAINER" \
   --env DATABASE_USERNAME="${DATABASE_USERNAME}" \
@@ -83,6 +81,8 @@ if ! podman run --rm --name "$APP_CONTAINER" \
   --env CEPH_ACCESS_KEY="${CEPH_ACCESS_KEY}" \
   --env CEPH_SECRET_KEY="${CEPH_SECRET_KEY}" \
   --env CEPH_SSH_KEY="${CEPH_SSH_KEY}" \
+  --env FIXTURES_FILE="/tmp/fixtures.yaml" \
+  -v "${FIXTURES_FILE}:/tmp/fixtures.yaml:z" \
   -v "${CEPH_SSH_KEYFILE}:/.ssh/id_ed25519:ro,z" \
   -v ./htmlcov:/usr/src/app/htmlcov:z \
   -v ./report.xml:/usr/src/app/report.xml:z \
@@ -90,10 +90,5 @@ if ! podman run --rm --name "$APP_CONTAINER" \
   "$IMAGE_NAME" sh -c "pytest -s -v --setup-show --junitxml=/usr/src/app/report.xml"; then
   error "Tests failed" 4
 fi
-
-# Stop and remove all running containers
-log "Stopping and removing all running containers"
-podman stop -a || true
-podman rm -a || true
 
 log "Tests completed successfully!"

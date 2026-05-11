@@ -4,28 +4,28 @@ from sqlalchemy.orm import selectinload
 
 from app.lib.request_utils import abort_detailed, parse_jsonapi_filters, request_json
 from app.models.account import Accounts
-from app.models.s3_quota import S3Quotas, S3QuotaSchema
+from app.models.s3_quota import S3QuotaResponseSchema, S3Quotas, S3QuotaSchema
+from app.models.s3_user import S3Users
 
 
 def index(subject):
-    schema = S3QuotaSchema(partial=True)
     parsed_filters = parse_jsonapi_filters(request.args)
     try:
-        filters = schema.load(parsed_filters)
+        quotas = S3Quotas.filtered(subject, parsed_filters).options(selectinload(S3Quotas.pool)) \
+            .except_(S3Quotas.get_default_limitsets()).all()
     except ValidationError as e:
         abort_detailed(400, "Invalid query parameters.", e.messages)
-    quotas = S3Quotas.filtered(subject).options(selectinload(S3Quotas.pool)) \
-             .filter_by(**filters).except_(S3Quotas.get_default_limitsets()).all()
-    return jsonify(S3QuotaSchema(many=True).dump(quotas))
+    return jsonify(S3QuotaResponseSchema(many=True).dump(quotas))
 
 
 def create(subject, body=None):
     if not body:
         body = request_json(request)
-    account = Accounts.filtered(subject).filter_by(name=body["account_name"]).first()
+    account_name = body.pop("account_name", subject.account_name)
+    account = Accounts.filtered(subject).filter_by(name=account_name).first()
     if not account:
         abort(404, "Account with this name not found.")
-    body.pop("account_name")
+    body["account_id"] = account.id
     try:
         validated_body = S3QuotaSchema().load(body)
     except ValidationError as e:
@@ -37,16 +37,17 @@ def create(subject, body=None):
     account.s3_quotas.append(quota)
     account.save()
 
-    return S3QuotaSchema().dump(quota)
+    return quota.to_dict()
 
 
-def update(subject, quota_id):
-    body = request_json(request)
+def update(subject, quota_id, body=None):
+    if not body:
+        body = request_json(request)
     quota = S3Quotas.filtered(subject).filter_by(id=quota_id).first()
     if not quota:
         abort(404, "Quota with this ID not found or you haven't access for it.")
     usage = quota.compute_usage()
-    schema = S3QuotaSchema(context={"usage": usage})
+    schema = S3QuotaSchema(context={"usage": usage}, partial=True)
     try:
         validated_body = schema.load(body | {"pool_id": quota.pool_id})
     except ValidationError as e:
@@ -54,13 +55,16 @@ def update(subject, quota_id):
 
     quota.update(validated_body)
 
-    return S3QuotaSchema().dump(quota)
+    return quota.to_dict()
 
 
 def destroy(subject, quota_id):
     quota = S3Quotas.filtered(subject).filter_by(id=quota_id).first()
     if not quota:
         abort(404, "Quota with this ID not found or you haven't access for it.")
-    quota.destroy()
 
+    if S3Users.query.filter_by(account_id=quota.account_id, pool_id=quota.pool_id).first():
+        abort(409, "S3 users must be deleted first.")
+
+    quota.destroy()
     return jsonify("No content.")
