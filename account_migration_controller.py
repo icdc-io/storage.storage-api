@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 
 import boto3
+from app.lib.ceph_utils import ceph_connection as ceph
 from migration_cli import ACCESS_KEY, HOST, S3_DEFAULT_CLASS, SECRET_KEY
 
 from app.controllers import (
@@ -10,7 +11,6 @@ from app.controllers import (
     iscsi_controller,
     pools_controller,
 )
-from app.lib.ceph_utils import ceph_connection as ceph
 from app.lib.request_utils import log
 from app.models.account import Accounts
 
