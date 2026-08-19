@@ -10,7 +10,6 @@ from marshmallow import ValidationError
 from app.lib.request_utils import (
     abort_detailed,
     is_failed,
-    is_fake,
     log,
     no_content,
     parse_jsonapi_filters,
@@ -20,7 +19,7 @@ from app.lib.request_utils import (
 from app.models.account import Accounts
 from app.models.iscsi_client import IscsiClients, IscsiClientSchema
 from app.models.iscsi_cluster import IscsiClusters, IscsiClusterSchema
-from app.models.iscsi_disk import IscsiDisks, IscsiDiskSchema
+from app.models.iscsi_disk import IscsiDiskResponseSchema, IscsiDisks, IscsiDiskSchema
 from app.models.iscsi_gateway import IscsiGateways, IscsiGatewaySchema
 from app.models.iscsi_quota import IscsiQuotas
 from app.models.iscsi_target import IscsiTargets
@@ -239,26 +238,25 @@ def create_disk(subject):
         abort_detailed(400, "Invalid parameters.", e.messages)
     args.update(body=validated_body)
 
-    if not is_fake():
-        try:
-            iscsi_service = target.iscsi_service()
-        except ValueError as e:
-            abort(400, str(e))
+    try:
+        iscsi_service = target.iscsi_service()
+    except ValueError as e:
+        abort(400, str(e))
 
-        # Select appropriate service method based on mode
-        iscsi_service_method = (
-            iscsi_service.new_disk_from_snapshot if snapshot_id
-            else iscsi_service.create_disk
-        )
+    # Select appropriate service method based on mode
+    iscsi_service_method = (
+        iscsi_service.new_disk_from_snapshot if snapshot_id
+        else iscsi_service.create_disk
+    )
 
-        response = iscsi_service_method(**args)
-        if is_failed(response):
-            abort(response["code"], response["data"])
+    response = iscsi_service_method(**args)
+    if is_failed(response):
+        abort(response["code"], response["data"])
 
     disk = IscsiDisks(**validated_body)
     disk.save()
 
-    return IscsiDiskSchema().dump(disk)
+    return IscsiDiskResponseSchema().dump(disk)
 
 
 def update_disk(subject, disk_id):
@@ -280,7 +278,7 @@ def update_disk(subject, disk_id):
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters.", e.messages)
 
-    if not is_fake() and "size_gb" in validated_body:
+    if "size_gb" in validated_body:
         try:
             iscsi_service = disk.target.iscsi_service()
         except ValueError as e:
@@ -380,16 +378,15 @@ def update_client(subject, client_id):
     if body.get("owner", None) and "set-owner" not in subject.policy["iscsi.clients"]["permissions"]:
         del validated_body["owner"]  # pylint: disable=multiple-statements
 
-    if not is_fake():
-        for disk in client.disks:
-            try:
-                iscsi_service = disk.target.iscsi_service()
-            except ValueError as e:
-                abort(400, str(e))
+    for disk in client.disks:
+        try:
+            iscsi_service = disk.target.iscsi_service()
+        except ValueError as e:
+            abort(400, str(e))
 
-            response = iscsi_service.update_client(client, validated_body)
-            if is_failed(response):
-                abort(response.get("code", 500), response.get("data", "Internal server error."))
+        response = iscsi_service.update_client(client, validated_body)
+        if is_failed(response):
+            abort(response.get("code", 500), response.get("data", "Internal server error."))
 
     client.update(validated_body)
     return client.to_dict()
@@ -449,15 +446,14 @@ def disks_to_client(subject, client_id):
 
         _check_clients_quota_exceeds(disk.target)
 
-        if not is_fake():
-            try:
-                iscsi_service = disk.target.iscsi_service()
-            except ValueError as e:
-                abort(400, str(e))
-
-            response = iscsi_service.assign_disk(client, disk.name)
-            if is_failed(response):
-                abort(response["code"], response["data"])
+        try:
+            iscsi_service = disk.target.iscsi_service()
+        except ValueError as e:
+            abort(400, str(e))
+        
+        response = iscsi_service.assign_disk(client, disk.name)
+        if is_failed(response):
+            abort(response["code"], response["data"])
 
         client.disks.append(disk)
         client.save()
@@ -484,16 +480,15 @@ def unassign_client_disk(subject, client_id, disk_id):
     disk = IscsiDisks.filtered(subject).filter_by(id=disk_id).first()
     if not disk:
         abort(404, "Disk with this ID not found or you don't have permission.")
-    if not is_fake():
-        try:
-            iscsi_service = disk.target.iscsi_service()
-        except ValueError as e:
-            abort(400, str(e))
+    try:
+        iscsi_service = disk.target.iscsi_service()
+    except ValueError as e:
+        abort(400, str(e))
 
-        response = iscsi_service.disconnect_disk(client.iqn, disk.name)
+    response = iscsi_service.disconnect_disk(client.iqn, disk.name)
 
-        if is_failed(response):
-            abort(response["code"], response["data"])
+    if is_failed(response):
+        abort(response["code"], response["data"])
 
     if disk in client.disks:
         client.disks.remove(disk)

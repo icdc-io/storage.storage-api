@@ -42,7 +42,7 @@ class S3UserTestResponseSchema(Schema):
     pool = fields.Nested(PoolTestSchema(), required=True)
     status = fields.String(
         required=True,
-        validate=validate.OneOf(["active", "locked", "delete"])
+        validate=validate.OneOf(["active", "locked", "deleted", "unknown"])
     )
     usage = fields.Nested(S3UserUsageSchema(), required=True)
-    user_quota = fields.Nested(S3UserQuotaSchema(), required=True)
+    quota = fields.Nested(S3UserQuotaSchema(), required=True)

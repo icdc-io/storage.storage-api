@@ -24,8 +24,8 @@ class Bucket:
 
 
 class BucketQuotaSchema(Schema):
-    data_size_mb = fields.Int(min=0)
-    objects = fields.Int(min=0)
+    data_size_mb = fields.Int(validate=validate.Range(min=-1))
+    objects = fields.Int(validate=validate.Range(min=-1))
 
 
 class BucketSchema(Schema):

@@ -422,6 +422,12 @@ class CephService:
             usage=usage_data
         )
 
+    def _normalize_bucket_state(self, bucket_data: Any) -> Bucket:
+        if isinstance(bucket_data, Bucket):
+            return bucket_data
+
+        return self._assemble_bucket_state(bucket_data)
+
     def list_s3_buckets(self, s3_users: list, filters: dict = None) -> list:
         """
         Lists all S3 buckets for a given list of users, with optional filtering.
@@ -441,7 +447,7 @@ class CephService:
 
         buckets = []
         for info in raw_buckets:
-            bucket = self._assemble_bucket_state(info)
+            bucket = self._normalize_bucket_state(info)
 
             if bucket.user_name in user_names:
                 if not filters or self._apply_filters(bucket, filters):

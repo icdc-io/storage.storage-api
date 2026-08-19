@@ -87,7 +87,7 @@ if ! podman run --rm --name "$APP_CONTAINER" \
   -v ./htmlcov:/usr/src/app/htmlcov:z \
   -v ./report.xml:/usr/src/app/report.xml:z \
   --network="$NETWORK_NAME" \
-  "$IMAGE_NAME" sh -c "pytest -s -v --setup-show --junitxml=/usr/src/app/report.xml"; then
+  "$IMAGE_NAME" sh -c "pytest -s -vv --setup-show --junitxml=/usr/src/app/report.xml"; then
   error "Tests failed" 4
 fi
 

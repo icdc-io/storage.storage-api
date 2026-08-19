@@ -137,7 +137,11 @@ class S3UserSchema(Schema):
     account = fields.Nested(AccountSchema(), dump_only=True)
     pool = fields.Nested(PoolSchema(), dump_only=True)
 
-    status = fields.String(serialize=lambda s3user: s3user.status, deserialize=lambda value: value)
+    status = fields.String(
+        serialize=lambda s3user: s3user.status,
+        deserialize=lambda value: value,
+        validate=validate.OneOf([status.value for status in S3UserStatus]),
+    )
     quota = fields.Dict(serialize=lambda s3user: s3user.quota, deserialize=lambda value: value, required=True)
     usage = fields.Dict(dump_only=True)
     keys = fields.Dict(dump_only=True)
