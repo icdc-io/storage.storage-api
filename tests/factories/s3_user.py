@@ -1,36 +1,70 @@
 import factory
 
-from tests.factories.base import BasePayloadFactory
+from app.models.s3_user import S3Users, S3UserStatus
+from tests.factories.base import BaseFactory, BasePayloadFactory
+
+ACTIVE_USER_QUOTA = {"data_size_mb": 1, "objects": 1, "buckets": 1}
+EMPTY_USER_USAGE = {"data_size_mb": 0, "objects": 0, "buckets": 0}
+DELETED_USER_QUOTA = EMPTY_USER_USAGE
+TYPICAL_USER_QUOTA = {"data_size_mb": 10, "objects": 10, "buckets": 10}
+OVERSIZED_USER_QUOTA = {"data_size_mb": 10000, "buckets": 10000, "objects": 10000}
+
+
+def build_user_keys(user_name):
+    return {
+        "s3": {
+            "access_key": "fake_access_key",
+            "secret_key": "fake_secret_key",
+            "user": user_name,
+        },
+        "swift": {
+            "secret_key": "fake_swift_secret_key",
+            "user": f"{user_name}:swift",
+        },
+    }
+
+
+def build_user_state(user_name, *, quota=None, usage=None, status=None, keys=None):
+    return {
+        "status": status or S3UserStatus.ACTIVE,
+        "quota": quota or ACTIVE_USER_QUOTA.copy(),
+        "usage": usage or EMPTY_USER_USAGE.copy(),
+        "keys": keys or build_user_keys(user_name),
+    }
+
+
+class S3UserFactory(BaseFactory):
+    class Meta:
+        model = S3Users
+
+    class Params:
+        account_name = "test-account"
+
+    description = factory.Sequence(lambda n: f"s3 user {n}")
+    owner = factory.Sequence(lambda n: f"s3_owner{n}@example.com")
+    name = factory.LazyAttributeSequence(
+        lambda obj, n: f"{obj.account_name}$user_{n}"
+    )
+    account_id: int
+    pool_id: int
 
 
 class S3UserCreatePayloadFactory(BasePayloadFactory):
-    """Payload factories for creating S3 users (no DB insert)."""
     name = factory.Sequence(lambda n: f"testing_{n + 200}")
     owner = "owner@example.com"
     account_name = None
+    account_id = None
     pool_id = None
-    quota = {"data_size_mb": 1, "buckets": 1, "objects": 1}
+    quota = factory.LazyFunction(lambda: ACTIVE_USER_QUOTA.copy())
 
     class Params:
-        # Common quota variants for testing
-        good_quota = {"data_size_mb": 4, "buckets": 4, "objects": 4}
-        bad_quota = {"data_size_mb": 10000}
+        typical_quota = factory.Trait(
+            quota=factory.LazyFunction(lambda: TYPICAL_USER_QUOTA.copy()),
+        )
 
 
 class S3UserUpdatePayloadFactory(BasePayloadFactory):
-    """Payload factories for updating S3 users."""
     owner = None
     status = None
     description = None
     quota = None
-
-    class Params:
-        # Reusable traits for specific scenarios
-        lock = factory.Trait(status="lock")
-        unlock = factory.Trait(status="unlock")
-        good = factory.Trait(quota={"data_size_mb": 3, "buckets": 3, "objects": 3})
-        use_default = factory.Trait(
-            owner="new_owner@example.com",
-            description="new description",
-            quota={"data_size_mb": 3, "buckets": 3, "objects": 3},
-        )

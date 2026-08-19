@@ -3,7 +3,7 @@ Abstract model
 """
 
 import marshmallow
-from marshmallow import ValidationError, INCLUDE
+from marshmallow import INCLUDE, ValidationError
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm import query as sql_query
 

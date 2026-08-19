@@ -1,21 +1,19 @@
-import os
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Tuple
 
 import pytest
-import yaml
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from tests.api import Api
 from tests.factories.account import AccountFactory
-from tests.factories.iscsi_client import IscsiAssignedClientFactory, IscsiClientFactory
+from tests.factories.iscsi_client import IscsiClientFactory
 from tests.factories.iscsi_cluster import IscsiClusterFactory
-from tests.factories.iscsi_disk import IscsiDiskCephFactory, IscsiDiskFactory
+from tests.factories.iscsi_disk import IscsiDiskFactory
 from tests.factories.iscsi_gateway import IscsiGatewayFactory
 from tests.factories.iscsi_quota import IscsiQuotaFactory
 from tests.factories.iscsi_targets import IscsiTargetFactory
 from tests.factories.s3_quota import S3QuotaFactory
+from tests.factories.s3_user import S3UserFactory
+from tests.support.api_client import Api
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -59,14 +57,13 @@ def make_connection(app):
         for factory in [
             AccountFactory,
             S3QuotaFactory,
+            S3UserFactory,
             IscsiClusterFactory,
             IscsiQuotaFactory,
             IscsiTargetFactory,
             IscsiGatewayFactory,
             IscsiDiskFactory,
-            IscsiDiskCephFactory,
             IscsiClientFactory,
-            IscsiAssignedClientFactory
         ]:
             factory._meta.sqlalchemy_session = db.session
 
@@ -80,92 +77,23 @@ def make_connection(app):
     return SimpleNamespace(start_connection=start_connection)
 
 
-class ObjectCleaner:
-    def __init__(self):
-        self.to_delete = []
-
-    def delete(self, model, objects=None, ids=None, immediate=False):
-        if ids:
-            if isinstance(ids, (int, str)):
-                obj = model.query.filter_by(id=ids).first()
-                if obj:
-                    objects = [obj]
-            else:
-                objects = model.query.filter(model.id.in_(ids)).all()
-        elif objects:
-            if isinstance(objects, model):
-                objects = [objects]
-            objects = objects or []
-
-        if not objects:
-            return
-
-        if immediate:
-            for obj in objects:
-                obj.destroy()
-            return
-
-        self.to_delete.extend(objects)
-
-    def finalize(self):
-        for obj in self.to_delete:
-            obj.destroy()
-
-
-@pytest.fixture
-def cleaner():
-    c = ObjectCleaner()
-    yield c
-    c.finalize()
-
-
-def get_environment_data(filename: str = None) -> dict:
-    """Load YAML config for test environment."""
-    env_file = os.getenv("FIXTURES_FILE")
-    path_str = env_file or filename
-
-    path = Path(path_str)
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {path}")
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
-
-
-@pytest.fixture(scope="session")
-def env_data() -> dict:
-    """Return parsed environment config."""
-    return get_environment_data()
-
-
-@pytest.fixture
-def ceph_cleanup_registry():
-    """Register cleanup callbacks and run them in reverse after test."""
-    undos: list[Callable[[], None]] = []
-    try:
-        yield undos
-    finally:
-        for undo in reversed(undos):
-            try:
-                undo()
-            except Exception:
-                pass
-
-
-@pytest.fixture(scope="package")
-def ceph_cleanup_registry_scope_package():
-    """Same as above but package-scoped."""
-    undos: list[Callable[[], None]] = []
-    try:
-        yield undos
-    finally:
-        for undo in reversed(undos):
-            try:
-                undo()
-            except Exception:
-                pass
-
-
 @pytest.fixture(scope="session")
 def api(flask_client) -> Api:
     """Return API wrapper for making HTTP requests."""
     return Api(flask_client)
+
+
+@pytest.fixture(scope="package")
+def s3_pools():
+    """Return all S3 pools keyed by klass."""
+    from tests.builders.account_namespace import load_pools
+
+    yield load_pools("s3")
+
+
+@pytest.fixture(scope="package")
+def iscsi_pools():
+    """Return all iSCSI pools keyed by klass."""
+    from tests.builders.account_namespace import load_pools
+
+    yield load_pools("iscsi")

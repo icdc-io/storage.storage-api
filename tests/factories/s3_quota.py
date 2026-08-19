@@ -11,38 +11,81 @@ class S3QuotaFactory(BaseFactory):
 
     account_id: int
     pool_id: int
-    users: int
-    buckets: int
-    objects: int
-    data_size_mb: int
+    users = 10_000
+    buckets = 10_000
+    objects = 10_000
+    data_size_mb = 10_000
 
     class Params:
-        # Default test values
-        default = factory.Trait(
+        typical_limits = factory.Trait(
+            users=10,
+            buckets=10,
+            objects=10,
+            data_size_mb=10,
+        )
+        constrained_limits = factory.Trait(
             users=5,
             buckets=10,
             objects=20,
             data_size_mb=100,
+        )
+        minimal_limits = factory.Trait(
+            users=1,
+            buckets=1,
+            objects=1,
+            data_size_mb=1,
         )
 
 
 class S3QuotaPayloadFactory(BasePayloadFactory):
-    """Payload factories for API (no DB insert)."""
-    users: int
-    buckets: int
-    objects: int
-    data_size_mb: int
+    account_name = None
+    pool_id = None
+    users = 10
+    buckets = 10
+    objects = 10
+    data_size_mb = 10
 
     class Params:
-        # Default payload values
-        default = factory.Trait(
+        typical_limits = factory.Trait(
+            users=10,
+            buckets=10,
+            objects=10,
+            data_size_mb=10,
+        )
+        constrained_limits = factory.Trait(
             users=5,
             buckets=10,
             objects=20,
             data_size_mb=100,
         )
-        # Minimum values for validation tests
-        min = factory.Trait(
+        minimal_limits = factory.Trait(
+            users=1,
+            buckets=1,
+            objects=1,
+            data_size_mb=1,
+        )
+
+
+class S3QuotaUpdatePayloadFactory(BasePayloadFactory):
+    users = None
+    buckets = None
+    objects = None
+    data_size_mb = None
+
+    class Params:
+        constrained_limits = factory.Trait(
+            users=5,
+            buckets=10,
+            objects=20,
+            data_size_mb=100,
+        )
+        increased_limits = factory.Trait(
+            users=6,
+            buckets=11,
+            objects=21,
+            data_size_mb=101,
+        )
+        minimal_limits = factory.Trait(
             users=1,
             buckets=1,
             objects=1,

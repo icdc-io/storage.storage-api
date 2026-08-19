@@ -1,7 +1,7 @@
 import factory
 
 from app.models.iscsi_quota import IscsiQuotas
-from tests.factories.base import BaseFactory, DictFactory
+from tests.factories.base import BaseFactory, BasePayloadFactory
 
 
 class IscsiQuotaFactory(BaseFactory):
@@ -11,24 +11,29 @@ class IscsiQuotaFactory(BaseFactory):
 
     account_id: int
     pool_id: int
-    data_size_gb: int
-    snapshots: int
-    clients: int
-    disks: int
+    data_size_gb = 10_000
+    snapshots = 10_000
+    clients = 10_000
+    disks = 10_000
 
     class Params:
-        # Default test values
-        default = factory.Trait(
+        typical_limits = factory.Trait(
+            data_size_gb=10,
+            snapshots=10,
+            clients=10,
+            disks=10,
+        )
+        constrained_limits = factory.Trait(
             data_size_gb=20,
             snapshots=6,
             clients=4,
             disks=10,
         )
-        big = factory.Trait(
-            data_size_gb=10000,
-            snapshots=10000,
-            clients=10000,
-            disks=10000,
+        minimal_limits = factory.Trait(
+            data_size_gb=1,
+            snapshots=1,
+            clients=1,
+            disks=1,
         )
 
 
@@ -37,27 +42,38 @@ def get_limitset(pool_id: int):
     return IscsiQuotas.get_pool_limitset(pool_id)
 
 
-class IscsiQuotaPayload(DictFactory):
-    """Payload factories for API (no DB insert)."""
-    account_name: int
-    pool_id: int
-    data_size_gb: int
-    snapshots: int
-    clients: int
-    disks: int
+class IscsiQuotaPayload(BasePayloadFactory):
+    account_name = None
+    pool_id = None
+    target = None
+    data_size_gb = 10
+    snapshots = 10
+    clients = 10
+    disks = 10
 
     class Params:
-        # Default payload values
-        default = factory.Trait(
+        typical_limits = factory.Trait(
+            data_size_gb=10,
+            snapshots=10,
+            clients=10,
+            disks=10,
+        )
+        constrained_limits = factory.Trait(
             data_size_gb=20,
             snapshots=6,
             clients=4,
             disks=10,
         )
-        # Minimum values for validation tests
-        min = factory.Trait(
+        minimal_limits = factory.Trait(
             data_size_gb=1,
             snapshots=1,
             clients=1,
             disks=1,
         )
+
+
+class IscsiQuotaUpdatePayload(BasePayloadFactory):
+    data_size_gb = None
+    snapshots = None
+    clients = None
+    disks = None
