@@ -236,7 +236,7 @@ def create_disk(subject):
         }).load(body)
     except ValidationError as e:
         abort_detailed(400, "Invalid parameters.", e.messages)
-    args.update(body=validated_body)
+    args.update(body=validated_body.copy())
 
     try:
         iscsi_service = target.iscsi_service()
@@ -252,6 +252,8 @@ def create_disk(subject):
     response = iscsi_service_method(**args)
     if is_failed(response):
         abort(response["code"], response["data"])
+
+    validated_body["wwn"] = response["data"].get("wwn")
 
     disk = IscsiDisks(**validated_body)
     disk.save()

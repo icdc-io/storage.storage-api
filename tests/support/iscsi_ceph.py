@@ -98,6 +98,16 @@ def verify_disk_exists(disk):
     return not is_failed(response)
 
 
+def verify_disk_wwn(disk, expected_wwn):
+    """Verify that a disk's WWN matches the value returned by its gateway."""
+    iscsi_service = disk.target.iscsi_service()
+    response = iscsi_service.get_disk(disk.name)
+    return (
+        not is_failed(response)
+        and response.get("data", {}).get("wwn") == expected_wwn
+    )
+
+
 def verify_disk_absent(disk):
     """Verify that the disk no longer exists in the target service."""
     iscsi_service = disk.target.iscsi_service()

@@ -28,6 +28,7 @@ class IscsiDisks(AbstractModel):
     owner = db.Column(db.String(128))
     size_gb = db.Column(db.Integer)
     name = db.Column(db.String(128))
+    wwn = db.Column(db.String(128))
     target_id = db.Column(db.Integer, db.ForeignKey("iscsi_targets.id"))
 
     target = db.relationship("IscsiTargets", back_populates="disks")
@@ -57,7 +58,7 @@ class IscsiDisks(AbstractModel):
 
     def __repr__(self):
         return f"IscsiDisks({self.id}, {self.owner}, {self.size_gb}, \
-            {self.name}, {self.target_id}, {self.clients}, {self.snapshots})"
+            {self.name}, {self.wwn}, {self.target_id}, {self.clients}, {self.snapshots})"
 
     def update(self, body):
         """UPDATE SET SQL"""
@@ -115,6 +116,7 @@ class IscsiDiskSchema(Schema):
         ),
         required=True
     )
+    wwn = fields.String(dump_only=True)
     target_id = fields.Int(load_only=True, required=True)
 
     @validates_schema

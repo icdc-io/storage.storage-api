@@ -3181,6 +3181,11 @@ components:
         size_gb:
           type: integer
           example: 100
+        wwn:
+          readOnly: true
+          type: string
+          description: WWN assigned by the iSCSI gateway.
+          example: 4a0b038f-8f36-493d-bff8-385ad6616f05
         from_snapshot_id:
           writeOnly: true
           type: integer

@@ -154,6 +154,7 @@ class Iscsi:
 
         Returns:
             dict: API response from the storage backend or an error message.
+                - wwn (str): Disk WWN
         """
         image_name = self.get_image_name(body["name"])
         log.info(f"Creating RBD image with name '{image_name}'")
@@ -180,7 +181,21 @@ class Iscsi:
 
         if is_failed(response):
             self.delete_disk(body["name"])
+            return response
 
+        disk_response = self.get_disk(image_name)
+        if is_failed(disk_response):
+            self.delete_disk(body["name"])
+            return disk_response
+
+        wwn = disk_response["data"].get("wwn")
+        if not wwn:
+            self.delete_disk(body["name"])
+            return internal_server_error(
+                f"Gateway returned no WWN for disk '{body['name']}'."
+            )
+
+        response["data"] = {"wwn": wwn}
         return response
 
     def _add_disk_to_target_iqn(self, image_name: str) -> dict:

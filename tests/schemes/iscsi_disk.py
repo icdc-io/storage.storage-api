@@ -6,6 +6,7 @@ class IscsiDiskTestSchema(Schema):
     owner = fields.String(required=True)
     size_gb = fields.Int(required=True)
     name = fields.String(required=True)
+    wwn = fields.String(allow_none=True)
 
 
 class IscsiDiskResponseTestSchema(IscsiDiskTestSchema):
