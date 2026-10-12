@@ -78,3 +78,6 @@ database:
   name:
 operator:
   group: devel.operator
+ws:
+  path: /ws/disk_stats  # engine.io path, must match the nginx location and the client
+  stats_interval: 10 # seconds between pushes of disk stats to subscribers

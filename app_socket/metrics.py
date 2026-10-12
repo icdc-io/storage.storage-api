@@ -4,22 +4,36 @@ from prometheus_client.parser import text_string_to_metric_families
 from app_socket.config import CEPH_PROMETHEUS_HOST, log
 from app_socket.utils import consolidate_metrics, get_metric_name
 
+# Prometheus is polled from a background task, so a hung request would stall
+# every subscriber. Never wait on it indefinitely.
+REQUEST_TIMEOUT = 10
+
+
+# Function to collect stats for every known image
+def collect_all_stats():
+    """Fetch and parse all ceph_librbd_ metrics from Prometheus.
+
+    Kept separate from filtering so that a single poll can serve every
+    subscriber instead of hitting Prometheus once per client.
+    """
+    log.debug(f"Collecting disk stats from Prometheus: {CEPH_PROMETHEUS_HOST}")
+    return _collect_stats(f"http://{CEPH_PROMETHEUS_HOST}/metrics") or {}
+
+
+# Function to keep only the images the client asked for
+def filter_disk_stats(stats, query):
+    return {name: stats[name] for name in query if name in stats}
+
 
 # Function to send disk stats to the client
 def send_disk_stats(query):
-    try:
-        log.debug(f"Collecting disk stats from Prometheus: {CEPH_PROMETHEUS_HOST}")
-        res = _collect_stats(f"http://{CEPH_PROMETHEUS_HOST}/metrics", query)
-        return {i: res[i] for i in res if i in query} if res else {}
-    except ConnectionError:
-        log.error("Failed to connect to Prometheus.")
-        return {}
+    return filter_disk_stats(collect_all_stats(), query)
 
 
 # Helper function to collect stats from Prometheus
-def _collect_stats(url, query):
+def _collect_stats(url):
     try:
-        metrics = requests.get(url)
+        metrics = requests.get(url, timeout=REQUEST_TIMEOUT)
 
         # Check if the response status code is 200 (OK)
         if metrics.status_code != 200:

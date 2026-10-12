@@ -14,8 +14,12 @@ if ! whoami &> /dev/null; then
   fi
 fi
 
-# Run migrations and seeding
-FLASK_APP=main:flask_app flask db upgrade --directory migrations -x dummy=1
+# Run migrations and seeding.
+# The WebSocket service shares this image but must not race the API pod on
+# migrations, so it starts with SKIP_MIGRATIONS=1.
+if [ "${SKIP_MIGRATIONS:-0}" != "1" ]; then
+  FLASK_APP=main:flask_app flask db upgrade --directory migrations -x dummy=1
+fi
 
 # Execute the provided command
 exec "$@"

@@ -1,6 +1,21 @@
+"""Manual smoke test for the disk stats WebSocket endpoint.
+
+    python3 app_socket/for_test.py
+    WS_URL=https://api.dcz.lab.icdc.io python3 app_socket/for_test.py
+
+Connects the same way the frontend does: a socket.io client on the default
+namespace, with the endpoint selected by `socketio_path`.
+"""
+
+import os
 import time
+from urllib.parse import urlencode
 
 import socketio
+
+WS_URL = os.getenv("WS_URL", "http://localhost:8080")
+WS_PATH = os.getenv("WS_PATH", "/ws/disk_stats")
+DISKS = os.getenv("DISKS", "iscsi-nvme/uzhst_march,iscsi-nvme/uzhst_jns")
 
 # Initialize a Socket.IO client
 sio = socketio.Client()
@@ -11,19 +26,24 @@ sio = socketio.Client()
 def connect():
     print("Successfully connected to the server.")
     # Emit 'my_ping' event to test the connection
-    sio.emit("my_ping", namespace="/ws/disk_stats")
+    sio.emit("my_ping")
 
 
 # Define event handler for 'response' event
-@sio.on("response", namespace="/ws/disk_stats")
+@sio.on("response")
 def handle_response(data):
     print("Received response from the server:", data)
 
 
 # Define event handler for 'disk_stats_response' event
-@sio.on("disk_stats_response", namespace="/ws/disk_stats")
+@sio.on("disk_stats_response")
 def handle_disk_stats_response(data):
     print("Received disk stats response:", data)
+
+
+@sio.on("pong")
+def handle_pong():
+    print("Received pong.")
 
 
 # Define event handler for disconnection
@@ -33,26 +53,19 @@ def disconnect():
 
 
 if __name__ == "__main__":
-    # Connect to the Socket.IO server with the appropriate namespace
-    sio.connect("ws://localhost:8080", namespaces=["/ws/disk_stats"])
+    # The disk list is passed in the query string, exactly like the frontend does.
+    # After that the server pushes stats on its own, no polling required.
+    sio.connect(f"{WS_URL}?{urlencode({'disks': DISKS})}", socketio_path=WS_PATH)
 
-    # Allow some time for the connection to establish
-    time.sleep(1)
+    # Changing the subscription without reconnecting
+    time.sleep(2)
+    sio.emit("subscribe", {"disks": DISKS.split(",")})
 
-    # Emit a 'send_stats' event with a query parameter
-    # Assuming 'disks' is a valid parameter the server is expecting
-    sio.emit(
-        "send_stats",
-        {"disks": "iscsi-nvme/uzhst_march,iscsi-nvme/uzhst_jns"},
-        namespace="/ws/disk_stats",
-    )
+    # One-off request, for clients that prefer to poll
+    sio.emit("send_stats", {"disks": DISKS})
 
-    # Emit a 'my_ping' event to check if the server responds
-    sio.emit("my_ping", namespace="/ws/disk_stats")
-
-    # Wait for events (give some time for responses)
-    # Adjust the sleep time if necessary to ensure you receive responses before disconnecting
-    time.sleep(10)
+    # Wait long enough to observe at least one pushed frame
+    time.sleep(30)
 
     # Disconnect from the server
     sio.disconnect()

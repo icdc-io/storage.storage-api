@@ -1,90 +1,126 @@
-# Flask WebSocket Application for Disk Stats Monitoring
+# Disk Stats WebSocket Service
 
-## Description
+Flask-SocketIO service that streams per-image iSCSI disk statistics collected from
+Ceph's Prometheus exporter. It runs as a **separate process** from the REST API,
+though both share the same image.
 
-This is a Flask application using WebSocket for monitoring disk statistics by fetching data from Prometheus. It includes a server-side background process that periodically sends events to clients. Clients can request statistics for specific disks, and the server responds with data retrieved from Prometheus.
+## Project structure
 
-## Project Structure
+| File | Purpose |
+| --- | --- |
+| `../app_socket_server.py` | Entry point: Flask app, `SocketIO` instance, namespace registration |
+| `namespaces.py` | Connection handling, subscriptions, background broadcast task |
+| `metrics.py` | Prometheus polling and parsing |
+| `utils.py` | Metric name mapping and `disks` payload parsing |
+| `config.py` | Constants pulled from `app.consts` |
+| `for_test.py` | Manual smoke test client |
+| `ws-connection-example.html` | Manual smoke test page |
 
-Since this is a single-file project, all functionality is included in the main file:
+## Endpoint contract
 
-- `app_socket_server.py` - The main file that initializes Flask, handles WebSocket events, fetches metrics from Prometheus, and manages client connections.
+- **engine.io path**: `/ws/disk_stats` (configurable, see below)
+- **namespace**: default (`/`) — routing is done by path, not by namespace
 
-## Requirements
+The path must match on all three sides: the `path` option of the socket.io client,
+the nginx location that proxies to this service, and `WS_PATH` here. nginx forwards
+`$request_uri` unchanged, so it cannot paper over a mismatch.
 
-- Python 3.8+
-- Flask
-- Flask-SocketIO
-- Requests
-- Prometheus Client
+### Events sent by the server
 
-### Installing Dependencies
+| Event | Payload | When |
+| --- | --- | --- |
+| `response` | `{"data": "Connected"}` | On connect |
+| `disk_stats_response` | `{"<pool>/<image>": {"read_iops": ..., "read_throughput_mb": ..., "write_iops": ..., "write_throughput_mb": ...}}` | Every `WS_STATS_INTERVAL` seconds, plus once right after connect/subscribe |
+| `pong` | — | In reply to `my_ping` |
 
-1. Ensure you have Python 3.8+ installed.
-2. Install the required dependencies by running:
+### Events accepted by the server
+
+| Event | Payload | Purpose |
+| --- | --- | --- |
+| `subscribe` | `{"disks": "a,b"}` or `{"disks": ["a", "b"]}` | Replace the disk list without reconnecting |
+| `send_stats` | same as above, optional | One-off request, for clients that prefer polling |
+| `my_ping` | — | Connectivity check |
+
+The initial disk list is taken from the connection query string, so a client that
+only wants the stream does not have to emit anything at all.
+
+## Disk identifier format
+
+The server expects disk identifiers exactly as they appear in Prometheus metrics:
+`<pool>/<image>`, where `<pool>` is `{pool.type}-{pool.class}` and `<image>` is
+`{account_name}_{disk.name}`.
+
+Example: `iscsi-nvme/uzhst_march`.
+
+If a disk name does not match this format, the server will return `{}` for that
+request (no translation or account scoping is performed). Subscriptions with
+incorrect names will silently receive no stats for them.
+
+## Configuration
+
+Values come from `settings/config.yaml` and can be overridden by environment
+variables of the same (uppercased) name — see `app/consts.py`.
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `WS_PATH` | `/ws/disk_stats` | engine.io path |
+| `WS_STATS_INTERVAL` | `10` | Seconds between pushes |
+| `CEPH_HOST` | *(empty)* | **Required.** Without it `CEPH_PROMETHEUS_HOST` resolves to `None:9285` and every response is `{}` |
+| `CEPH_PROMETHEUS_HOST` | `{CEPH_HOST}:9285` | Set directly if the exporter is not on the Ceph VIP |
+| `LOG_LEVEL` | `DEBUG` | |
+
+## Running
 
 ```bash
-pip install -r requirements.txt
+pip install -r ../requirements.txt
+CEPH_HOST=<ceph-vip> gunicorn -c app_socket/gunicorn.conf.py app_socket_server:app
 ```
 
-Your requirements.txt should include the following:
+Run from the repository root — `app.consts` reads `settings/config.yaml` relative to
+the working directory.
 
-```txt
-Flask
-Flask-SocketIO
-requests
-prometheus_client
-```
+The default worker class is `eventlet`; the plain sync worker cannot serve WebSocket
+connections. If eventlet turns out to be a problem, `gevent-websocket` is also in
+`requirements.txt` and provides
+`geventwebsocket.gunicorn.workers.GeventWebSocketWorker`.
 
-### Running the Application
-
-To start the application, execute the following command:
+For a quick local check without a client:
 
 ```bash
-python3 app.py
+curl -i "http://localhost:8080/ws/disk_stats/?EIO=4&transport=polling"
 ```
 
-The application will be available at <http://0.0.0.0:8080/>.
+A `200` with a body starting `0{"sid":` means the endpoint is wired correctly; a
+`404` means the path does not match.
 
-### Usage
+## Deployment notes
 
-#### WebSocket
-
-The application uses WebSocket to communicate with clients. The connection occurs through the /ws/disk_stats namespace. Examples of WebSocket events include:
-    1. on_connect - When a client successfully connects.
-    2. on_disconnect - When a client disconnects.
-    3. on_my_ping - Receives a "ping" request and sends back a "pong" response.
-    4. on_send_stats - Clients send a list of disks to this event to request disk statistics.
-
-#### Example WebSocket Usage
-
-You can use a WebSocket client library such as socket.io-client to connect:
-
-```javascript
-const socket = io.connect('http://localhost:8080/ws/disk_stats');
-
-// On connection
-socket.on('response', (data) => {
-    console.log('Message from server:', data);
-});
-
-// Request disk statistics
-socket.emit('send_stats', { disks: 'disk1,disk2' });
-
-// Ping-pong
-socket.emit('my_ping');
-socket.on('pong', () => {
-    console.log('Pong received');
-});
+The image's default `CMD` starts the REST API, so the WebSocket Deployment has to
+override the command:
 
 ```
+command: ["gunicorn", "-c", "app_socket/gunicorn.conf.py", "app_socket_server:app"]
+env:
+  - name: SKIP_MIGRATIONS
+    value: "1"
+```
 
-### Prometheus Integration
+`SKIP_MIGRATIONS=1` keeps this pod from racing the API pod on `flask db upgrade`.
 
-The application expects a Prometheus server to be available at the
-address defined by the CEPH_PROMETHEUS_HOST constant (e.g., <http://10.254.20.50:9285/metrics>).
-Metrics are filtered by the ceph_librbd_ prefix and processed before being sent to clients.
+Keep `replicas: 1`. Subscriptions live in process memory, so scaling out requires
+configuring a message queue (Redis) for Flask-SocketIO first.
 
-### Logging
+On the nginx side, raise `proxy_read_timeout` / `proxy_send_timeout` (the 60s default
+is only survived thanks to engine.io pings). The hardcoded `Connection "Upgrade"`
+header is fine only while clients connect with `transports: ["websocket"]`; it breaks
+the HTTP polling fallback.
 
-Logging is configured to provide detailed information at the DEBUG level. You can adjust logging settings directly in the app.py file.
+## Known gaps
+
+- **No authentication or authorization.** `cors_allowed_origins` is `"*"` and any
+  client can request statistics for an arbitrary image name, with no account
+  scoping — unlike the REST API, which goes through `flask-rbac-icdc`.
+- `app/consts.py` logs every uppercase constant at INFO on startup, including
+  `DATABASE_PASSWORD`. That output lands in this service's logs too.
+- There is no automated test coverage for `app_socket`; `pyproject.toml` measures
+  coverage for `app` only.
