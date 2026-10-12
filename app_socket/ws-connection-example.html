@@ -1,39 +1,54 @@
 <!DOCTYPE HTML>
 <html>
 <head>
-    <title>Flask-SocketIO Test</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.4/socket.io.js" integrity="sha512-aMGMvNYu8Ue4G+fHa359jcPb1u+ytAF+P2SCb+PxrjCdO3n3ZTxJ30zuH39rimUggmTwmh2u7wvQsDTHESnmfQ==" crossorigin="anonymous"></script>
+    <title>Disk stats WebSocket test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
     <script type="text/javascript" charset="utf-8">
-        $(document).ready(function() {
-            // Connect to the Socket.IO server.
-            // The connection URL has the following format, relative to the current page:
-            //     http[s]://<domain>:<port>[/<namespace>]
-            const socket = io('wss://api.dcz.lab.icdc.io/ws/storage/disk_stats', {
-              transports: ["websocket"],
-              path: "/ws/storage/disk_stats",
-              query: { disks: ["iscsi-hdd/disk1", "iscsi-ssd/disk2"] },
+        document.addEventListener("DOMContentLoaded", function () {
+            // `path` selects the endpoint; the namespace stays the default one.
+            // Do NOT set addTrailingSlash: false - engine.io matches the path with
+            // a trailing slash and would answer 404 without it.
+            const socket = io("http://localhost:8080", {
+                path: "/ws/disk_stats",
+                transports: ["websocket"],
+                query: { disks: "iscsi-hdd/disk1,iscsi-ssd/disk2" },
             });
 
-            socket.on('connect', function() {
-              console.log("connected")
-                // socket.emit('connect', {data: 'I\'m connected!'});
+            const log = (text) => {
+                const item = document.createElement("li");
+                item.textContent = text;
+                document.getElementById("log").appendChild(item);
+            };
+
+            socket.on("connect", () => {
+                document.getElementById("status").textContent = "Connected";
             });
 
-            window.setInterval(function() {
-                start_time = (new Date).getTime();
-                $('#transport').text(socket.io.engine.transport.name);
-                socket.emit('my_ping');
-            }, 1000);
+            socket.on("connect_error", (err) => {
+                document.getElementById("status").textContent = "Error: " + err.message;
+            });
 
-            socket.emit("send_stats")
-            // socket.emit("disconnect")
             socket.on("disconnect", () => {
-              console.log("disconnected");
+                document.getElementById("status").textContent = "Disconnected";
+            });
+
+            // Pushed by the server every WS_STATS_INTERVAL seconds, no polling needed.
+            socket.on("disk_stats_response", (data) => log(JSON.stringify(data)));
+            socket.on("response", (data) => log(JSON.stringify(data)));
+            socket.on("pong", () => log("pong"));
+
+            // Changing the subscribed disks without reconnecting
+            document.getElementById("subscribe").addEventListener("click", () => {
+                const disks = document.getElementById("disks").value;
+                socket.emit("subscribe", { disks: disks });
             });
         });
     </script>
 </head>
 <body>
+    <p>Status: <span id="status">Disconnected</span></p>
+    <input id="disks" size="60" value="iscsi-hdd/disk1,iscsi-ssd/disk2" />
+    <button id="subscribe">Subscribe</button>
+    <ul id="log"></ul>
 </body>
 </html>
