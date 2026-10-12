@@ -128,6 +128,26 @@ class AbstractModel(db.Model):
         """
         return {}
 
+    @staticmethod
+    def _coerce_filter_value(column, value):
+        """
+        Converts a string filter value (query args are always strings) to the
+        Python type of the column. psycopg 3 binds parameters with explicit
+        casts, so comparing an integer column with a string value fails.
+        """
+        if not isinstance(value, str):
+            return value
+        try:
+            python_type = column.type.python_type
+        except (AttributeError, NotImplementedError):
+            return value
+        if python_type is int:
+            try:
+                return int(value)
+            except ValueError as e:
+                raise ValidationError(f"Invalid integer value: {value}") from e
+        return value
+
     @classmethod
     def _preprocess_filters(cls, filters: dict) -> dict:
         """
@@ -180,7 +200,8 @@ class AbstractModel(db.Model):
                 for field_name, value in attr_filters.items():
                     if not hasattr(cls, field_name):
                         raise ValidationError(f"No field {field_name} on the object")
-                    query = query.filter(getattr(cls, field_name) == value)
+                    column = getattr(cls, field_name)
+                    query = query.filter(column == cls._coerce_filter_value(column, value))
             else:
                 if relation_alias not in related_filters:
                     raise ValidationError(f"Unknown relation filter: {relation_alias}")
@@ -197,7 +218,8 @@ class AbstractModel(db.Model):
                 for attr, value in attr_filters.items():
                     if not hasattr(related_model, attr):
                         raise ValidationError(f"No field {attr} on {relation_alias}")
-                    query = query.filter(getattr(final_alias, attr) == value)
+                    column = getattr(final_alias, attr)
+                    query = query.filter(column == cls._coerce_filter_value(column, value))
 
         return query.reset_joinpoint()
 

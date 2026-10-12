@@ -37,19 +37,19 @@ def get_account_s3_users(subject):
     return jsonify(controller.get_account_s3_users(subject)), 200
 
 
-@s3.route("/users/<user_id>", methods=["GET"])
+@s3.route("/users/<int:user_id>", methods=["GET"])
 @rbac.allow("s3.users.get")
 def get_s3_user(subject, user_id):
     return controller.get_s3_user(subject, user_id), 200
 
 
-@s3.route("/users/<user_id>", methods=["DELETE"])
+@s3.route("/users/<int:user_id>", methods=["DELETE"])
 @rbac.allow("s3.users.delete")
 def delete_s3_user(subject, user_id):
     return controller.delete_s3_user(subject, user_id), 204
 
 
-@s3.route("/users/<user_id>", methods=["PUT"])
+@s3.route("/users/<int:user_id>", methods=["PUT"])
 @rbac.allow("s3.users.update")
 def update_s3_user(subject, user_id):
     return controller.update_s3_user(subject, user_id), 200
@@ -79,7 +79,7 @@ def delete_bucket(subject, path):
     return controller.delete_bucket(subject, path), 204
 
 
-@s3.route("/users/<user_id>/keys", methods=["POST"])
+@s3.route("/users/<int:user_id>/keys", methods=["POST"])
 @rbac.allow("s3.users.regenerate-keys")
 def regenerate_keys(subject, user_id):
     return controller.regenerate_keys(subject, user_id), 201
@@ -105,13 +105,13 @@ def set_account_s3_quota(subject):
     return quotas_controller.create(subject), 201
 
 
-@s3.route("/quotas/<id>", methods=["PUT"])
+@s3.route("/quotas/<int:id>", methods=["PUT"])
 @rbac.allow("s3.quotas.update")
 def update_s3_quota(subject, id):
     return quotas_controller.update(subject, id), 200
 
 
-@s3.route("/quotas/<id>", methods=["DELETE"])
+@s3.route("/quotas/<int:id>", methods=["DELETE"])
 @rbac.allow("s3.quotas.delete")
 def destroy_s3_quota(subject, id):
     return quotas_controller.destroy(subject, id), 204

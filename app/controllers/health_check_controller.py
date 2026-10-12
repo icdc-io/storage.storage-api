@@ -1,5 +1,5 @@
 # controllers/health_check_controller.py
-import psycopg2
+import psycopg
 from flask import Response
 
 import app.consts as consts
@@ -12,7 +12,7 @@ def health_check():
     db_status = "ok"
     try:
         # Attempt to establish a connection to the database
-        conn = psycopg2.connect(
+        conn = psycopg.connect(
             dbname=consts.DATABASE_NAME,
             user=consts.DATABASE_USERNAME,
             password=consts.DATABASE_PASSWORD,
@@ -20,7 +20,7 @@ def health_check():
             port=consts.DATABASE_PORT,
         )
         conn.close()
-    except psycopg2.OperationalError:
+    except psycopg.OperationalError:
         db_status = "error"
 
     # Check the overall status based on db_status

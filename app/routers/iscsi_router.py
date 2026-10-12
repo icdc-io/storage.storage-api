@@ -31,13 +31,13 @@ def set_account_iscsi_quota(subject):
     return quotas_controller.create(subject), 201
 
 
-@iscsi.route("/quotas/<quota_id>", methods=["PUT"])
+@iscsi.route("/quotas/<int:quota_id>", methods=["PUT"])
 @rbac.allow("iscsi.quotas.update")
 def update_iscsi_quota(subject, quota_id):
     return quotas_controller.update(subject, quota_id), 200
 
 
-@iscsi.route("/quotas/<quota_id>", methods=["DELETE"])
+@iscsi.route("/quotas/<int:quota_id>", methods=["DELETE"])
 @rbac.allow("iscsi.quotas.delete")
 def destroy_iscsi_quota(subject, quota_id):
     return quotas_controller.destroy(subject, quota_id), 204
@@ -55,13 +55,13 @@ def create_cluster(subject):
     return controller.create_cluster(subject), 201
 
 
-@iscsi.route("/clusters/<cluster_id>", methods=["GET"])
+@iscsi.route("/clusters/<int:cluster_id>", methods=["GET"])
 @rbac.allow("iscsi.clusters.get")
 def get_cluster(subject, cluster_id):
     return controller.get_cluster(subject, cluster_id), 200
 
 
-@iscsi.route("/clusters/<cluster_id>", methods=["DELETE"])
+@iscsi.route("/clusters/<int:cluster_id>", methods=["DELETE"])
 @rbac.allow("iscsi.clusters.delete")
 def delete_cluster(subject, cluster_id):
     return controller.delete_cluster(subject, cluster_id), 204
@@ -73,7 +73,7 @@ def delete_cluster(subject, cluster_id):
 #     return controller.create_target(subject), 204
 #
 #
-# @iscsi.route("/targets/<target_id>", methods=["DELETE"])
+# @iscsi.route("/targets/<int:target_id>", methods=["DELETE"])
 # @rbac.allow("iscsi.targets.delete")
 # def delete_target(subject, target_id):
 #     return controller.delete_target(subject, target_id), 204
@@ -85,7 +85,7 @@ def create_gateway(subject):
     return controller.create_gateway(subject), 204
 
 
-@iscsi.route("/gateways/<gateway_id>", methods=["DELETE"])
+@iscsi.route("/gateways/<int:gateway_id>", methods=["DELETE"])
 @rbac.allow("iscsi.gateways.delete")
 def delete_gateway(subject, gateway_id):
     return controller.delete_gateway(subject, gateway_id), 204
@@ -103,13 +103,13 @@ def list_disks(subject):
     return controller.get_disks(subject), 200
 
 
-@iscsi.route("/disks/<disk_id>", methods=["DELETE"])
+@iscsi.route("/disks/<int:disk_id>", methods=["DELETE"])
 @rbac.allow("iscsi.disks.delete")
 def delete_disk(subject, disk_id):
     return controller.delete_disk(subject, disk_id), 204
 
 
-@iscsi.route("/disks/<disk_id>", methods=["PUT"])
+@iscsi.route("/disks/<int:disk_id>", methods=["PUT"])
 @rbac.allow("iscsi.disks.update")
 def update_disk(subject, disk_id):
     return controller.update_disk(subject, disk_id), 200
@@ -127,31 +127,31 @@ def get_iscsi_clients(subject):
     return controller.get_clients(subject), 200
 
 
-@iscsi.route("/clients/<client_id>", methods=["DELETE"])
+@iscsi.route("/clients/<int:client_id>", methods=["DELETE"])
 @rbac.allow("iscsi.clients.delete")
 def delete_client(subject, client_id):
     return controller.delete_client(subject, client_id), 204
 
 
-@iscsi.route("/clients/<client_id>", methods=["PUT"])
+@iscsi.route("/clients/<int:client_id>", methods=["PUT"])
 @rbac.allow("iscsi.clients.update")
 def update_client(subject, client_id):
     return controller.update_client(subject, client_id), 200
 
 
-@iscsi.route("/clients/<client_id>/disks", methods=["POST"])
+@iscsi.route("/clients/<int:client_id>/disks", methods=["POST"])
 @rbac.allow("iscsi.disks.assign")
 def disks_to_client(subject, client_id):
     return controller.disks_to_client(subject, client_id), 201
 
 
-@iscsi.route("/clients/<client_id>/disks/<disk_id>", methods=["DELETE"])
+@iscsi.route("/clients/<int:client_id>/disks/<int:disk_id>", methods=["DELETE"])
 @rbac.allow("iscsi.disks.unassign")
 def unassign_client_disk(subject, client_id, disk_id):
     return controller.unassign_client_disk(subject, client_id, disk_id), 204
 
 
-@iscsi.route("/clients/<client_id>/disks", methods=["GET"])
+@iscsi.route("/clients/<int:client_id>/disks", methods=["GET"])
 @rbac.allow("iscsi.disks.list")
 def get_client_disks(subject, client_id):
     return controller.get_client_disks(subject, client_id), 200
@@ -169,25 +169,25 @@ def create_snapshot(subject):
     return controller.create_snapshot(subject), 201
 
 
-@iscsi.route("/snapshots/<snapshot_id>", methods=["GET"])
+@iscsi.route("/snapshots/<int:snapshot_id>", methods=["GET"])
 @rbac.allow("iscsi.snapshots.get")
 def get_snapshot(subject, snapshot_id):
     return controller.get_snapshot(subject, snapshot_id), 200
 
 
-@iscsi.route("/snapshots/<snapshot_id>", methods=["PUT"])
+@iscsi.route("/snapshots/<int:snapshot_id>", methods=["PUT"])
 @rbac.allow("iscsi.snapshots.update")
 def update_snapshot(subject, snapshot_id):
     return controller.update_snapshot(subject, snapshot_id), 200
 
 
-@iscsi.route("/snapshots/<snapshot_id>", methods=["DELETE"])
+@iscsi.route("/snapshots/<int:snapshot_id>", methods=["DELETE"])
 @rbac.allow("iscsi.snapshots.delete")
 def delete_snapshot(subject, snapshot_id):
     return controller.delete_snapshot(subject, snapshot_id), 204
 
 
-@iscsi.route("snapshots/<snapshot_id>/rollback", methods=["POST"])
+@iscsi.route("snapshots/<int:snapshot_id>/rollback", methods=["POST"])
 @rbac.allow("iscsi.snapshots.rollback")
 def rollback_snapshot(subject, snapshot_id):
     return controller.rollback_snapshot(subject, snapshot_id)

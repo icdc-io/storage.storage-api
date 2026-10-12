@@ -20,7 +20,7 @@ def create_app():
     # we can set level only after consts are imported
     log.setLevel(consts.LOG_LEVEL)
     db_conn = (
-        f"postgresql://"
+        f"postgresql+psycopg://"
         f"{consts.DATABASE_USERNAME}:{consts.DATABASE_PASSWORD}@"
         f"{consts.DATABASE_HOST}:{consts.DATABASE_PORT}/"
         f"{consts.DATABASE_NAME}"
