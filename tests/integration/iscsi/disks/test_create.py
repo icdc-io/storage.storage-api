@@ -5,7 +5,7 @@ from app.models.iscsi_disk import IscsiDisks
 from tests.factories.headers import HeadersPayload
 from tests.factories.iscsi_disk import IscsiDiskCreatePayload
 from tests.schemes import IscsiDiskResponseTestSchema
-from tests.support.iscsi_ceph import verify_disk_exists
+from tests.support.iscsi_ceph import verify_disk_exists, verify_disk_wwn
 
 
 def validate_schema(body):
@@ -45,4 +45,8 @@ def test_operator_can_create_disk_in_any_pool(
     assert created_disk.owner == payload["owner"]
     assert created_disk.size_gb == payload["size_gb"]
     assert created_disk.name == payload["name"]
+    assert response_body["wwn"]
+    assert created_disk.wwn == response_body["wwn"]
+
+    assert verify_disk_wwn(created_disk, response_body["wwn"])
     assert verify_disk_exists(created_disk), f"Disk was not created in Ceph for pool {pool_name}."
