@@ -8,7 +8,7 @@ marshmallow==3.26.2
 # Database and ORM
 SQLAlchemy
 SQLAlchemy-Utils
-psycopg2-binary
+psycopg[binary]
 
 # Configuration and Utilities
 PyYAML
